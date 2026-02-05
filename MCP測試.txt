@@ -1,0 +1,39 @@
+方法一：使用官方 MCP Inspector (最推薦 🌟)
+這是官方提供的網頁版除錯工具，它可以直接啟動您的 node 程式，並提供一個圖形介面讓您點擊測試所有工具。
+
+1. 在終端機執行指令 請在您的 D:\MCP_Server 目錄下，輸入以下指令：
+
+Bash
+npx @modelcontextprotocol/inspector node index.js
+(注意：第一次執行會需要下載一點東西，請稍等)
+
+2. 操作網頁介面 指令執行後，瀏覽器會自動跳出一個網頁（通常是 http://localhost:5173）。
+
+左側選單：點擊 Tools，您應該要看到 get_excel_values_batch、trace_excel_logic 等所有工具列表。
+
+中間區塊：選擇一個工具，它會自動產生輸入框。填入 path、sheet 等參數。
+
+點擊 Run：右側會顯示執行結果 (Result) 或錯誤訊息 (Logs)。
+
+優點：完全不用寫程式，直接圖形化測試，參數錯了也會馬上告訴您。
+
+方法二：手動輸入 JSON-RPC 指令 (硬派測試)
+如果您不想開瀏覽器，可以直接在終端機與程式對話。這能幫助您理解 MCP 底層是怎麼溝通的。
+
+1. 啟動程式
+
+Bash
+node index.js
+(程式啟動後會游標會閃爍，看起來像卡住，其實它在等您輸入)
+
+2. 貼上測試指令 (JSON格式) 請複製下面這串 JSON (這是 MCP 協定的標準查詢指令)，貼到終端機並按 Enter：
+
+測試 A：列出所有工具
+
+JSON
+{"jsonrpc": "2.0", "method": "tools/list", "id": 1}
+測試 B：呼叫工具 (例如讀檔) (請記得將 path 改為您電腦存在的真實路徑)
+
+JSON
+{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "read_file", "arguments": {"path": "D:\\test.txt"}}, "id": 2}
+3. 查看結果 程式會吐出一串 JSON 回應。如果成功，您會看到 "result": { ... }；如果失敗，會看到 "error": { ... }。
