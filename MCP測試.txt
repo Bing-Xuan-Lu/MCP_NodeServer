@@ -7,7 +7,7 @@ Bash
 npx @modelcontextprotocol/inspector node index.js
 (注意：第一次執行會需要下載一點東西，請稍等)
 
-2. 操作網頁介面 指令執行後，瀏覽器會自動跳出一個網頁（通常是 http://localhost:5173）。
+2. 操作網頁介面 指令執行後，瀏覽器會自動跳出一個網頁（通常是 http://localhost:6274）。
 
 左側選單：點擊 Tools，您應該要看到 get_excel_values_batch、trace_excel_logic 等所有工具列表。
 

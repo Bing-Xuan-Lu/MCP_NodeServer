@@ -3,12 +3,17 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import mysql from "mysql2/promise";
 import fs from "fs/promises";
 import path from "path";
 import { createRequire } from "module";
 import "dotenv/config";
+import { exec } from "child_process";
+import util from "util";
+const execPromise = util.promisify(exec);
 
 // 建立 require 以相容 CommonJS 套件
 const require = createRequire(import.meta.url);
@@ -26,7 +31,9 @@ const server = new Server(
     version: "5.0.0",
   },
   {
-    capabilities: { tools: {} },
+    capabilities: { 
+      tools: {},
+      prompts: {} },
   },
 );
 
@@ -40,8 +47,8 @@ const CONFIG = {
     host: process.env.DB_HOST || "127.0.0.1",
     port: parseInt(process.env.DB_PORT || "3306"),
     user: process.env.DB_USER || "root",
-    password: process.env.DB_PASSWORD || "",
-    database: process.env.DB_NAME || "pnsdb",
+    password: process.env.DB_PASSWORD || "abcdefg",
+    database: process.env.DB_NAME || "test",
   },
 };
 
@@ -127,6 +134,41 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           replace: { type: "string" },
         },
         required: ["path", "search", "replace"],
+      },
+    },
+    {
+      name: "run_php_script",
+      description:
+        "在伺服器上執行 PHP 腳本 (CLI 模式)，並回傳輸出結果 (Stdout/Stderr)",
+      inputSchema: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "PHP 檔案路徑 (例如: test_case.php)",
+          },
+          args: {
+            type: "string",
+            description: "選填：傳遞給腳本的參數 (例如: id=1)",
+          },
+        },
+        required: ["path"],
+      },
+    },
+    {
+      name: "send_http_request",
+      description: "發送 HTTP 請求到本地伺服器 (測試 API 或 網頁功能)",
+      inputSchema: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description: "完整網址 (例如: http://localhost/api/login.php)",
+          },
+          method: { type: "string", enum: ["GET", "POST"], default: "GET" },
+          data: { type: "string", description: "JSON 格式的 POST Data (選填)" },
+        },
+        required: ["url"],
       },
     },
 
@@ -268,6 +310,64 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
+    if (name === "run_php_script") {
+      const fullPath = resolveSecurePath(args.path);
+      // 安全性檢查：確保是 .php 檔案
+      if (!fullPath.endsWith(".php")) {
+        throw new Error("安全限制：只能執行 .php 檔案");
+      }
+
+      try {
+        // 執行 php 指令
+        const cmd = `php "${fullPath}" ${args.args || ""}`;
+        const { stdout, stderr } = await execPromise(cmd);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `📝 PHP 執行結果：\n${stdout}\n${stderr ? `⚠️ 錯誤輸出：\n${stderr}` : ""}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: `執行失敗: ${error.message}` }],
+        };
+      }
+    }
+
+    if (name === "send_http_request") {
+      try {
+        const options = {
+          method: args.method || "GET",
+          headers: { "Content-Type": "application/json" }, // 或 application/x-www-form-urlencoded
+        };
+
+        if (args.method === "POST" && args.data) {
+          options.body = args.data;
+        }
+
+        const response = await fetch(args.url, options);
+        const text = await response.text();
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `🌐 HTTP ${response.status} ${response.statusText}\n回應內容：\n${text.substring(0, 2000)}`, // 限制長度避免爆 Token
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: `請求失敗: ${error.message}` }],
+        };
+      }
+    }
+
     // ----------------------------------------
     // B. 資料庫
     // ----------------------------------------
@@ -292,10 +392,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const conn = await mysql.createConnection(CONFIG.db);
       try {
         const [res] = await conn.execute(args.sql);
+
+        if (Array.isArray(res)) {
+          // 如果是 SELECT，res 會是一個陣列 (資料列)
+          return {
+            content: [
+              {
+                type: "text",
+                text: `🔍 查詢結果 (${res.length} 筆)：\n${JSON.stringify(res, null, 2)}`,
+              },
+            ],
+          };
+        } else {
+          // 如果是 INSERT/UPDATE/DELETE，res 會是物件 (包含 affectedRows)
+          return {
+            content: [
+              {
+                type: "text",
+                text: `✅ 執行成功。影響列數: ${res.affectedRows}, 新增 ID: ${res.insertId || "無"}`,
+              },
+            ],
+          };
+        }
+      } catch (err) {
         return {
-          content: [
-            { type: "text", text: `✅ 影響列數: ${res.affectedRows || 0}` },
-          ],
+          isError: true,
+          content: [{ type: "text", text: `SQL 錯誤: ${err.message}` }],
         };
       } finally {
         await conn.end();
@@ -461,7 +583,60 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-// 4. 啟動
+// ============================================
+// 5. 定義 Prompts (Agent Skills)
+// ============================================
+
+// A. 列出有哪些 Skills
+server.setRequestHandler(ListPromptsRequestSchema, async () => {
+  return {
+    prompts: [
+      {
+        name: "php_crud_generator",
+        description: "PHP CRUD 產生器 (讀取 MD 範本)",
+        arguments: [
+          {
+            name: "tableName",
+            description: "要生成的資料表名稱 (例如: products)",
+            required: true,
+          },
+        ],
+      },
+    ],
+  };
+});
+
+// B. 讀取 Skill 內容 (讀取 MD 檔並替換變數)
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+  const promptName = request.params.name;
+  const args = request.params.arguments || {};
+
+  if (promptName === "php_crud_generator") {
+    const tableName = args.tableName || "unknown_table";
+
+    // 讀取 MD 檔案內容
+    const skillPath = path.resolve(CONFIG.basePath, "skills/generate_crud.md");
+    let promptContent = await fs.readFile(skillPath, "utf-8");
+
+    // 簡單的模板替換 (把 {{TABLE_NAME}} 換成真的表名)
+    promptContent = promptContent.replace(/{{TABLE_NAME}}/g, tableName);
+
+    return {
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: promptContent,
+          },
+        },
+      ],
+    };
+  }
+
+  throw new Error("找不到指定的 Skill (Prompt)");
+});
+
 const transport = new StdioServerTransport();
 await server.connect(transport);
 console.error("✅ MCP Server v5.0.0 (Full Integration) Started.");
