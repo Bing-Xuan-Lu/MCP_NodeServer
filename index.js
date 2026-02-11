@@ -31,9 +31,10 @@ const server = new Server(
     version: "5.0.0",
   },
   {
-    capabilities: { 
+    capabilities: {
       tools: {},
-      prompts: {} },
+      prompts: {},
+    },
   },
 );
 
@@ -47,8 +48,8 @@ const CONFIG = {
     host: process.env.DB_HOST || "127.0.0.1",
     port: parseInt(process.env.DB_PORT || "3306"),
     user: process.env.DB_USER || "root",
-    password: process.env.DB_PASSWORD || "abcdefg",
-    database: process.env.DB_NAME || "test",
+    password: process.env.DB_PASSWORD || "",
+    database: process.env.DB_NAME || "pnsdb",
   },
 };
 
@@ -153,23 +154,63 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
         },
         required: ["path"],
-      },
+      }
     },
     {
       name: "send_http_request",
-      description: "發送 HTTP 請求到本地伺服器 (測試 API 或 網頁功能)",
+      description: "發送 HTTP 請求。支援 Multipart 實體檔案上傳 (讀取本地檔案傳送給 PHP)。",
       inputSchema: {
         type: "object",
         properties: {
-          url: {
-            type: "string",
-            description: "完整網址 (例如: http://localhost/api/login.php)",
-          },
-          method: { type: "string", enum: ["GET", "POST"], default: "GET" },
-          data: { type: "string", description: "JSON 格式的 POST Data (選填)" },
+          url: { type: "string", description: "完整網址" },
+          method: { type: "string", enum: ["GET", "POST", "PUT", "DELETE"], default: "GET" },
+          headers: { type: "object", description: "自訂標頭" },
+          data: { type: "string", description: "一般欄位資料 (JSON 字串)" },
+          files: { 
+            type: "array", 
+            description: "檔案列表",
+            items: {
+                type: "object",
+                properties: {
+                    name: { type: "string", description: "表單欄位名稱 (例如 'file_upload')" },
+                    filePath: { type: "string", description: "本地實體檔案路徑 (優先使用)" }, // 新增這個
+                    filename: { type: "string", description: "上傳後的檔名 (選填)" },
+                    content: { type: "string", description: "純文字內容 (若無 filePath 則用此模擬)" }
+                },
+                required: ["name"]
+            }
+          }
         },
-        required: ["url"],
-      },
+        required: ["url"]
+      }
+    },
+    // [新增] 讀取 Log 尾部
+    {
+      name: "tail_log",
+      description: "讀取檔案最後 N 行 (適用於查看 PHP Error Log)",
+      inputSchema: {
+        type: "object",
+        properties: {
+            path: { type: "string", description: "Log 檔案路徑" },
+            lines: { type: "number", description: "要讀取的行數 (預設 50)", default: 50 }
+        },
+        required: ["path"]
+      }
+    },
+    // [新增] 自動化 PHP 測試環境
+    {
+        name: "run_php_test",
+        description: "自動建立測試環境 (Session/Config) 並執行 PHP 腳本",
+        inputSchema: {
+            type: "object",
+            properties: {
+                targetPath: { type: "string", description: "要測試的 PHP 檔案路徑" },
+                configPath: { type: "string", description: "設定檔路徑 (例如 config.php)" },
+                sessionData: { type: "string", description: "模擬 $_SESSION 的 JSON 資料" },
+                postData: { type: "string", description: "模擬 $_POST 的 JSON 資料" }
+            },
+            required: ["targetPath"]
+        }
     },
 
     // --- [資料庫工具] ---
@@ -338,34 +379,134 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
     }
 
+    // ----------------------------------------
+    // [更新] HTTP 請求 (支援實體檔案上傳)
+    // ----------------------------------------
     if (name === "send_http_request") {
       try {
-        const options = {
-          method: args.method || "GET",
-          headers: { "Content-Type": "application/json" }, // 或 application/x-www-form-urlencoded
-        };
+        const headers = args.headers || {};
+        let body = null;
 
-        if (args.method === "POST" && args.data) {
-          options.body = args.data;
+        if (args.files && Array.isArray(args.files) && args.files.length > 0) {
+          const formData = new FormData();
+
+          // 1. 一般欄位
+          if (args.data) {
+            try {
+              const fields = typeof args.data === 'string' ? JSON.parse(args.data) : args.data;
+              for (const [key, value] of Object.entries(fields)) {
+                formData.append(key, value);
+              }
+            } catch (e) {}
+          }
+
+          // 2. 檔案處理 (關鍵更新)
+          for (const file of args.files) {
+            let blob;
+            let finalFilename = file.filename;
+
+            if (file.filePath) {
+                // [關鍵] 讀取本地實體檔案
+                const fullPath = resolveSecurePath(file.filePath);
+                const fileBuffer = await fs.readFile(fullPath);
+                blob = new Blob([fileBuffer]);
+                if (!finalFilename) finalFilename = path.basename(fullPath);
+            } else {
+                // 舊模式：使用假內容
+                blob = new Blob([file.content || ""], { type: "text/plain" });
+                if (!finalFilename) finalFilename = "test.txt";
+            }
+            
+            formData.append(file.name, blob, finalFilename);
+          }
+
+          body = formData;
+          delete headers["Content-Type"]; // 讓 fetch 自動產生 Boundary
+        } else {
+            // ... (維持原本 JSON/Form 處理邏輯) ...
+            body = args.data;
+            if (headers["Content-Type"] && headers["Content-Type"].includes("application/x-www-form-urlencoded") && body) {
+                try {
+                    const jsonBody = JSON.parse(body);
+                    body = new URLSearchParams(jsonBody).toString();
+                } catch (e) {}
+            }
         }
+
+        const options = { method: args.method || "GET", headers: headers };
+        if (args.method !== "GET" && args.method !== "HEAD" && body) options.body = body;
 
         const response = await fetch(args.url, options);
         const text = await response.text();
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: `🌐 HTTP ${response.status} ${response.statusText}\n回應內容：\n${text.substring(0, 2000)}`, // 限制長度避免爆 Token
-            },
-          ],
+        
+        return { 
+          content: [{ type: "text", text: `🌐 HTTP ${response.status}\n${text.substring(0, 2000)}` }] 
         };
       } catch (error) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: `請求失敗: ${error.message}` }],
-        };
+        return { isError: true, content: [{ type: "text", text: `請求失敗: ${error.message}` }] };
       }
+    }
+
+    // ----------------------------------------
+    // [新增] tail_log (讀取最後 N 行)
+    // ----------------------------------------
+    if (name === "tail_log") {
+        const fullPath = resolveSecurePath(args.path);
+        const content = await fs.readFile(fullPath, "utf-8");
+        const lines = content.split(/\r?\n/);
+        const n = args.lines || 50;
+        const lastLines = lines.slice(-n).join("\n");
+        
+        return { content: [{ type: "text", text: lastLines }] };
+    }
+
+    // ----------------------------------------
+    // [新增] run_php_test (Wrapper 模式)
+    // ----------------------------------------
+    if (name === "run_php_test") {
+        const targetPath = resolveSecurePath(args.targetPath);
+        const configPath = args.configPath ? resolveSecurePath(args.configPath) : null;
+        
+        // 1. 建立 Wrapper PHP 檔案內容
+        let wrapperCode = "<?php\n";
+        
+        // 模擬 Session
+        if (args.sessionData) {
+            wrapperCode += "session_start();\n";
+            wrapperCode += `$_SESSION = json_decode('${args.sessionData.replace(/'/g, "\\'")}', true);\n`;
+        }
+        
+        // 模擬 POST (如果是 CLI 執行，需手動注入)
+        if (args.postData) {
+            wrapperCode += `$_POST = json_decode('${args.postData.replace(/'/g, "\\'")}', true);\n`;
+        }
+
+        // 引入 Config
+        if (configPath) {
+            // 轉換為 PHP 可用的絕對路徑格式 (Windows 斜線處理)
+            const phpConfigPath = configPath.replace(/\\/g, '/');
+            wrapperCode += `require_once '${phpConfigPath}';\n`;
+        }
+
+        // 引入目標檔案
+        const phpTargetPath = targetPath.replace(/\\/g, '/');
+        wrapperCode += `require '${phpTargetPath}';\n`;
+        
+        // 2. 寫入暫存檔
+        const tempFile = path.join(path.dirname(targetPath), `_mcp_runner_${Date.now()}.php`);
+        await fs.writeFile(tempFile, wrapperCode);
+
+        try {
+            // 3. 執行
+            const cmd = `php "${tempFile}"`;
+            const { stdout, stderr } = await execPromise(cmd);
+            return { 
+                content: [{ type: "text", text: `📝 測試結果：\n${stdout}\n${stderr ? `⚠️ 錯誤：\n${stderr}` : ""}` }] 
+            };
+        } finally {
+            // 4. 清理暫存檔
+            await fs.unlink(tempFile).catch(() => {});
+        }
     }
 
     // ----------------------------------------
