@@ -6,3 +6,6 @@ npm-debug.log
 .env
 .env.test
 package-lock.json
+.vscode
+.claude
+.mcp.json
