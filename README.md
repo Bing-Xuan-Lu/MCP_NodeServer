@@ -2,6 +2,34 @@
 
 基於 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 構建的多功能伺服器，整合檔案系統、資料庫、Excel 邏輯分析、PHP 測試以及 **Chrome 書籤管理** 等功能。
 
+## 專案結構
+
+```text
+MCP_NodeServer/
+├── index.js              ← 啟動 + 路由整合 (77 行)
+├── config.js             ← 共用設定 + resolveSecurePath
+├── tools/
+│   ├── filesystem.js     ← 檔案系統工具 (4)
+│   ├── php.js            ← PHP 執行工具 (4)
+│   ├── database.js       ← 資料庫工具 (2)
+│   ├── excel.js          ← Excel 分析工具 (3)
+│   └── bookmarks.js      ← Chrome 書籤工具 (12)
+├── skills/
+│   └── index.js          ← Agent Skill 路由
+└── Skills/
+    ├── php_crud_agent.md ← PHP CRUD 產生器 Skill
+    └── bookmark_agent.md ← 書籤整理範例 Prompt
+```
+
+每個 `tools/` 模組統一介面：
+
+```js
+export const definitions = [...];          // 工具 Schema 清單
+export async function handle(name, args)   // 工具邏輯
+```
+
+---
+
 ## 工具總覽 (26 個)
 
 ### 1. 檔案系統 (4)
@@ -46,7 +74,7 @@
 | 工具 | 說明 |
 |------|------|
 | `get_bookmark_structure` | 取得書籤資料夾樹狀結構 (僅資料夾名稱 + 書籤數量) |
-| `get_folder_contents` | 列出資料夾內所有書籤 (ID / Title / URL) |
+| `get_folder_contents` | 列出資料夾內所有書籤 (ID / Title) |
 | `create_bookmark_folder` | 在指定父資料夾下建立新資料夾 |
 | `rename_bookmark_folder` | 重新命名資料夾 |
 | `delete_bookmark_folder` | 刪除資料夾 (預設僅空資料夾，可強制刪除) |
@@ -64,13 +92,116 @@
 - 每次操作自動備份原始 Bookmarks 檔案
 - 支援搬移子資料夾 (不只是書籤連結)
 
-> 書籤整理範例 Prompt 請參考 [PROMPTS.md](PROMPTS.md)
-
 ### 6. 網頁工具 (1)
 
 | 工具 | 說明 |
 |------|------|
 | `fetch_page_summary` | 讀取網頁並提取摘要 (標題 + 描述 + 前 2000 字) |
+
+---
+
+## Agent Skills
+
+MCP Prompts 功能，可在 Claude 中直接呼叫完整的 Agent 技能書。
+
+| Skill 名稱 | 說明 | MD 檔案 |
+| --- | --- | --- |
+| `php_crud_generator` | 根據資料表自動產生完整後台模組 (model + CRUD 頁面) | `Skills/php_crud_agent.md` |
+| `bookmark_organizer` | Chrome 書籤整理 SOP + 範例 Prompt 集 | `Skills/bookmark_agent.md` |
+
+---
+
+## 新增 Skill 步驟
+
+### Step 1 — 撰寫技能書 MD 檔
+
+在 `Skills/` 目錄下建立 `.md` 檔，描述 Agent 的角色、可用工具、執行流程：
+
+```text
+Skills/
+└── my_new_skill.md
+```
+
+MD 檔撰寫建議：
+
+- **角色定義**：你是什麼 Agent，能做什麼
+- **可用 MCP 工具**：列出此 Skill 會用到的工具名稱
+- **輸入格式**：使用者應該提供什麼資訊
+- **執行流程**：Step by Step 的操作步驟
+- **完成提示**：完成後要告知使用者什麼
+
+### Step 2 — 在 `skills/index.js` 登記
+
+```js
+// 1. 在 definitions 陣列加入 Skill 描述
+export const definitions = [
+  // ... 現有 Skills ...
+  {
+    name: "my_new_skill",
+    description: "這個 Skill 的簡短說明",
+    arguments: [
+      { name: "someParam", description: "參數說明", required: false },
+    ],
+  },
+];
+
+// 2. 在 getPrompt() 加入對應的讀取邏輯
+export async function getPrompt(name, args = {}) {
+  // ... 現有 Skills ...
+
+  if (name === "my_new_skill") {
+    const skillPath = path.join(SKILLS_DIR, "my_new_skill.md");
+    const content = await fs.readFile(skillPath, "utf-8");
+    // 可選：用 args 替換 MD 裡的 {{PLACEHOLDER}}
+    return {
+      messages: [{ role: "user", content: { type: "text", text: content } }],
+    };
+  }
+}
+```
+
+### Step 3 — 重啟 MCP Server
+
+重新啟動後，Claude 即可透過 Prompts 清單看到並呼叫新 Skill。
+
+---
+
+## 新增工具模組步驟
+
+### Step 1 — 建立 `tools/my_module.js`
+
+```js
+import { resolveSecurePath } from "../config.js";
+
+export const definitions = [
+  {
+    name: "my_tool",
+    description: "工具說明",
+    inputSchema: {
+      type: "object",
+      properties: { param: { type: "string" } },
+      required: ["param"],
+    },
+  },
+];
+
+export async function handle(name, args) {
+  if (name === "my_tool") {
+    // 工具邏輯
+    return { content: [{ type: "text", text: "結果" }] };
+  }
+}
+```
+
+### Step 2 — 在 `index.js` 加入模組
+
+```js
+import * as myModule from "./tools/my_module.js";
+
+const TOOL_MODULES = [filesystem, php, database, excel, bookmarks, myModule]; // 加到陣列末尾
+```
+
+---
 
 ## 安裝與設定
 
@@ -91,7 +222,6 @@ DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=你的密碼
 DB_NAME=pnsdb
-BASE_PROJECT_PATH=D:\Project\
 ```
 
 ### 啟動
@@ -117,17 +247,21 @@ node index.js
 }
 ```
 
+---
+
 ## 技術細節
 
 - **MCP SDK**: `@modelcontextprotocol/sdk` v1.25+
+- **架構**: 模組化 — 每個工具類別獨立為 `tools/*.js`，Skills 路由在 `skills/index.js`
 - **Excel 引擎**: HyperFormula — 解析公式、追蹤引用鏈、模擬計算
-- **路徑安全**: `resolveSecurePath()` 防止目錄穿越攻擊
-- **ESM 相容**: `createRequire()` 在 ES Module 中載入 CommonJS 套件 (xlsx)
+- **路徑安全**: `resolveSecurePath()` 防止目錄穿越攻擊，限制在 `D:\Project\` 以內
+- **ESM 相容**: `createRequire()` 在 ES Module 中載入 CommonJS 套件 (xlsx, hyperformula)
 - **書籤路徑**: 自動偵測 Chrome User Data 路徑，支援自訂 `profilePath`
 
 ## 注意事項
 
-- Excel 邏輯追蹤預設深度 3 層，可透過參數調整
 - 書籤操作前請先關閉 Chrome，避免檔案鎖定衝突
 - `move_specific_bookmarks` 每次最多 20 個，大量搬移需分批呼叫
+- Excel 邏輯追蹤預設深度 3 層，可透過 `depth` 參數調整
 - SQL 指令請謹慎操作，建議先在測試環境驗證
+- 新增 Skill 後需重啟 MCP Server 才會生效
