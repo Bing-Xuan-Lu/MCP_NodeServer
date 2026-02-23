@@ -28,6 +28,18 @@ export const definitions = [
       "Chrome 書籤整理 Agent — 提供完整的書籤分類、清理、排序範例 Prompt",
     arguments: [],
   },
+  {
+    name: "php_upgrade",
+    description:
+      "PHP 7.x → 8.4 升級 Agent — 掃描資料夾內所有 PHP 檔案，自動修正為 PHP 8.4 相容語法",
+    arguments: [
+      {
+        name: "targetDir",
+        description: "要升級的資料夾路徑 (例如: myproject/cls/model)",
+        required: true,
+      },
+    ],
+  },
 ];
 
 // ============================================
@@ -47,6 +59,16 @@ export async function getPrompt(name, args = {}) {
   if (name === "bookmark_organizer") {
     const skillPath = path.join(SKILLS_DIR, "bookmark_agent.md");
     const content = await fs.readFile(skillPath, "utf-8");
+    return {
+      messages: [{ role: "user", content: { type: "text", text: content } }],
+    };
+  }
+
+  if (name === "php_upgrade") {
+    const targetDir = args.targetDir || "";
+    const skillPath = path.join(SKILLS_DIR, "php_upgrade_agent.md");
+    let content = await fs.readFile(skillPath, "utf-8");
+    content = content.replace(/{{TARGET_DIR}}/g, targetDir);
     return {
       messages: [{ role: "user", content: { type: "text", text: content } }],
     };
