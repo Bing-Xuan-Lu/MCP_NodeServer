@@ -233,17 +233,85 @@ node index.js
 
 ## 整合設定
 
-### Claude Desktop / Claude Code
-在 `claude_desktop_config.json` 或 `.mcp.json` 中加入：
+### 從 Git Clone 後的完整設定步驟
+
+#### Step 1 — 安裝依賴
+```bash
+npm install
+```
+
+#### Step 2 — 設定環境變數
+複製 `.env.example` 並填入資料庫密碼：
+```bash
+cp .env.example .env
+```
+
+#### Step 3 — 連接 Claude Code（MCP Server）
+
+將專案內的 `.mcp.json` **複製到家目錄**，讓 Claude Code 能自動啟動 MCP Server：
+
+```bash
+# Windows
+copy .mcp.json %USERPROFILE%\.mcp.json
+
+# macOS / Linux
+cp .mcp.json ~/.mcp.json
+```
+
+> ⚠️ 複製後請將 `.mcp.json` 內的路徑改為你本機的實際路徑：
+> ```json
+> {
+>   "mcpServers": {
+>     "project-migration-assistant-pro": {
+>       "type": "stdio",
+>       "command": "node",
+>       "args": ["C:\\實際路徑\\MCP_Server\\index.js"]
+>     }
+>   }
+> }
+> ```
+
+#### Step 4 — 部署斜線指令
+
+執行專案根目錄的部署腳本，將 `Skills/commands/` 複製到 `~/.claude/commands/`：
+
+```bash
+# Windows
+deploy-commands.bat
+
+# macOS / Linux
+bash deploy-commands.sh
+```
+
+部署完成後可直接使用：`/php_upgrade`、`/php_crud_generator`、`/bookmark_organizer`
+
+> 💡 **維護說明**：只需修改 `Skills/commands/` 內的 `.md` 檔，改完後重新執行部署腳本即可。
+
+#### Step 5 — 重啟 Claude Code
+
+完全關閉並重新開啟 Claude Code，MCP Server 會自動啟動。
+
+之後輸入 `/skills` 即可看到所有可用 Skill 清單。
+
+---
+
+### 設定完成後的使用方式
+
+| 輸入 | 效果 |
+|------|------|
+| `/skills` | 顯示所有可用 Skill 清單 |
+| 告訴 Claude 要用哪個 Skill | Claude 自動透過 MCP 調用 |
+
+---
+
+### Claude Desktop 設定（選用）
+若使用 Claude Desktop，在 `claude_desktop_config.json` 中加入：
 ```json
 {
   "mcpServers": {
     "project-migration-assistant-pro": {
       "command": "node",
-      "args": ["d:/Develop/MCP_NodeServer/index.js"],
-      "env": {
-        "DB_PASSWORD": "你的密碼"
-      }
+      "args": ["C:\\實際路徑\\MCP_Server\\index.js"]
     }
   }
 }
