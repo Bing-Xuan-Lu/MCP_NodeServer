@@ -17,8 +17,9 @@ MCP_NodeServer/
 ├── skills/
 │   └── index.js          ← Agent Skill 路由
 └── Skills/
-    ├── php_crud_agent.md ← PHP CRUD 產生器 Skill
-    └── bookmark_agent.md ← 書籤整理範例 Prompt
+    ├── php_crud_agent.md      ← PHP CRUD 產生器 Skill
+    ├── php_upgrade_agent.md   ← PHP 7.x → 8.4 升級 Skill
+    └── bookmark_agent.md      ← 書籤整理範例 Prompt
 ```
 
 每個 `tools/` 模組統一介面：
@@ -107,6 +108,7 @@ MCP Prompts 功能，可在 Claude 中直接呼叫完整的 Agent 技能書。
 | Skill 名稱 | 說明 | MD 檔案 |
 | --- | --- | --- |
 | `php_crud_generator` | 根據資料表自動產生完整後台模組 (model + CRUD 頁面) | `Skills/php_crud_agent.md` |
+| `php_upgrade` | PHP 7.x → 8.4 升級 Agent — 掃描資料夾、自動修正為 PHP 8.4 相容語法（13 條升遷規則） | `Skills/php_upgrade_agent.md` |
 | `bookmark_organizer` | Chrome 書籤整理 SOP + 範例 Prompt 集 | `Skills/bookmark_agent.md` |
 
 ---
