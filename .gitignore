@@ -9,3 +9,5 @@ package-lock.json
 .vscode
 .claude
 .mcp.json
+Skills/commands/*_internal.md
+deploy-commands-internal.bat
