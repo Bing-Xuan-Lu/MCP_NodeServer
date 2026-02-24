@@ -277,7 +277,7 @@ cp .mcp.json ~/.mcp.json
 
 ```bash
 # Windows
-deploy-commands.bat
+.\deploy-commands.bat
 
 # macOS / Linux
 bash deploy-commands.sh
