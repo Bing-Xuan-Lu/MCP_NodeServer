@@ -162,13 +162,13 @@ read_file("{{PROJECT_NAME}}.Web/Views/{Feature}/Detail.cshtml")  ← 若有 Deta
 ### Step 4：讀取 PHP 風格參考
 
 ```
-list_files("{{PHP_DIR}}/adminControl/project")
+list_files("{{PROJECT_DIR}}/{{PHP_DIR}}/adminControl/project")
 → 取得 project 模組的所有 PHP 檔案
 
 讀取與 Step 1 分析結果對應的 PHP 參考檔：
-read_file("{{PHP_DIR}}/adminControl/project/add.php")    ← 若需要 add
-read_file("{{PHP_DIR}}/adminControl/project/list.php")   ← 若需要 list
-read_file("{{PHP_DIR}}/adminControl/project/detail.php") ← 若需要 detail
+read_file("{{PROJECT_DIR}}/{{PHP_DIR}}/adminControl/project/add.php")    ← 若需要 add
+read_file("{{PROJECT_DIR}}/{{PHP_DIR}}/adminControl/project/list.php")   ← 若需要 list
+read_file("{{PROJECT_DIR}}/{{PHP_DIR}}/adminControl/project/detail.php") ← 若需要 detail
 
 → 分析 PHP 專案的：
   - HTML 結構與 CSS 類別
@@ -206,11 +206,11 @@ get_db_schema("{{TABLE_NAME}}")
   BLL:        {Area}/Biz{Feature}.cs
 
 將產生的 PHP 檔案：
-  1. {{PHP_DIR}}/cls/model/{{TARGET_MODULE}}.class.php
-  2. {{PHP_DIR}}/adminControl/{{TARGET_MODULE}}/list.php
-  3. {{PHP_DIR}}/adminControl/{{TARGET_MODULE}}/add.php
-  4. {{PHP_DIR}}/adminControl/{{TARGET_MODULE}}/add_.php
-  5. {{PHP_DIR}}/adminControl/{{TARGET_MODULE}}/detail.php
+  1. {{PROJECT_DIR}}/{{PHP_DIR}}/cls/model/{{TARGET_MODULE}}.class.php
+  2. {{PROJECT_DIR}}/{{PHP_DIR}}/adminControl/{{TARGET_MODULE}}/list.php
+  3. {{PROJECT_DIR}}/{{PHP_DIR}}/adminControl/{{TARGET_MODULE}}/add.php
+  4. {{PROJECT_DIR}}/{{PHP_DIR}}/adminControl/{{TARGET_MODULE}}/add_.php
+  5. {{PROJECT_DIR}}/{{PHP_DIR}}/adminControl/{{TARGET_MODULE}}/detail.php
 
 請確認是否正確，確認後開始產生程式碼。
 ```
@@ -225,14 +225,14 @@ get_db_schema("{{TABLE_NAME}}")
 ✅ .NET → PHP 翻寫完成！
 
 📊 統計：
-  專案：{{PROJECT_DIR}} ({{PROJECT_NAME}}) → {{PHP_DIR}}
+  專案：{{PROJECT_DIR}} ({{PROJECT_NAME}}) → {{PROJECT_DIR}}/{{PHP_DIR}}
   參考 .NET 檔案：X 個 (Controller + Model + BLL + Views)
   產生 PHP 檔案：Y 個
   語法驗證：全部通過 ✅
 
 📝 檔案清單：
-  📄 {{PHP_DIR}}/cls/model/{{TARGET_MODULE}}.class.php
-  📄 {{PHP_DIR}}/adminControl/{{TARGET_MODULE}}/list.php
+  📄 {{PROJECT_DIR}}/{{PHP_DIR}}/cls/model/{{TARGET_MODULE}}.class.php
+  📄 {{PROJECT_DIR}}/{{PHP_DIR}}/adminControl/{{TARGET_MODULE}}/list.php
   ...
 
 🔄 .NET → PHP 對照：
