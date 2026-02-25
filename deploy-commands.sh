@@ -8,5 +8,6 @@ cp -f Skills/commands/php_crud_generator.md ~/.claude/commands/php_crud_generato
 cp -f Skills/commands/bookmark_organizer.md ~/.claude/commands/bookmark_organizer.md
 cp -f Skills/commands/dotnet_to_php.md      ~/.claude/commands/dotnet_to_php.md
 cp -f Skills/commands/php_net_to_php_test.md           ~/.claude/commands/php_net_to_php_test.md
+cp -f Skills/commands/axshare_diff.md        ~/.claude/commands/axshare_diff.md
 
-echo "Done! Available commands: /php_upgrade  /php_crud_generator  /bookmark_organizer  /dotnet_to_php  /php_net_to_php_test"
+echo "Done! Available commands: /php_upgrade  /php_crud_generator  /bookmark_organizer  /dotnet_to_php  /php_net_to_php_test  /axshare_diff"
