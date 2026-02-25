@@ -40,6 +40,38 @@ export const definitions = [
       },
     ],
   },
+  {
+    name: "dotnet_to_php",
+    description:
+      ".NET → PHP 翻寫 Agent — 讀取 C# Controller/Model/BLL/View，翻寫為 PHP 模組",
+    arguments: [
+      {
+        name: "projectDir",
+        description: "專案資料夾名稱 (例如: PG_Milestone_ERP)",
+        required: true,
+      },
+      {
+        name: "projectName",
+        description: ".NET 專案名稱前綴 (例如: PNS)",
+        required: true,
+      },
+      {
+        name: "phpDir",
+        description: "PHP 專案資料夾名稱 (例如: PG_Milestone_ERP_PHP)",
+        required: true,
+      },
+      {
+        name: "targetModule",
+        description: "翻寫後 PHP 要放的資料夾名稱 (例如: empdailyreport)",
+        required: true,
+      },
+      {
+        name: "tableName",
+        description: "對應的 MySQL 資料表名稱 (例如: EmpDailyReport)",
+        required: true,
+      },
+    ],
+  },
 ];
 
 // ============================================
@@ -69,6 +101,24 @@ export async function getPrompt(name, args = {}) {
     const skillPath = path.join(SKILLS_DIR, "php_upgrade_agent.md");
     let content = await fs.readFile(skillPath, "utf-8");
     content = content.replace(/{{TARGET_DIR}}/g, targetDir);
+    return {
+      messages: [{ role: "user", content: { type: "text", text: content } }],
+    };
+  }
+
+  if (name === "dotnet_to_php") {
+    const projectDir = args.projectDir || "";
+    const projectName = args.projectName || "";
+    const phpDir = args.phpDir || "";
+    const targetModule = args.targetModule || "";
+    const tableName = args.tableName || "";
+    const skillPath = path.join(SKILLS_DIR, "dotnet_to_php_agent.md");
+    let content = await fs.readFile(skillPath, "utf-8");
+    content = content.replace(/{{PROJECT_DIR}}/g, projectDir);
+    content = content.replace(/{{PROJECT_NAME}}/g, projectName);
+    content = content.replace(/{{PHP_DIR}}/g, phpDir);
+    content = content.replace(/{{TARGET_MODULE}}/g, targetModule);
+    content = content.replace(/{{TABLE_NAME}}/g, tableName);
     return {
       messages: [{ role: "user", content: { type: "text", text: content } }],
     };

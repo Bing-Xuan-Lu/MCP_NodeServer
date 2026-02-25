@@ -31,7 +31,7 @@ export async function handle(name, args)   // 工具邏輯
 
 ---
 
-## 工具總覽 (26 個)
+## 工具總覽 (28 個)
 
 ### 1. 檔案系統 (4)
 
@@ -53,12 +53,16 @@ export async function handle(name, args)   // 工具邏輯
 | `send_http_request` | 發送 HTTP 請求，支援 Multipart 檔案上傳 |
 | `tail_log` | 讀取檔案最後 N 行 (適用 PHP Error Log) |
 
-### 3. 資料庫 MySQL (2)
+### 3. 資料庫 MySQL (4)
 
 | 工具 | 說明 |
 |------|------|
+| `set_database` | 設定資料庫連線 (host/port/user/password/database)，設定後同一對話內有效 |
+| `get_current_db` | 查看目前的資料庫連線設定 |
 | `get_db_schema` | 查看資料表結構 (欄位與型別) |
 | `execute_sql` | 執行 SQL 指令 (DDL/DML) |
+
+> 使用 `get_db_schema` / `execute_sql` 前，需先呼叫 `set_database` 設定連線。連線設定保存在記憶體中，MCP Server 重啟後需重新設定。
 
 ### 4. Excel 分析 (3)
 
@@ -109,6 +113,7 @@ MCP Prompts 功能，可在 Claude 中直接呼叫完整的 Agent 技能書。
 | --- | --- | --- |
 | `php_crud_generator` | 根據資料表自動產生完整後台模組 (model + CRUD 頁面) | `Skills/php_crud_agent.md` |
 | `php_upgrade` | PHP 7.x → 8.4 升級 Agent — 掃描資料夾、自動修正為 PHP 8.4 相容語法（13 條升遷規則） | `Skills/php_upgrade_agent.md` |
+| `dotnet_to_php` | .NET → PHP 翻寫 Agent — 讀取 C# Controller/View，翻寫為 PHP CRUD 模組 | `Skills/dotnet_to_php_agent.md` |
 | `bookmark_organizer` | Chrome 書籤整理 SOP + 範例 Prompt 集 | `Skills/bookmark_agent.md` |
 
 ---
@@ -217,14 +222,9 @@ const TOOL_MODULES = [filesystem, php, database, excel, bookmarks, myModule]; //
 npm install
 ```
 
-### 環境變數 (.env)
-```env
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=你的密碼
-DB_NAME=pnsdb
-```
+### 資料庫連線
+
+不再使用 `.env` 設定資料庫。改為在對話中透過 `set_database` 工具動態設定連線。
 
 ### 啟動
 ```bash
