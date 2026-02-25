@@ -24,10 +24,10 @@ $ARGUMENTS
 1. **讀取 Controller**：分析有哪些 Action Method，只翻寫存在的功能（不假設一定有完整 CRUD）
 2. **回推 Model + BLL**：從 Controller 找出對應的 {專案名稱}.Models 和 {專案名稱}.BLL，讀取並分析
 3. **讀取 View**：只讀取 Controller 中存在的 Action 對應的 .cshtml
-4. **讀取 PHP 風格參考**：讀取 `{PHP資料夾}/adminControl/project/*.php` 作為風格規範
+4. **讀取 PHP 風格參考**：讀取 `{專案資料夾}/{PHP資料夾}/adminControl/project/*.php` 作為風格規範
 5. **查詢資料表結構**：用 `get_db_schema` 取得 MySQL 欄位資訊
 6. **列出翻寫計畫**：告知使用者將產生哪些 PHP 檔案，等確認後再動手
-7. **產生 PHP 程式碼**：輸出到 `{PHP資料夾}/adminControl/{模組}/` 和 `cls/model/`
+7. **產生 PHP 程式碼**：輸出到 `{專案資料夾}/{PHP資料夾}/adminControl/{模組}/` 和 `{專案資料夾}/{PHP資料夾}/cls/model/`
 8. **語法驗證**：每寫完一個檔案立即用 `php -l` 驗證
 
 ## 翻寫準則
