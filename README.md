@@ -115,6 +115,7 @@ MCP Prompts 功能，可在 Claude 中直接呼叫完整的 Agent 技能書。
 | `php_upgrade` | PHP 7.x → 8.4 升級 Agent — 掃描資料夾、自動修正為 PHP 8.4 相容語法（13 條升遷規則） | `Skills/php_upgrade_agent.md` |
 | `dotnet_to_php` | .NET → PHP 翻寫 Agent — 讀取 C# Controller/View，翻寫為 PHP CRUD 模組 | `Skills/dotnet_to_php_agent.md` |
 | `php_net_to_php_test` | PHP 整合測試 Agent — 對 .NET 轉 PHP 模組進行 CRUD、資料寫入、檔案上傳的完整測試 | `Skills/php_net_to_php_test_agent.md` |
+| `axshare_diff` | AxShare 規格書差異比對 — 比對 Axure 規格與測試網站的功能差異 | `Skills/axshare_diff_agent.md` |
 | `bookmark_organizer` | Chrome 書籤整理 SOP + 範例 Prompt 集 | `Skills/bookmark_agent.md` |
 
 ---

@@ -95,6 +95,29 @@ export const definitions = [
       },
     ],
   },
+  {
+    name: "axshare_diff",
+    description:
+      "AxShare 規格書差異比對 — 比對 Axure 規格與測試網站的功能差異",
+    arguments: [
+      {
+        name: "axshareUrl",
+        description: "AxShare 規格書網址 (例如: https://xxx.axshare.com)",
+        required: true,
+      },
+      {
+        name: "testSiteUrl",
+        description: "測試網站基礎網址 (例如: http://localhost/project/adminControl)",
+        required: true,
+      },
+      {
+        name: "targetPages",
+        description:
+          "要比對的頁面，逗號分隔 (例如: list, add, detail, update)",
+        required: true,
+      },
+    ],
+  },
 ];
 
 // ============================================
@@ -156,6 +179,20 @@ export async function getPrompt(name, args = {}) {
     content = content.replace(/{{PROJECT_DIR}}/g, projectDir);
     content = content.replace(/{{PHP_DIR}}/g, phpDir);
     content = content.replace(/{{TARGET_MODULES}}/g, targetModules);
+    return {
+      messages: [{ role: "user", content: { type: "text", text: content } }],
+    };
+  }
+
+  if (name === "axshare_diff") {
+    const axshareUrl = args.axshareUrl || "";
+    const testSiteUrl = args.testSiteUrl || "";
+    const targetPages = args.targetPages || "";
+    const skillPath = path.join(SKILLS_DIR, "axshare_diff_agent.md");
+    let content = await fs.readFile(skillPath, "utf-8");
+    content = content.replace(/{{AXSHARE_URL}}/g, axshareUrl);
+    content = content.replace(/{{TEST_SITE_URL}}/g, testSiteUrl);
+    content = content.replace(/{{TARGET_PAGES}}/g, targetPages);
     return {
       messages: [{ role: "user", content: { type: "text", text: content } }],
     };
