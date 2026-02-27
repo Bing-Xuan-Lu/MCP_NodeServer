@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>程式設計師的私人AI助理員工</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: #0d1117;
+      background-image: radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 28px 28px;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', sans-serif;
+      min-height: 100vh;
+      padding: 56px 24px 96px;
+    }
+
+    .container {
+      max-width: 940px;
+      margin: 0 auto;
+    }
+
+    /* ── Header ── */
+    .header { margin-bottom: 48px; }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+
+    .eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #30363d;
+      letter-spacing: 2px;
+      margin-bottom: 14px;
+    }
+
+    .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: #e6edf3;
+      letter-spacing: -0.5px;
+      line-height: 1.2;
+    }
+
+    .version-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      padding: 4px 10px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #8b949e;
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+
+    .stat-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3fb950;
+      box-shadow: 0 0 8px rgba(63,185,80,0.6);
+    }
+
+    .stat-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: #8b949e;
+    }
+
+    .stat-text strong {
+      color: #3fb950;
+      font-size: 18px;
+    }
+
+    /* ── Divider ── */
+    .divider { height: 1px; background: #21262d; }
+
+    /* ── Section ── */
+    .section { margin-bottom: 8px; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 0;
+      border-bottom: 1px solid #21262d;
+      margin-bottom: 4px;
+    }
+
+    .section-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    .section-title.skills { color: #a371f7; }
+    .section-title.tools  { color: #39c5cf; }
+
+    .section-slash {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #30363d;
+    }
+
+    .section-subtitle {
+      font-size: 11px;
+      color: #484f58;
+      letter-spacing: 1px;
+    }
+
+    .section-total {
+      margin-left: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #484f58;
+    }
+
+    /* ── Row ── */
+    .dept-row {
+      display: flex;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #161b22;
+      border-left: 2px solid transparent;
+      margin-left: -2px;
+      padding-left: 0;
+      transition: background 0.15s, border-left-color 0.15s;
+      cursor: default;
+    }
+
+    .dept-row:hover { background: rgba(255,255,255,0.02); }
+
+    .section.skills .dept-row:hover { border-left-color: #a371f7; }
+    .section.tools  .dept-row:hover { border-left-color: #39c5cf; }
+
+    .dept-row:hover .dept-icon,
+    .dept-row:hover .dept-name { padding-left: 12px; }
+
+    .dept-icon {
+      font-size: 18px;
+      width: 32px;
+      flex-shrink: 0;
+      transition: padding 0.15s;
+    }
+
+    .dept-name {
+      width: 148px;
+      flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 500;
+      color: #c9d1d9;
+      transition: padding 0.15s;
+    }
+
+    .dept-tags {
+      flex: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 4px;
+      border: 1px solid #30363d;
+      background: #161b22;
+      color: #8b949e;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+
+    .section.skills .dept-row:hover .tag {
+      color: #d2a8ff;
+      border-color: #6e40c9;
+      background: rgba(110,64,201,0.08);
+    }
+
+    .section.tools .dept-row:hover .tag {
+      color: #79e8ee;
+      border-color: #1f7d83;
+      background: rgba(31,125,131,0.08);
+    }
+
+    .dept-count {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px;
+      font-weight: 500;
+      width: 36px;
+      text-align: right;
+      flex-shrink: 0;
+      color: #30363d;
+      transition: color 0.15s;
+    }
+
+    .section.skills .dept-row:hover .dept-count { color: #a371f7; }
+    .section.tools  .dept-row:hover .dept-count { color: #39c5cf; }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #21262d;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #30363d;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-top">
+        <div>
+          <p class="eyebrow">CLAUDE CODE · MCP SERVER</p>
+          <h1 class="title">程式設計師的私人AI助理員工</h1>
+        </div>
+        <span class="version-badge">v5.1.0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-dot"></span>
+        <span class="stat-text"><strong>23</strong> &nbsp;個能力已建立 &nbsp;·&nbsp; 8 Skills &nbsp;+&nbsp; 15 MCP Tools</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ─── Agent Skills ─── -->
+    <div class="section skills">
+      <div class="section-header">
+        <span class="section-title skills">Agent Skills</span>
+        <span class="section-slash">/</span>
+        <span class="section-subtitle">斜線指令，直接在 Claude Code 輸入觸發</span>
+        <span class="section-total">5 departments &nbsp;·&nbsp; 8 skills</span>
+      </div>
+
+      <div class="dept-row">
+        <span class="dept-icon">🐘</span>
+        <span class="dept-name">PHP 開發部</span>
+        <div class="dept-tags">
+          <span class="tag">/php_crud_generator</span>
+          <span class="tag">/php_crud_generator_internal</span>
+          <span class="tag">/php_upgrade</span>
+        </div>
+        <span class="dept-count">3</span>
+      </div>
+
+      <div class="dept-row">
+        <span class="dept-icon">🔄</span>
+        <span class="dept-name">程式移植部</span>
+        <div class="dept-tags">
+          <span class="tag">/dotnet_to_php</span>
+        </div>
+        <span class="dept-count">1</span>
+      </div>
+
+      <div class="dept-row">
+        <span class="dept-icon">🧪</span>
+        <span class="dept-name">測試品管部</span>
+        <div class="dept-tags">
+          <span class="tag">/php_net_to_php_test</span>
+          <span class="tag">/playwright_ui_test</span>
+        </div>
+        <span class="dept-count">2</span>
+      </div>
+
+      <div class="dept-row">
+        <span class="dept-icon">📋</span>
+        <span class="dept-name">規格分析部</span>
+        <div class="dept-tags">
+          <span class="tag">/axshare_diff</span>
+        </div>
+        <span class="dept-count">1</span>
+      </div>
+
+      <div class="dept-row">
+        <span class="dept-icon">🔖</span>
+        <span class="dept-name">工具管理部</span>
+        <div class="dept-tags">
+          <span class="tag">/bookmark_organizer</span>
+        </div>
+        <span class="dept-count">1</span>
+      </div>
+    </div>
+
+    <!-- ─── MCP Tools ─── -->
+    <div class="section tools" style="margin-top: 32px;">
+      <div class="section-header">
+        <span class="section-title tools">MCP Tools</span>
+        <span class="section-slash">/</span>
+        <span class="section-subtitle">工具模組，透過 MCP Server 自動調用</span>
+        <span class="section-total">4 departments &nbsp;·&nbsp; 15 tools</span>
+      </div>
+
+      <div class="dept-row">
+        <span class="dept-icon">📁</span>
+        <span class="dept-name">檔案系統部</span>
+        <div class="dept-tags">
+          <span class="tag">list_files</span>
+          <span class="tag">read_file</span>
+          <span class="tag">create_file</span>
+          <span class="tag">apply_diff</span>
+        </div>
+        <span class="dept-count">4</span>
+      </div>
+
+      <div class="dept-row">
+        <span class="dept-icon">🗄️</span>
+        <span class="dept-name">資料庫管理部</span>
+        <div class="dept-tags">
+          <span class="tag">set_database</span>
+          <span class="tag">get_current_db</span>
+          <span class="tag">get_db_schema</span>
+          <span class="tag">execute_sql</span>
+        </div>
+        <span class="dept-count">4</span>
+      </div>
+
+      <div class="dept-row">
+        <span class="dept-icon">⚙️</span>
+        <span class="dept-name">PHP 執行部</span>
+        <div class="dept-tags">
+          <span class="tag">run_php_script</span>
+          <span class="tag">run_php_test</span>
+          <span class="tag">send_http_request</span>
+          <span class="tag">tail_log</span>
+        </div>
+        <span class="dept-count">4</span>
+      </div>
+
+      <div class="dept-row">
+        <span class="dept-icon">📊</span>
+        <span class="dept-name">Excel 分析部</span>
+        <div class="dept-tags">
+          <span class="tag">get_excel_values_batch</span>
+          <span class="tag">trace_excel_logic</span>
+          <span class="tag">simulate_excel_change</span>
+        </div>
+        <span class="dept-count">3</span>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <span class="footer-text">project-migration-assistant-pro</span>
+      <span class="footer-text">github.com/Bing-Xuan-Lu/MCP_NodeServer</span>
+    </div>
+
+  </div>
+</body>
+</html>
