@@ -112,6 +112,10 @@ MCP_NodeServer/
 | `/playwright_ui_test` | 瀏覽器 UI 自動化測試（登入、CRUD、截圖）| 公開 |
 | `/axshare_diff` | AxShare 規格書 vs 實作網站差異比對 | 公開 |
 | `/bookmark_organizer` | Chrome 書籤整理 SOP 範例 | 公開 |
+| `/n8n_workflow_update` | n8n 工作流安全更新 SOP（deactivate→PUT→activate） | 公開 |
+| `/n8n_workflow_create` | n8n 新建工作流 SOP（create→PUT settings→activate→backup） | 公開 |
+| `/learn_claude_skill` | 從對話提取模式，自動產生並部署新 Skill，同步更新文件 | 公開 |
+| `/git_commit` | 分析變更自動產生繁體中文條列式 Commit 訊息並提交 | 公開 |
 
 ---
 
@@ -120,6 +124,19 @@ MCP_NodeServer/
 - MCP 檔案工具（list_files / read_file / create_file / apply_diff）的 basePath = `D:\Project\`
 - `resolveSecurePath()` 在 `config.js` 中實作，防止路徑穿越
 - 所有 MCP 工具呼叫路徑**相對於** `D:\Project\`，不需要加完整磁碟路徑
+- 需存取 `D:\Project\` 以外的路徑時，先呼叫 `grant_path_access` 工具（需說明原因）
+- Runtime 白名單在 MCP Server 重啟後自動清空，可用 `list_allowed_paths` 查詢目前狀態
+
+## Skill Factory MCP 工具（tools/skill_factory.js）
+
+| 工具名稱 | 功能 |
+| ------- | ---- |
+| `save_claude_skill` | 將 MD 內容儲存為 Skill 並自動部署到 `~/.claude/commands/` |
+| `list_claude_skills` | 列出所有 Skills 及部署狀態 |
+| `delete_claude_skill` | 刪除指定 Skill（來源 + 部署版本） |
+| `grant_path_access` | 將路徑加入 Runtime 白名單（重啟後清空） |
+| `list_allowed_paths` | 查詢目前允許存取的所有路徑 |
+| `revoke_path_access` | 從白名單移除指定路徑 |
 
 ---
 
