@@ -8,11 +8,12 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 // ── 工具模組 ──────────────────────────────────────────────
-import * as filesystem from "./tools/filesystem.js";
-import * as php        from "./tools/php.js";
-import * as database   from "./tools/database.js";
-import * as excel      from "./tools/excel.js";
-import * as bookmarks  from "./tools/bookmarks.js";
+import * as filesystem    from "./tools/filesystem.js";
+import * as php           from "./tools/php.js";
+import * as database      from "./tools/database.js";
+import * as excel         from "./tools/excel.js";
+import * as bookmarks     from "./tools/bookmarks.js";
+import * as skillFactory  from "./tools/skill_factory.js";
 
 // ── Skills 模組 ───────────────────────────────────────────
 import { definitions as skillDefinitions, getPrompt } from "./skills/index.js";
@@ -20,7 +21,7 @@ import { definitions as skillDefinitions, getPrompt } from "./skills/index.js";
 // ============================================
 // 工具模組清單 (新增模組只需在此加一行)
 // ============================================
-const TOOL_MODULES = [filesystem, php, database, excel, bookmarks];
+const TOOL_MODULES = [filesystem, php, database, excel, bookmarks, skillFactory];
 
 // ============================================
 // MCP Server 初始化
