@@ -116,6 +116,7 @@ MCP_NodeServer/
 | `/n8n_workflow_create` | n8n 新建工作流 SOP（create→PUT settings→activate→backup） | 公開 |
 | `/learn_claude_skill` | 從對話提取模式，自動產生並部署新 Skill，同步更新文件 | 公開 |
 | `/git_commit` | 分析變更自動產生繁體中文條列式 Commit 訊息並提交 | 公開 |
+| `/youtube_organizer` | YouTube 播放清單依語言與類型自動分類整理歌單 | 公開 |
 
 ---
 
@@ -142,11 +143,16 @@ MCP_NodeServer/
 
 ## 新增 Skill 流程
 
+> **重要：撰寫或修改任何 `Skills/commands/*.md` 前，必須先讀取範本：**
+> `Skills/commands/_skill_template.md`
+> 範本內有標題格式、章節規範、步驟格式、禁止事項的完整說明。
+
 ### 只要斜線指令（最簡單）
 
-1. 在 `Skills/commands/` 新增 `xxx.md`
-2. 執行 `deploy-commands.bat`
-3. 重啟 Claude Code → 可用 `/xxx`
+1. 讀取 `Skills/commands/_skill_template.md` 作為格式參考
+2. 在 `Skills/commands/` 新增 `xxx.md`
+3. 執行 `deploy-commands.bat`
+4. 重啟 Claude Code → 可用 `/xxx`
 
 ### 同時加入 MCP Prompts
 
