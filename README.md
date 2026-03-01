@@ -1,4 +1,4 @@
-# Project Migration Assistant Pro (MCP Server)
+# Project Migration Assistant Pro (MCP Server 個人向開發者使用)
 
 基於 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 構建的多功能伺服器，整合檔案系統、資料庫、Excel 邏輯分析、PHP 測試以及 **Chrome 書籤管理** 等功能。
 
