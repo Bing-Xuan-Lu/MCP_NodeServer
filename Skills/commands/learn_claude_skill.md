@@ -1,11 +1,29 @@
-# /learn_claude_skill — 從對話學習並建立新 Claude 技能
+# /learn_claude_skill — 從對話學習，建立或改進 Claude 技能
 
 你是能從對話中提取可重用模式的 AI 助理。
-當使用者說「/learn_claude_skill」或「把這個存成技能」時，請執行以下完整流程。
+支援兩種模式：
+- **新增模式**：從對話中萃取新技能
+- **改進模式**：檢討現有 Skill 的問題並修正
 
 ---
 
-## 流程
+## 判斷模式
+
+根據使用者輸入自動判斷：
+
+| 使用者說 | 模式 |
+|---------|------|
+| `/learn_claude_skill` | 新增（從對話萃取） |
+| `/learn_claude_skill 把這個存成技能` | 新增（指定主題） |
+| `/learn_claude_skill 改進 playwright_ui_test` | 改進（指定 Skill） |
+| `/learn_claude_skill 檢討 php_crud_generator` | 改進（指定 Skill） |
+| `/learn_claude_skill 修正 xxx` | 改進（指定 Skill） |
+
+關鍵字「改進 / 檢討 / 修正 / 更新 / fix」→ 改進模式，否則 → 新增模式。
+
+---
+
+## 新增模式
 
 ### 步驟 1：分析目前對話
 
@@ -16,7 +34,7 @@
 - **獨立性**：能在不同專案或場景使用
 
 若有多個候選模式，列出並詢問使用者選擇哪個。
-若使用者呼叫 `/learn_claude_skill [描述]`，直接以描述為主題，跳過詢問。
+若使用者指定了描述，直接以描述為主題。
 
 ### 步驟 2：撰寫 Skill MD 內容
 
@@ -42,93 +60,175 @@
 
 技能內容應**通用**，不寫死特定 URL、資料表名等，改用佔位符。
 
-### 步驟 3：儲存技能
+### 步驟 3：儲存與部署
 
-確認 MD 內容後，優先使用 MCP 工具，失敗時自動 fallback 到內建工具：
+→ 跳到「儲存與部署」章節
 
-**方式 A（優先）— 使用 MCP 工具 `save_claude_skill`：**
+---
 
-- `name`：技能名稱（英文小寫加底線，例如 `api_error_handler`）
-- `content`：步驟 2 生成的 Markdown 內容
-- `description`：一句話中文說明
+## 改進模式
 
-**方式 B（Fallback）— MCP 不可用時，改用 Claude Code 內建工具：**
+### 步驟 M1：讀取現有 Skill
 
-1. 使用 `Write` 工具將 MD 內容寫入：
-   `d:\Develop\MCP_NodeServer\Skills\commands\[name].md`
-
-2. 使用 `Bash` 工具複製到部署目錄：
-
-   ```bash
-   cp "d:/Develop/MCP_NodeServer/Skills/commands/[name].md" \
-      "$HOME/.claude/commands/[name].md"
-   ```
-
-儲存成功後繼續更新相關文件。
-
-### 步驟 4：更新 CLAUDE.md
-
-讀取 `d:\Develop\MCP_NodeServer\CLAUDE.md`，找到「可用 Skills（斜線指令）」表格，
-在表格末尾新增一列：
+已部署的 Skill 一定在 `~/.claude/commands/`，直接讀取：
 
 ```
-| `/[name]` | [技能說明] | 公開 |
+Read ~/.claude/commands/{skill_name}.md
 ```
 
-若為 `_internal` 結尾的技能，備註欄改為「私有，git-ignored」。
+若需要讀取原始碼（未部署的版本），找到 MCP Server 專案目錄：
 
-### 步驟 5：更新 docs/dashboard.html
+```
+Glob pattern="**/Skills/commands/{skill_name}.md"
+→ 找到路徑後 Read 該檔案
+```
 
-讀取 `d:\Develop\MCP_NodeServer\docs\dashboard.html`，在 Agent Skills 區塊中找出最適合的部門列（`dept-row`）：
+### 步驟 M2：分析對話中的問題
 
-**判斷歸類規則：**
+回顧本次對話，找出 Skill 執行時遇到的問題：
+
+**問題分類表**：
+
+| 問題類型 | 症狀 | Skill 該補什麼 |
+|---------|------|---------------|
+| 無窮錯誤迴圈 | 同一個步驟反覆失敗重試 | 加「失敗處理」：重試 N 次後停止，改用替代方案或詢問使用者 |
+| 步驟遺漏 | 缺少前置檢查導致後續步驟失敗 | 加前置檢查步驟（環境確認、檔案存在、權限等） |
+| 假設錯誤 | Skill 假設某個條件成立但實際不是 | 把假設改為檢查，不滿足時有 fallback |
+| 路徑/名稱錯誤 | 寫死的路徑或命名規則不正確 | 修正路徑，或改為動態取得 |
+| 工具使用不當 | 用了錯誤的 MCP 工具或參數 | 修正工具名稱和參數 |
+| 缺少交叉參考 | 自己猜解法而不去參考已有程式碼 | 加入參考模組/檔案的步驟 |
+| 範圍膨脹 | 做了超出 Skill 範圍的事 | 明確列出「不做什麼」清單 |
+| 輸出格式不清 | 結果雜亂難讀 | 改進輸出模板 |
+
+### 步驟 M3：產出改進報告
+
+向使用者回報分析結果：
+
+```
+📋 Skill 檢討報告：/{skill_name}
+
+🔍 本次對話發現的問題：
+
+| # | 問題類型 | 具體描述 | 建議修改 |
+|---|---------|---------|---------|
+| 1 | 無窮迴圈 | 步驟 3 表單送出失敗後一直重試 | 加失敗上限 + fallback |
+| 2 | 假設錯誤 | 假設所有模組都有 del.php | 先 list_files 確認再操作 |
+| 3 | 缺少參考 | 自己猜 form action 格式 | 加交叉參考步驟 |
+
+📝 計畫修改的段落：
+  - 步驟 2c（新增頁）：加入失敗重試上限
+  - 測試準則：新增「最多重試 2 次」規則
+  - 新增「錯誤處理」章節
+```
+
+等使用者確認後再修改。
+
+### 步驟 M4：修改 Skill
+
+使用 `Edit` 工具修改 Skill 檔案，針對每個問題逐一修正。
+
+修改原則：
+- **最小修改**：只改有問題的部分，不重寫整份 Skill
+- **保留原有結構**：不改變步驟編號和章節順序（除非新增章節）
+- **加註修改原因**：在改動處附近加一行註解說明為什麼改
+
+### 步驟 M5：部署修改後的 Skill
+
+→ 跳到「儲存與部署」章節
+
+---
+
+## 儲存與部署
+
+**方式 A（優先）— MCP 工具 `save_claude_skill`：**
+
+注意：`save_claude_skill` 的 `content` 參數會**覆蓋**整個檔案。
+- 新增模式：直接傳入完整 MD 內容
+- 改進模式：**不要用 save_claude_skill**，改用方式 B 的 Edit 工具做局部修改
+
+**方式 B（改進模式 / Fallback）— Claude Code 內建工具：**
+
+先找到 MCP Server 專案目錄（只需找一次）：
+```
+Glob pattern="**/Skills/commands/_skill_template.md"
+→ 從結果路徑推算出 MCP Server 根目錄，記為 {MCP_ROOT}
+```
+
+新增：
+```
+Write {MCP_ROOT}/Skills/commands/[name].md
+```
+
+改進：
+```
+Edit {MCP_ROOT}/Skills/commands/[name].md（局部修改）
+```
+
+部署：
+```bash
+cp "{MCP_ROOT}/Skills/commands/[name].md" "$HOME/.claude/commands/[name].md"
+```
+
+---
+
+## 更新 dashboard.html
+
+找到 `{MCP_ROOT}/docs/dashboard.html` 並讀取，在 Agent Skills 區塊中找出最適合的部門列（`dept-row`）：
+
+**歸類規則：**
 
 | 技能類型 | 對應部門 |
-| ------- | ------- |
-| PHP 開發、CRUD、升級 | `PHP 開發部` |
-| .NET、程式翻譯、移植 | `程式移植部` |
-| 測試、品管、整合測試、UI 測試 | `測試品管部` |
-| 規格書、文件比對、分析 | `規格分析部` |
-| 書籤、工具管理、技能管理、學習 | `工具管理部` |
+|---------|---------|
+| PHP 開發、CRUD、升級 | PHP 開發部 |
+| .NET、程式翻譯、移植 | 程式移植部 |
+| 測試、品管、整合測試、UI 測試 | 測試品管部 |
+| 規格書、文件比對、分析 | 規格分析部 |
+| 書籤、工具管理、技能管理、學習 | 工具管理部 |
+| Git、Docker、開發流程 | 開發流程部 |
+| 文章擷取、影片、內容 | 內容擷取部 |
 | 全新類型（不符合以上） | 新增一個 `dept-row` |
 
-**更新內容：**
+**新增模式**：加入新 tag + 更新計數。
+**改進模式**：Skill 已存在於 dashboard，不需更新（除非改了名稱）。
 
-1. 在目標 `dept-row` 的 `.dept-tags` 中，末尾加入：
+更新內容：
+1. 在目標 `dept-row` 的 `.dept-tags` 中末尾加入 `<span class="tag">/[name]</span>`
+2. 該 `dept-row` 的 `.dept-count` +1
+3. `section-total` 的 skills 總數 +1
+4. 頁首統計列的 Skills 數字與總數 +1
 
-   ```html
-   <span class="tag">/[name]</span>
-   ```
+---
 
-2. 將該 `dept-row` 的 `.dept-count` 數字 +1
+## 確認完成
 
-3. 更新 `section-total` 中的 skills 總數（例如 `8 skills` → `9 skills`）
-
-4. 更新頁首統計列（約 248 行）中的 Skills 數字與總數：
-
-   ```html
-   <strong>[新總數]</strong> &nbsp;個能力已建立 &nbsp;·&nbsp; [新Skills數] Skills &nbsp;+&nbsp; 15 MCP Tools
-   ```
-
-若新技能屬於全新部門，在 Skills 區塊末尾新增 `dept-row`，並同時更新 `section-total` 的 departments 數。
-
-### 步驟 6：確認完成
-
-告知使用者以下資訊：
-
-```text
+**新增模式**：
+```
 ✅ 技能 /[name] 已建立並部署
 📁 Skills/commands/[name].md
 📦 已部署至 ~/.claude/commands/
-📝 CLAUDE.md Skills 表格已更新
 📊 dashboard.html 已歸類至 [部門名稱]
 ⚠️  請重啟 Claude Code 讓新指令生效
+```
+
+**改進模式**：
+```
+✅ 技能 /[name] 已改進並重新部署
+📁 Skills/commands/[name].md（已修改）
+📦 已部署至 ~/.claude/commands/
+
+📝 本次修改摘要：
+  - [修改 1 的一句話描述]
+  - [修改 2 的一句話描述]
+
+⚠️  請重啟 Claude Code 讓修改生效
 ```
 
 ---
 
 ## 注意事項
 
-- 內部私用技能（不想推 Git）命名加 `_internal` 後綴，`dashboard.html` 中同樣加入但標記 `[內部]`
+- 內部私用技能命名加 `_internal` 後綴
+- 改進模式下用 `Edit` 做局部修改，不要用 `save_claude_skill` 覆蓋整個檔案
 - 若使用者指定技能名稱，優先使用使用者給的名稱
-- `CLAUDE.md` 與 `dashboard.html` 更新完成後，使用者可自行 commit push
+- 改進前務必先讀取現有 Skill 全文，理解完整結構再動手
+- 改進後立即部署到 `~/.claude/commands/`，不需等使用者手動部署

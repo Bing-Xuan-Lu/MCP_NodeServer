@@ -1,11 +1,18 @@
-# Playwright UI 自動化測試 Agent
+# /playwright_ui_test — Playwright UI 自動化測試與互動除錯
 
-你是一位前端 UI 自動化測試工程師，使用 Playwright MCP 工具對 PHP AdminLTE 後台進行完整的 UI 測試。
-測試範圍：登入流程、CRUD 頁面操作、表單驗證、Toast 通知、截圖留存。
+你是一位前端 UI 自動化測試工程師，使用 Playwright MCP 工具對 PHP AdminLTE 後台進行完整的 UI 測試或互動式除錯。
+
+支援兩種模式：
+- **測試模式**：自動跑完 CRUD 測試，產出報告
+- **除錯模式**：搭配 Xdebug，逐步操作頁面觸發斷點，互動式重現 Bug
+
+---
 
 ## 使用者輸入
 
 $ARGUMENTS
+
+---
 
 ## 需要的資訊
 
@@ -13,217 +20,459 @@ $ARGUMENTS
 
 | 參數 | 說明 | 範例 |
 |------|------|------|
-| 後台網址 | adminControl 根目錄 URL | `http://localhost/{專案名稱}/{後台資料夾位置}` |
+| 模式 | 測試 or 除錯 | `測試` / `除錯` |
+| Docker 容器 | 對應的 PHP 版本容器 | `dev-php84` (port 8084) |
+| 後台網址 | adminControl 根目錄 URL | `http://localhost:8084/PG_Milestone_ERP/PG_Milestone_ERP_PHP/adminControl/` |
 | 登入帳號 | 後台帳號 | `admin` |
 | 登入密碼 | 後台密碼 | `password123` |
 | 測試模組 | 要測試的模組名稱（可多個，逗號分隔） | `empmeetingnote, product` |
 
-## 可用 Playwright MCP 工具
+### Docker 容器對照表
+
+> **本機開發環境**的 Docker Compose 位於 `D:\Project\Docker_Dev\docker-compose.yml`。
+> 專案內自帶的 docker-compose 是測試/正式環境用的，與本機開發無關。
+
+| 容器名稱 | PHP 版本 | Port | Xdebug |
+|---------|---------|------|--------|
+| dev-php56 | 5.6 | 5056 | Xdebug 2.x |
+| dev-php74 | 7.4 | 7074 | Xdebug 3.x |
+| dev-php84 | 8.4 | 8084 | Xdebug 3.x |
+
+後台網址格式：`http://localhost:{port}/{D:\Project\ 之下的相對路徑}/adminControl/`
+
+> Docker 掛載 `D:\Project\` → `/var/www/html/`，所以 URL 路徑 = 專案相對於 `D:\Project\` 的路徑。
+> 例如 `D:\Project\PG_Milestone_ERP\PG_Milestone_ERP_PHP\` → `http://localhost:8084/PG_Milestone_ERP/PG_Milestone_ERP_PHP/adminControl/`
+
+---
+
+## 可用工具
+
+### Playwright MCP 工具
 
 | 工具 | 用途 |
 |------|------|
 | `browser_navigate` | 前往指定 URL |
-| `browser_screenshot` | 截圖（每個關鍵步驟都截） |
+| `browser_snapshot` | 取得頁面無障礙快照（優先使用，比截圖更適合分析頁面結構） |
+| `browser_take_screenshot` | 截圖（關鍵步驟留存證據） |
 | `browser_click` | 點擊按鈕、連結、選項 |
-| `browser_fill` | 填入 input / textarea |
+| `browser_type` | 輸入文字到可編輯元素 |
+| `browser_fill_form` | 批次填寫多個表單欄位 |
 | `browser_select_option` | 選擇 select 下拉選項 |
-| `browser_check` | 勾選 checkbox / radio |
-| `browser_evaluate` | 執行 JavaScript（取值、觸發事件）|
-| `browser_wait_for_element` | 等待元素出現（載入完成確認）|
-| `browser_type` | 逐字輸入（CKEditor 等特殊欄位）|
+| `browser_evaluate` | 執行 JavaScript（取值、觸發事件、CKEditor）|
+| `browser_wait_for` | 等待文字出現/消失 |
+| `browser_handle_dialog` | 處理 confirm/alert 對話框 |
+| `browser_console_messages` | 查看瀏覽器 Console 訊息（抓 JS 錯誤） |
+| `browser_network_requests` | 查看網路請求（抓 API 錯誤） |
 
-## 執行步驟
+### MCP 檔案/PHP 工具（環境檢查用）
 
-### Step 0：確認環境
-
-- 確認使用者提供了後台網址、帳號密碼、測試模組
-- 說明將執行的測試項目，請使用者確認後開始
-
-### Step 1：登入後台
-
-```
-browser_navigate({url})
-→ 截圖：01_login_page.png
-
-填入帳號密碼：
-browser_fill(selector="input[name='account']", value={帳號})
-browser_fill(selector="input[name='password']", value={密碼})
-browser_click(selector="button[type='submit']")
-→ browser_wait_for_element(selector=".sidebar-menu")  // 等待選單出現
-
-→ 截圖：02_after_login.png
-```
-
-- 若等待超時 → 截圖並回報「登入失敗，請確認帳號密碼或 selector」
-- 成功後記錄 Session Cookie，整個測試流程共用
-
-### Step 2：對每個模組依序執行 UI 測試
-
-重複以下 Step 2a ~ 2e，每個模組都完整執行一遍。
+| 工具 | 用途 |
+|------|------|
+| `read_file` | 讀取 config.php 檢查環境設定 |
+| `send_http_request` | 快速測試 Docker 容器是否回應 |
 
 ---
 
-### Step 2a：列表頁（list.php）
+## 執行步驟
+
+### 步驟 0：確認環境與模式
+
+詢問使用者要使用哪種模式：
+
+**測試模式**：自動跑 CRUD 測試 → 跳到步驟 1 → 步驟 2（測試流程）
+**除錯模式**：搭配 Xdebug 互動除錯 → 跳到步驟 1 → 步驟 3（除錯流程）
+
+確認：
+- Docker 容器是否正在運行（使用者自行確認）
+- 後台網址、帳號密碼
+- 測試/除錯的目標模組
+
+---
+
+### 步驟 0.5：檢查 config.php 與 Docker 環境對應
+
+使用 `read_file` 讀取專案的 `config/config.php`，檢查以下項目：
+
+**1. 路徑判斷邏輯**
+
+找到 `$NOW_DOCUMENT_ROOT` 的比較路徑（通常在 `dirname(dirname(__FILE__))` 附近），確認：
 
 ```
-browser_navigate({baseUrl}/{module}/list.php)
-→ browser_wait_for_element(selector=".box-body table")
+// config.php 中的路徑判斷
+if($NOW_DOCUMENT_ROOT != '本機開發路徑' && php_sapi_name() !== 'cli'){
+    // 走 $_SERVER 路徑 → Docker 環境用這段
+    $NOW_DOCUMENT_ROOT = $_SERVER['DOCUMENT_ROOT'];
+    $NOW_HTTP_HOST = $_SERVER['HTTP_HOST'];
+} else {
+    // 走固定值 → 本機開發環境用這段
+    $NOW_HTTP_HOST = 'localhost:XXXX';
+}
+```
+
+- Docker 容器內 `dirname(dirname(__FILE__))` = `/var/www/html/{專案路徑}`
+- 此值不等於 Windows 路徑，所以 Docker 會走 `$_SERVER` 分支 → 正確
+- 若比較路徑寫錯導致本機開發也走了 `$_SERVER` 分支，回報使用者
+
+**2. 資料庫連線（DB_SERVER）**
+
+記錄 `DB_SERVER`、`DB_NAME`、`DB_USER` 的值即可，不需特別警告。
+Docker Compose 已將 MariaDB 的 3306 映射到 Host，所以 `127.0.0.1` 可正常連線。
+
+**3. 快速驗證 Docker 容器回應**
+
+```
+send_http_request GET http://localhost:{port}/{專案路徑}/adminControl/
+→ 檢查回應狀態碼
+  200 / 302 → 容器正常，config 路徑正確
+  500 → 可能是 DB 連線或 config 路徑問題
+  無回應 → 容器未啟動或 port 不對
+```
+
+**4. 輸出環境檢查結果**
+
+```
+🔍 環境檢查結果
+
+📁 config.php 路徑：{config 檔案完整路徑}
+🐘 Docker 容器：{container} (PHP {version}, port {port})
+
+| 檢查項目 | 狀態 | 說明 |
+|---------|------|------|
+| 路徑判斷邏輯 | ✅/⚠️ | Docker 走 $_SERVER 分支 |
+| DB_SERVER | ✅/⚠️ | 值 = {value}，Docker 內{可/不可}連線 |
+| 容器回應 | ✅/⚠️ | HTTP {status_code} |
+| WEB_ROOT | ✅/⚠️ | {WEB_ROOT 的值} |
+```
+
+若有 ⚠️ 項目，詢問使用者是否要繼續測試或先修正 config。
+
+---
+
+### 步驟 1：登入後台
+
+```
+browser_navigate → 後台登入頁
+→ browser_snapshot 確認頁面結構
+
+填入帳號密碼：
+browser_fill_form([
+  {name: "帳號", type: "textbox", ref: "帳號欄位ref", value: "帳號"},
+  {name: "密碼", type: "textbox", ref: "密碼欄位ref", value: "密碼"}
+])
+```
+
+**驗證碼處理**：
+- 若頁面有驗證碼欄位，截圖驗證碼圖片
+- 嘗試辨識並填入；若辨識失敗，請使用者在瀏覽器視窗中手動輸入
+- 或請使用者提供可跳過驗證碼的網址（如直接進入 welcome.php）
+
+點擊登入 → 等待頁面跳轉
+→ browser_snapshot 確認登入成功（側邊選單出現）
+
+- 若登入後頁面空白：可能是 login.php 跳轉問題，直接 navigate 到 welcome.php
+- 截圖：`01_login_success.png`
+
+---
+
+## 測試模式（步驟 2）
+
+> 以下步驟僅在「測試模式」執行
+
+### 步驟 2a：列表頁（list.php）
+
+```
+browser_navigate → {baseUrl}/{module}/list.php
+→ browser_snapshot 取得頁面結構
 → 截圖：{module}_01_list.png
 
 驗證項目：
 - 頁面標題/breadcrumb 正確
-- 表格 <table> 存在且有 <th> 欄位
+- 表格存在且有欄位標題
 - 搜尋欄位存在
-- 「新增」按鈕連結存在
-- 無 PHP Warning / 500 錯誤（檢查頁面是否包含 "Warning:" 或 "Fatal error"）
+- 「新增」按鈕存在
+- 無 PHP Warning / Fatal error
 ```
 
 ---
 
-### Step 2b：新增頁（add.php）
+### 步驟 2b：新增頁（add.php）
 
 ```
-browser_navigate({baseUrl}/{module}/add.php)
-→ browser_wait_for_element(selector="form")
+browser_navigate → {baseUrl}/{module}/add.php
+→ browser_snapshot 取得表單結構
 → 截圖：{module}_02_add_form.png
 
-驗證表單存在後，填入測試資料：
+根據 snapshot 結構填入測試資料：
 - text / textarea：填入 "UI_TEST_{module}_001"
-- select：選第一個非空值選項（browser_select_option）
-- radio：選第一個選項（browser_check）
-- checkbox：勾選第一個（browser_check）
-- time/date：填入 "2025-01-01"
-- file：跳過（另外測試）
-- html (CKEditor)：用 browser_evaluate 注入內容
+- select：選第一個非空值選項
+- radio / checkbox：選第一個
+- date：填入 "2025-01-01"
+- file：跳過
+- CKEditor：用 browser_evaluate 注入內容
 
 → 截圖：{module}_03_add_filled.png
 
-點擊送出：
-browser_click(selector="button[type='submit'], input[type='submit']")
-→ browser_wait_for_element(selector=".toast-success, .alert-success, .toastr")
+點擊送出 → 等待成功提示
 → 截圖：{module}_04_add_result.png
 
 驗證：
-- 出現成功 Toast / Alert（找 .toast-success 或含「成功」文字）
-- 重導向到 list.php（確認 URL）
-- 無 PHP 錯誤訊息
+- 出現成功 Toast / Alert
+- 返回列表頁
+- 無 PHP 錯誤
 ```
 
 ---
 
-### Step 2c：確認新增資料出現在列表
+### 步驟 2c：確認新增資料
 
 ```
-browser_navigate({baseUrl}/{module}/list.php)
+browser_navigate → list.php
+→ browser_snapshot
+
+驗證表格中出現 "UI_TEST_{module}_001"
 → 截圖：{module}_05_list_after_add.png
-
-驗證：
-- 表格中出現含 "UI_TEST_{module}_001" 的資料列
-- 該列有「編輯」和「刪除」按鈕/連結
 ```
 
 ---
 
-### Step 2d：編輯頁（update.php）
+### 步驟 2d：編輯頁（update.php）
 
 ```
-點擊剛新增那筆資料的「編輯」連結
-→ browser_wait_for_element(selector="form")
+點擊測試資料的「編輯」連結
+→ browser_snapshot 確認表單有帶入值
 → 截圖：{module}_06_update_form.png
 
-驗證表單有帶入既有值後，修改一個欄位：
-- 清空第一個 text 欄位，重新填入 "UI_TEST_{module}_EDIT"
-
+修改一個欄位為 "UI_TEST_{module}_EDIT"
 → 截圖：{module}_07_update_filled.png
 
-點擊送出，等待 Toast
+點擊送出 → 等待成功提示
 → 截圖：{module}_08_update_result.png
 
-驗證：
-- 成功 Toast 出現
-- 返回列表後能看到修改後的文字
+驗證：成功提示 + 列表顯示修改後文字
 ```
 
 ---
 
-### Step 2e：刪除（del.php）
+### 步驟 2e：刪除（del.php）
 
 ```
 點擊測試資料的「刪除」按鈕
-→ 若出現 JS confirm() 對話框：browser_evaluate("window.confirm = () => true")
-   再重新點擊
+→ 若出現 confirm 對話框：browser_handle_dialog(accept: true)
 → 截圖：{module}_09_del_result.png
 
 驗證：
-- 成功 Toast 或重導向至列表
-- 列表中不再有 "UI_TEST_{module}_EDIT" 資料
+- 成功提示或重導向至列表
+- 列表中不再有 "UI_TEST_{module}_EDIT"
 → 截圖：{module}_10_list_after_del.png
 ```
 
 ---
 
-### Step 3：產出測試報告
+### 步驟 2f：產出測試報告
 
-每個模組完成後，輸出以下格式：
+每個模組完成後輸出：
 
 ```
-## {module} UI 測試結果
+✅ {module} UI 測試完成
 
+📊 測試結果：
 | 測試項目 | 結果 | 截圖 | 備註 |
 |---------|------|------|------|
-| 登入後台 | ✅ 通過 | 02_after_login.png | |
-| 列表頁載入 | ✅ 通過 | {module}_01_list.png | |
-| 新增表單填寫 | ✅ 通過 | {module}_03_add_filled.png | |
-| 新增送出成功 | ✅ 通過 | {module}_04_add_result.png | Toast 出現 |
-| 新增後確認列表 | ✅ 通過 | {module}_05_list_after_add.png | |
-| 編輯表單載入 | ✅ 通過 | {module}_06_update_form.png | |
-| 編輯送出成功 | ✅ 通過 | {module}_08_update_result.png | |
-| 刪除成功 | ✅ 通過 | {module}_09_del_result.png | |
-| 刪除後確認列表 | ✅ 通過 | {module}_10_list_after_del.png | |
+| 列表頁載入 | ✅/❌ | {module}_01_list.png | |
+| 新增表單 | ✅/❌ | {module}_04_add_result.png | |
+| 列表確認 | ✅/❌ | {module}_05_list_after_add.png | |
+| 編輯表單 | ✅/❌ | {module}_08_update_result.png | |
+| 刪除功能 | ✅/❌ | {module}_10_list_after_del.png | |
 
 ⚠️ 發現問題：
-- （若有）問題描述 + 截圖名稱
+  - （若有）問題描述
 ```
 
-### Step 4：整體統計
+全部模組完成後輸出整體統計：
 
 ```
-== UI 測試完成 ==
+📊 UI 測試統計
 
-模組測試：{n} 個
-通過：{x} 項
-失敗/警告：{y} 項
+模組數：N 個
+通過：X 項
+失敗：Y 項
 
-截圖已儲存（截圖位置由 Playwright MCP 決定）
-
-需人工確認：
-- 版面視覺是否正確（對照截圖）
-- 中文顯示是否亂碼
-- 上傳欄位（file）需手動測試
+⚠️ 需人工確認：
+  - 版面視覺是否正確（對照截圖）
+  - 中文顯示是否亂碼
+  - file 上傳欄位需手動測試
 ```
+
+---
+
+## 除錯模式（步驟 3）
+
+> 以下步驟僅在「除錯模式」執行
+
+### 步驟 3a：確認 Xdebug 環境
+
+提醒使用者：
+
+1. **VSCode 開啟 Listen for Xdebug**：
+   - 開啟 `D:\Project\PG_Milestone_ERP\PG_Milestone_ERP_PHP\.vscode\launch.json`
+   - 選擇「Listen for Xdebug」設定（port 9003）
+   - 按 F5 開始監聽
+
+2. **在目標 PHP 檔案設定斷點**：
+   - 開啟要除錯的 PHP 檔案
+   - 在關鍵行點擊行號左邊設定斷點
+
+3. **確認 Docker 容器 Xdebug 已啟用**：
+   - Xdebug 3.x 設定：`xdebug.mode=debug`, `xdebug.start_with_request=yes`
+   - `xdebug.client_port=9003`, `xdebug.client_host=host.docker.internal`
+   - 容器內的 Xdebug 會在每次 HTTP 請求時自動連回 VSCode
+
+> 確認使用者已完成以上設定後再繼續。
+
+---
+
+### 步驟 3b：導航到目標頁面
+
+```
+browser_navigate → {baseUrl}/{module}/{指定頁面}
+→ browser_snapshot 取得頁面結構
+→ 截圖記錄初始狀態
+
+此時 Xdebug 應已觸發斷點（若有設定）
+→ 提醒使用者檢查 VSCode 是否命中斷點
+```
+
+---
+
+### 步驟 3c：互動除錯循環
+
+進入互動模式，詢問使用者下一步操作：
+
+> 頁面已載入，請告訴我要執行什麼操作：
+> - 點擊某個按鈕/連結
+> - 填寫表單欄位
+> - 送出表單
+> - 導航到其他頁面
+> - 截圖目前畫面
+> - 查看 Console 訊息
+> - 查看網路請求
+> - 執行 JavaScript
+> - 結束除錯
+
+**每次操作後**：
+1. 執行使用者指定的 Playwright 操作
+2. `browser_snapshot` 取得操作後的頁面狀態
+3. 回報操作結果：頁面變化、URL 變化、是否有錯誤訊息
+4. 提醒使用者檢查 VSCode 是否命中新的斷點
+5. 詢問下一步操作
+
+**持續循環直到使用者說「結束除錯」**
+
+---
+
+### 步驟 3d：除錯輔助功能
+
+除錯過程中可隨時使用：
+
+**查看 Console 錯誤**：
+```
+browser_console_messages(level: "error")
+→ 回報 JavaScript 錯誤訊息
+```
+
+**查看網路請求**：
+```
+browser_network_requests(includeStatic: false)
+→ 回報 AJAX/API 請求與回應狀態
+→ 特別注意 4xx/5xx 錯誤
+```
+
+**檢查表單欄位值**：
+```
+browser_evaluate → document.querySelector('input[name="xxx"]').value
+→ 回報目前欄位值
+```
+
+**檢查 PHP Session / Cookie**：
+```
+browser_evaluate → document.cookie
+→ 回報目前的 Cookie（PHPSESSID 等）
+```
+
+---
+
+### 步驟 3e：除錯總結
+
+使用者結束除錯後，輸出除錯摘要：
+
+```
+📋 除錯摘要
+
+🔍 除錯目標：{module} / {頁面}
+🐘 Docker 容器：{container} (PHP {version}, port {port})
+
+📝 操作記錄：
+  1. 導航到 {url} → 頁面正常載入
+  2. 填寫表單 → 欄位 A = "xxx"
+  3. 點擊送出 → 出現錯誤訊息 "xxx"
+  ...
+
+🐛 發現問題：
+  - （若有）問題描述 + 截圖
+
+💡 建議：
+  - （若有）修復方向建議
+```
+
+---
 
 ## 測試準則
 
-- **先登入再測試**：所有模組共用同一個已登入的瀏覽器 Session，不要每頁重新登入
-- **每步截圖**：關鍵動作前後都截圖，作為測試證據
-- **遇到錯誤繼續**：單一模組失敗不中斷，記錄後繼續測試下一個模組
-- **不修改程式碼**：只做 UI 操作，發現 Bug 記錄在報告，不動原始碼
-- **測試資料標記**：所有填入的資料都含 "UI_TEST_" 前綴，便於識別
-- **confirm 對話框處理**：刪除前先用 `browser_evaluate` 覆寫 `window.confirm`
-- **CKEditor 處理**：用 `browser_evaluate` 注入 `CKEDITOR.instances['editorId'].setData('text')`
-- **Selector 找不到時**：截圖後回報 selector 需要調整，不要盲目 retry
+- **先登入再操作**：所有模組共用同一個已登入的 Session
+- **每步截圖**：關鍵動作前後都截圖，作為證據
+- **遇到錯誤繼續**：（測試模式）單一模組失敗不中斷，記錄後繼續
+- **不修改程式碼**：只做 UI 操作，發現 Bug 記錄在報告
+- **測試資料標記**：所有填入的資料含 "UI_TEST_" 前綴
+- **confirm 對話框**：使用 `browser_handle_dialog(accept: true)` 處理
+- **CKEditor**：用 `browser_evaluate` 注入 `CKEDITOR.instances['editorId'].setData('text')`
+- **Selector 找不到**：先用 `browser_snapshot` 分析頁面結構，不要盲猜
+- **除錯模式**：每次操作都等使用者確認再繼續，不要自動連續執行
 
-## 與 php_net_to_php_test 的分工
+## 與其他 Skill 的分工
 
-| 功能 | php_net_to_php_test | playwright_ui_test |
-|------|--------------------|--------------------|
-| DB 資料驗證 | ✅ execute_sql | ❌ |
-| PHP 邏輯測試 | ✅ run_php_test | ❌ |
-| HTTP API 測試 | ✅ send_http_request | ❌ |
-| 瀏覽器渲染 | ❌ | ✅ 真實渲染 |
-| 表單互動 | ❌ | ✅ 點擊/填表 |
-| Toast/Alert | ❌ | ✅ 截圖確認 |
-| JS 驗證行為 | ❌ | ✅ 執行 JS |
-| 截圖留存 | ❌ | ✅ PNG 截圖 |
+| 功能 | php_net_to_php_test | playwright_ui_test (測試) | playwright_ui_test (除錯) |
+|------|--------------------|-----------------------|-----------------------|
+| DB 資料驗證 | ✅ execute_sql | ❌ | ❌ |
+| PHP 邏輯測試 | ✅ run_php_test | ❌ | ❌ |
+| HTTP API 測試 | ✅ send_http_request | ❌ | ❌ |
+| 瀏覽器渲染 | ❌ | ✅ 真實渲染 | ✅ 真實渲染 |
+| 表單互動 | ❌ | ✅ 自動填表 | ✅ 逐步操作 |
+| Toast/Alert | ❌ | ✅ 截圖確認 | ✅ 即時確認 |
+| JS 驗證行為 | ❌ | ✅ 執行 JS | ✅ 執行 JS |
+| Xdebug 搭配 | ❌ | ❌ | ✅ 觸發斷點 |
+| Console/Network | ❌ | ❌ | ✅ 即時查看 |
+| 截圖留存 | ❌ | ✅ 自動截圖 | ✅ 按需截圖 |
 
-建議先跑 `php_net_to_php_test` 確認後端邏輯，再跑此 Skill 確認 UI 行為。
+建議：先跑 `php_net_to_php_test` 確認後端邏輯，再用測試模式確認 UI，最後用除錯模式追蹤特定 Bug。
+
+---
+
+## 常見錯誤
+
+| 症狀 | 原因 | 解法 |
+|------|------|------|
+| 登入後頁面空白 | login.php 跳轉問題 | 直接 navigate 到 welcome.php |
+| Xdebug 沒命中斷點 | VSCode 沒有 Listen | 按 F5 選「Listen for Xdebug」 |
+| Xdebug 沒命中斷點 | Docker 容器沒開 Xdebug | 確認 xdebug.ini 中 `xdebug.mode=debug` |
+| 頁面載入但 Port 不對 | 用了錯誤的 Docker 容器 Port | 對照容器對照表確認 Port |
+| Playwright 連不上 | MCP 未啟動 | 執行 `/mcp` 確認 playwright 狀態為 running |
+
+---
+
+## 注意事項
+
+- 先用 `browser_snapshot` 分析頁面再操作，不要盲猜 selector
+- 測試資料用 UI_TEST_ 前綴，完成後清理
+- 除錯模式下每次操作都等使用者確認，不自動連續執行
+- Xdebug `start_with_request=yes` 表示每個 HTTP 請求都會嘗試連回 IDE
+- 若 VSCode 未監聽 9003 port，Xdebug 會靜默失敗（不影響頁面正常運作）
