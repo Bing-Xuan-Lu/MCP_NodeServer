@@ -11,3 +11,4 @@ package-lock.json
 .mcp.json
 Skills/commands/*_internal.md
 deploy-commands-internal.bat
+.playwright-mcp

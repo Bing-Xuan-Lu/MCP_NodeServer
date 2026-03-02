@@ -220,6 +220,7 @@ const TOOL_MODULES = [filesystem, php, database, excel, bookmarks, myModule]; //
 - Node.js v18+
 - MySQL (選用，書籤功能不需要)
 - Chrome 瀏覽器 (書籤功能)
+- Playwright MCP (選用，UI 自動化測試需要，見 Step 1.5)
 
 ### 安裝
 ```bash
@@ -243,6 +244,21 @@ node index.js
 ```bash
 npm install
 ```
+
+#### Step 1.5 — 安裝 Playwright MCP（選用）
+
+若需要 UI 自動化測試、網頁截圖、自動登入等功能：
+
+```bash
+# 安裝 Playwright MCP 套件
+npm install -g @playwright/mcp@latest
+
+# 安裝 Chromium 瀏覽器（約 170MB）
+npx playwright install chromium
+```
+
+> **注意**：套件名稱是 `@playwright/mcp`，不是 `@anthropic-ai/playwright-mcp`。
+> 詳細說明見 [docs/playwright-setup.md](docs/playwright-setup.md)
 
 #### Step 2 — 設定環境變數
 複製 `.env.example` 並填入資料庫密碼：
@@ -270,10 +286,20 @@ cp .mcp.json ~/.mcp.json
 >       "type": "stdio",
 >       "command": "node",
 >       "args": ["C:\\實際路徑\\MCP_Server\\index.js"]
+>     },
+>     "playwright": {
+>       "type": "stdio",
+>       "command": "npx",
+>       "args": ["@playwright/mcp@latest"]
 >     }
 >   }
 > }
 > ```
+>
+> **Playwright 注意事項**：
+> - `playwright` 必須放在 `mcpServers` **內部**，放到外面會讀不到
+> - 預設就是 headed 模式（開啟可見瀏覽器視窗），不需要加 `--headed` 參數
+> - 若要無頭模式，加 `"--headless"` 到 args 陣列
 
 #### Step 4 — 部署斜線指令
 
@@ -339,3 +365,4 @@ bash deploy-commands.sh
 - Excel 邏輯追蹤預設深度 3 層，可透過 `depth` 參數調整
 - SQL 指令請謹慎操作，建議先在測試環境驗證
 - 新增 Skill 後需重啟 MCP Server 才會生效
+- Playwright MCP 遇驗證碼時，可在彈出的瀏覽器視窗中手動輸入，或由 Claude 截圖辨識
