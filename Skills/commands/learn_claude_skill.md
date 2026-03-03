@@ -60,7 +60,26 @@
 
 技能內容應**通用**，不寫死特定 URL、資料表名等，改用佔位符。
 
-### 步驟 3：儲存與部署
+### 步驟 3：選擇指令類型
+
+詢問使用者：
+
+> 這個 Skill 要設為哪種指令？
+> 1. **外部指令**（通用，會進版控，適用所有專案）
+> 2. **內部指令**（私有，不進版控，可寫死專案路徑與設定）
+
+依選擇設定：
+
+| | 外部指令 | 內部指令 |
+|--|---------|---------|
+| 檔名 | `{name}.md` | `{name}_internal.md` |
+| 內容風格 | 通用、用佔位符 | 可寫死專案路徑、DB 設定、Docker 容器等 |
+| 版控 | 會 commit | `.gitignore` 已排除 `*_internal*` |
+| 部署方式 | `save_claude_skill` 或手動 cp | 手動 cp（見儲存與部署章節） |
+
+若使用者選擇內部指令，回到步驟 2 確認是否需要將佔位符替換為專案實際值。
+
+### 步驟 4：儲存與部署
 
 → 跳到「儲存與部署」章節
 
@@ -140,34 +159,39 @@ Glob pattern="**/Skills/commands/{skill_name}.md"
 
 ## 儲存與部署
 
-**方式 A（優先）— MCP 工具 `save_claude_skill`：**
-
-注意：`save_claude_skill` 的 `content` 參數會**覆蓋**整個檔案。
-- 新增模式：直接傳入完整 MD 內容
-- 改進模式：**不要用 save_claude_skill**，改用方式 B 的 Edit 工具做局部修改
-
-**方式 B（改進模式 / Fallback）— Claude Code 內建工具：**
-
 先找到 MCP Server 專案目錄（只需找一次）：
 ```
 Glob pattern="**/Skills/commands/_skill_template.md"
 → 從結果路徑推算出 MCP Server 根目錄，記為 {MCP_ROOT}
 ```
 
-新增：
+### 外部指令
+
+**方式 A（新增，優先）— MCP 工具 `save_claude_skill`：**
+
+注意：`save_claude_skill` 的 `content` 參數會**覆蓋**整個檔案。
+- 新增模式：直接傳入完整 MD 內容
+- 改進模式：**不要用 save_claude_skill**，改用方式 B
+
+**方式 B（改進模式 / Fallback）— Claude Code 內建工具：**
+
 ```
-Write {MCP_ROOT}/Skills/commands/[name].md
+新增：Write {MCP_ROOT}/Skills/commands/[name].md
+改進：Edit {MCP_ROOT}/Skills/commands/[name].md（局部修改）
+部署：cp "{MCP_ROOT}/Skills/commands/[name].md" "$HOME/.claude/commands/[name].md"
 ```
 
-改進：
+### 內部指令
+
+內部指令**不使用 `save_claude_skill`**（該工具不處理 `_internal` 後綴的特殊部署邏輯）。
+
 ```
-Edit {MCP_ROOT}/Skills/commands/[name].md（局部修改）
+新增：Write {MCP_ROOT}/Skills/commands/[name]_internal.md
+改進：Edit {MCP_ROOT}/Skills/commands/[name]_internal.md（局部修改）
+部署：cp "{MCP_ROOT}/Skills/commands/[name]_internal.md" "$HOME/.claude/commands/[name]_internal.md"
 ```
 
-部署：
-```bash
-cp "{MCP_ROOT}/Skills/commands/[name].md" "$HOME/.claude/commands/[name].md"
-```
+> 內部指令的 `.md` 檔已被 `.gitignore` 排除（`*_internal*`），不會進版控。
 
 ---
 
@@ -188,7 +212,8 @@ cp "{MCP_ROOT}/Skills/commands/[name].md" "$HOME/.claude/commands/[name].md"
 | 文章擷取、影片、內容 | 內容擷取部 |
 | 全新類型（不符合以上） | 新增一個 `dept-row` |
 
-**新增模式**：加入新 tag + 更新計數。
+**新增模式（外部）**：加入新 tag + 更新計數。
+**新增模式（內部）**：也加入 tag + 更新計數（內部指令一樣要追蹤）。
 **改進模式**：Skill 已存在於 dashboard，不需更新（除非改了名稱）。
 
 更新內容：
@@ -201,12 +226,20 @@ cp "{MCP_ROOT}/Skills/commands/[name].md" "$HOME/.claude/commands/[name].md"
 
 ## 確認完成
 
-**新增模式**：
+**新增模式（外部）**：
 ```
 ✅ 技能 /[name] 已建立並部署
 📁 Skills/commands/[name].md
 📦 已部署至 ~/.claude/commands/
 📊 dashboard.html 已歸類至 [部門名稱]
+⚠️  請重啟 Claude Code 讓新指令生效
+```
+
+**新增模式（內部）**：
+```
+✅ 技能 /[name]_internal 已建立並部署（內部指令）
+📁 Skills/commands/[name]_internal.md（不進版控）
+📦 已部署至 ~/.claude/commands/
 ⚠️  請重啟 Claude Code 讓新指令生效
 ```
 
