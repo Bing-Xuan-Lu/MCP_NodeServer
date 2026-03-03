@@ -157,8 +157,10 @@ async function saveSkill({ name, content, description }) {
 async function listSkills() {
   let srcFiles = [];
   try {
-    const entries = await fs.readdir(SKILLS_DIR);
-    srcFiles = entries.filter((f) => f.endsWith(".md"));
+    const entries = await fs.readdir(SKILLS_DIR, { recursive: true });
+    srcFiles = entries
+      .filter((f) => f.endsWith(".md") && path.basename(f) !== "_skill_template.md")
+      .map((f) => path.basename(f));
   } catch {
     // 目錄不存在
   }
@@ -202,7 +204,14 @@ async function deleteSkill({ name }) {
     };
   }
 
-  const srcPath    = path.join(SKILLS_DIR, `${name}.md`);
+  // 遞迴搜尋來源（支援子資料夾）
+  let srcPath = path.join(SKILLS_DIR, `${name}.md`);
+  try {
+    const entries = await fs.readdir(SKILLS_DIR, { recursive: true });
+    const rel = entries.find((e) => path.basename(e) === `${name}.md`);
+    if (rel) srcPath = path.join(SKILLS_DIR, rel);
+  } catch { /* 找不到就用預設路徑 */ }
+
   const deployPath = path.join(DEPLOY_DIR, `${name}.md`);
   const results    = [];
 

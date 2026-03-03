@@ -3,12 +3,11 @@ build
 npm-debug.log
 .env
 .DS_Store
-.env
 .env.test
 package-lock.json
 .vscode
 .claude
 .mcp.json
-Skills/commands/*_internal.md
+Skills/commands/**/*_internal.md
 deploy-commands-internal.bat
 .playwright-mcp
