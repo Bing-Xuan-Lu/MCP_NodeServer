@@ -88,6 +88,13 @@ ls ~/.claude/commands/*.md
 
 技能內容應**通用**，不寫死特定 URL、資料表名等，改用佔位符。
 
+#### 撰寫品質原則（Composio Best Practices）
+
+- **說明行**：`# /name — 說明` 的一句話應能回答「何時該用這個 Skill」。例：「將本機 PHP 專案部署到遠端測試機」比「部署工具」更容易在對的情境觸發。
+- **祈使語氣**：步驟描述用動詞開頭（「讀取」、「連線」、「確認」），避免「你應該…」或「請去做…」。
+- **精簡原則**：Skill MD 只放核心執行步驟；複雜範例、對照表移到底部「參考」或「常見錯誤」章節，保持步驟主體簡潔。
+- **技能命名**：優先使用「動詞 + 領域」格式（`sftp_deploy`、`db_migration_generator`），避免泛用名稱（`tool`、`helper`、`dev_util`）。
+
 生成後，以 code block 展示完整 MD 內容，詢問使用者：
 
 > 以上是生成的 Skill 內容，確認後繼續。如需調整，請說明需要更改哪些部分。
@@ -264,7 +271,7 @@ Glob pattern="**/Skills/commands/_skill_template.md"
 | 全新類型（不符合以上） | 新增一個 `dept-row` |
 
 **新增模式（外部）**：加入新 tag + 更新計數。
-**新增模式（內部）**：也加入 tag + 更新計數（內部指令一樣要追蹤）。
+**新增模式（內部）**：`_internal` Skill **不加入** dashboard tag，也不更新計數。
 **改進模式**：Skill 已存在於 dashboard，不需更新（除非改了名稱）。
 **合併模式**：移除被合併 Skill 的 tag，對應 `dept-count` 和總數各 -1。同時刪除被合併的 Skill 檔案和部署檔。
 
