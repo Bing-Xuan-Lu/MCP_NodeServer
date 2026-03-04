@@ -12,7 +12,7 @@ $ARGUMENTS
 
 若未指定，掃描整個專案。可指定：
 - 特定檔案：`download.php`
-- 特定目錄：`adminControl/empmeetingnote/`
+- 特定目錄：`adminControl/{module}/`
 - 特定常數：`DOCUMENT_ROOT`
 
 ## 步驟
