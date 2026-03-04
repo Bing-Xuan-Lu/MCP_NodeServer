@@ -36,6 +36,34 @@
 若有多個候選模式，列出並詢問使用者選擇哪個。
 若使用者指定了描述，直接以描述為主題。
 
+### 步驟 1b：相似技能檢查
+
+在撰寫新 Skill 之前，先掃描現有技能是否有功能重疊：
+
+```
+ls ~/.claude/commands/*.md
+→ 讀取每個 Skill 的標題行（# /name — 說明）
+→ 比對目前要建立的技能是否與某個現有 Skill 功能相似
+```
+
+**判斷相似的標準**：
+- 操作對象相同（如都操作 Docker、都處理 PHP 升級）
+- 流程步驟高度重疊（超過 50% 步驟相同）
+- 差異僅在參數或目標專案不同
+
+**發現相似時**，向使用者報告：
+
+> 發現以下現有技能與此次要建立的技能功能相似：
+> - `/existing_skill` — 該技能的一句話說明
+>
+> 建議方案：
+> 1. **整合**：將新功能合併到現有 `/existing_skill`（推薦）
+> 2. **擴展**：在現有 Skill 加入可選參數/模式來涵蓋新場景
+> 3. **獨立建立**：仍然建立新 Skill（適用於差異確實很大的情況）
+
+若使用者選擇整合或擴展 → 自動切換為**改進模式**，目標為現有的相似技能。
+若無相似技能或使用者選擇獨立建立 → 繼續步驟 2。
+
 ### 步驟 2：撰寫 Skill MD 內容
 
 按照以下格式生成技能內容：
@@ -107,6 +135,23 @@ Read ~/.claude/commands/{skill_name}.md
 Glob pattern="**/Skills/commands/{skill_name}.md"
 → 找到路徑後 Read 該檔案
 ```
+
+### 步驟 M1b：相似技能檢查
+
+改進時同步掃描是否有其他 Skill 與目標 Skill 功能重疊：
+
+```
+ls ~/.claude/commands/*.md
+→ 讀取每個 Skill 的標題行
+→ 找出與目標 Skill 功能相近的技能
+```
+
+**發現可合併的技能時**，在步驟 M3 報告中一併提出：
+- 說明哪些 Skill 功能重疊
+- 建議合併方向（誰併入誰、保留哪個名稱）
+- 合併後需刪除的 Skill 檔案與 dashboard tag
+
+若使用者同意合併，在步驟 M4 一併處理：修改目標 Skill + 刪除被合併的 Skill + 更新 dashboard 計數。
 
 ### 步驟 M2：分析對話中的問題
 
@@ -221,6 +266,7 @@ Glob pattern="**/Skills/commands/_skill_template.md"
 **新增模式（外部）**：加入新 tag + 更新計數。
 **新增模式（內部）**：也加入 tag + 更新計數（內部指令一樣要追蹤）。
 **改進模式**：Skill 已存在於 dashboard，不需更新（除非改了名稱）。
+**合併模式**：移除被合併 Skill 的 tag，對應 `dept-count` 和總數各 -1。同時刪除被合併的 Skill 檔案和部署檔。
 
 更新內容：
 1. 在目標 `dept-row` 的 `.dept-tags` 中末尾加入 `<span class="tag">/[name]</span>`
@@ -247,6 +293,15 @@ Glob pattern="**/Skills/commands/_skill_template.md"
 📁 Skills/commands/[name]_internal.md（不進版控）
 📦 已部署至 ~/.claude/commands/
 ⚠️  請重啟 Claude Code 讓新指令生效
+```
+
+**合併模式**：
+```
+✅ 技能已合併
+📁 /[target_name] ← 已整合 /[merged_name] 的功能
+🗑️ /[merged_name] 已刪除（Skills/commands/ + ~/.claude/commands/）
+📊 dashboard.html 已更新計數
+⚠️  請重啟 Claude Code 讓修改生效
 ```
 
 **改進模式**：
