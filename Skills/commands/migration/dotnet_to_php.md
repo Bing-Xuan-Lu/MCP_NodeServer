@@ -13,11 +13,11 @@ $ARGUMENTS
 
 | 參數 | 說明 | 範例 |
 |------|------|------|
-| 專案資料夾 | 專案根目錄資料夾名稱 | `PG_Milestone_ERP` |
-| .NET 專案名稱 | .NET 專案前綴 (影響 *.Web, *.Models, *.BLL 路徑) | `PNS` |
-| PHP 資料夾 | PHP 專案資料夾名稱 | `PG_Milestone_ERP_PHP` |
-| 目標模組 | 翻寫後 PHP 要放的資料夾名稱 | `empdailyreport` |
-| 資料表 | 對應的 MySQL 資料表名稱 | `EmpDailyReport` |
+| 專案資料夾 | 專案根目錄資料夾名稱 | `{ProjectFolder}` |
+| .NET 專案名稱 | .NET 專案前綴 (影響 *.Web, *.Models, *.BLL 路徑) | `{NetProject}` |
+| PHP 資料夾 | PHP 專案資料夾名稱 | `{PhpFolder}` |
+| 目標模組 | 翻寫後 PHP 要放的資料夾名稱 | `{module_name}` |
+| 資料表 | 對應的 MySQL 資料表名稱 | `{TableName}` |
 
 ## 執行步驟
 

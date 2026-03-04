@@ -1,4 +1,4 @@
-# PHP 整合測試 Agent
+# /php_crud_test — PHP CRUD 模組整合測試
 
 你是一位 PHP 測試工程師，使用 MCP 工具對 PHP 模組進行完整的整合測試。
 測試範圍：CRUD 操作、資料寫入驗證、檔案上傳/下載。
@@ -13,13 +13,12 @@ $ARGUMENTS
 
 | 參數 | 說明 | 範例 |
 |------|------|------|
-| 專案資料夾 | 專案根目錄資料夾名稱 | `PG_Milestone_ERP` |
-| PHP 資料夾 | PHP 專案資料夾名稱 | `PG_Milestone_ERP_PHP` |
-| 測試模組 | 要測試的模組名稱 (可多個，逗號分隔) | `empmeetingnote, empdailyreport` |
+| 專案資料夾 | 專案根目錄資料夾名稱 | `{ProjectFolder}` |
+| PHP 資料夾 | PHP 專案資料夾名稱 | `{PhpFolder}` |
+| 測試模組 | 要測試的模組名稱 (可多個，逗號分隔) | `module_a, module_b` |
 
 ## 路徑規則（最重要）
 
-- PHP 專案在 .NET 專案資料夾底下
 - MCP 工具的 basePath 是 `D:\Project\`
 - 所有路徑必須加上 `{專案資料夾}/{PHP資料夾}/` 前綴
 - 正確：`list_files("{專案資料夾}/{PHP資料夾}/adminControl/{模組}")`

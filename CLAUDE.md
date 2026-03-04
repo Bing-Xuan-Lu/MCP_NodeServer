@@ -95,4 +95,4 @@ MCP_NodeServer/
 - `skills/index.js`（小寫）= MCP Prompts 路由；`Skills/`（大寫）= MD 檔目錄，兩者不同
 - 新增 Skill 後更新 `docs/dashboard.html`（含 JS SKILLS 物件）；**不需修改此 CLAUDE.md**（目錄結構變動除外）
 - Playwright MCP：`npm install -g @playwright/mcp@latest`
-- **禁止在 Skill MD 檔（`Skills/commands/*.md`）中寫入客戶實際網址、域名、專案名稱**，範例一律使用 `example.com`、`localhost` 等通用佔位符。`reports/` 目錄下的執行報告不受此限。
+- **禁止在 Skill MD 檔（`Skills/commands/*.md`）中寫入客戶實際網址、域名、專案名稱、資料表名稱、模組名稱**，範例一律使用 `{ProjectFolder}`、`{TableName}`、`module_a`、`example.com`、`localhost` 等通用佔位符。`reports/` 目錄下的執行報告不受此限。

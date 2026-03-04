@@ -22,10 +22,10 @@ $ARGUMENTS
 |------|------|------|
 | 模式 | 測試 or 除錯 | `測試` / `除錯` |
 | Docker 容器 | 對應的 PHP 版本容器 | `dev-php84` (port 8084) |
-| 後台網址 | adminControl 根目錄 URL | `http://localhost:8084/PG_Milestone_ERP/PG_Milestone_ERP_PHP/adminControl/` |
+| 後台網址 | adminControl 根目錄 URL | `http://localhost:{port}/{ProjectFolder}/{PhpFolder}/adminControl/` |
 | 登入帳號 | 後台帳號 | `admin` |
-| 登入密碼 | 後台密碼 | `password123` |
-| 測試模組 | 要測試的模組名稱（可多個，逗號分隔） | `empmeetingnote, product` |
+| 登入密碼 | 後台密碼 | `your_password` |
+| 測試模組 | 要測試的模組名稱（可多個，逗號分隔） | `module_a, module_b` |
 
 ### Docker 容器對照表
 
@@ -41,7 +41,7 @@ $ARGUMENTS
 後台網址格式：`http://localhost:{port}/{D:\Project\ 之下的相對路徑}/adminControl/`
 
 > Docker 掛載 `D:\Project\` → `/var/www/html/`，所以 URL 路徑 = 專案相對於 `D:\Project\` 的路徑。
-> 例如 `D:\Project\PG_Milestone_ERP\PG_Milestone_ERP_PHP\` → `http://localhost:8084/PG_Milestone_ERP/PG_Milestone_ERP_PHP/adminControl/`
+> 例如 `D:\Project\{ProjectFolder}\{PhpFolder}\` → `http://localhost:{port}/{ProjectFolder}/{PhpFolder}/adminControl/`
 
 ---
 
@@ -314,7 +314,7 @@ browser_navigate → list.php
 提醒使用者：
 
 1. **VSCode 開啟 Listen for Xdebug**：
-   - 開啟 `D:\Project\PG_Milestone_ERP\PG_Milestone_ERP_PHP\.vscode\launch.json`
+   - 開啟 `D:\Project\{ProjectFolder}\{PhpFolder}\.vscode\launch.json`
    - 選擇「Listen for Xdebug」設定（port 9003）
    - 按 F5 開始監聽
 
@@ -440,7 +440,7 @@ browser_evaluate → document.cookie
 
 ## 與其他 Skill 的分工
 
-| 功能 | php_net_to_php_test | playwright_ui_test (測試) | playwright_ui_test (除錯) |
+| 功能 | php_crud_test | playwright_ui_test (測試) | playwright_ui_test (除錯) |
 |------|--------------------|-----------------------|-----------------------|
 | DB 資料驗證 | ✅ execute_sql | ❌ | ❌ |
 | PHP 邏輯測試 | ✅ run_php_test | ❌ | ❌ |
@@ -453,7 +453,7 @@ browser_evaluate → document.cookie
 | Console/Network | ❌ | ❌ | ✅ 即時查看 |
 | 截圖留存 | ❌ | ✅ 自動截圖 | ✅ 按需截圖 |
 
-建議：先跑 `php_net_to_php_test` 確認後端邏輯，再用測試模式確認 UI，最後用除錯模式追蹤特定 Bug。
+建議：先跑 `php_crud_test` 確認後端邏輯，再用測試模式確認 UI，最後用除錯模式追蹤特定 Bug。
 
 ---
 
