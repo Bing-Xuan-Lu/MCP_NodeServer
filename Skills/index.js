@@ -73,24 +73,24 @@ export const definitions = [
     ],
   },
   {
-    name: "php_net_to_php_test",
+    name: "php_crud_test",
     description:
-      "PHP 整合測試 Agent — 對 PHP 模組進行 CRUD、資料寫入、檔案上傳的完整測試",
+      "PHP CRUD 整合測試 Agent — 對 PHP 模組進行 CRUD、資料寫入、檔案上傳的完整測試",
     arguments: [
       {
         name: "projectDir",
-        description: "專案資料夾名稱 (例如: PG_Milestone_ERP)",
+        description: "專案資料夾名稱 (例如: {ProjectFolder})",
         required: true,
       },
       {
         name: "phpDir",
-        description: "PHP 專案資料夾名稱 (例如: PG_Milestone_ERP_PHP)",
+        description: "PHP 專案資料夾名稱 (例如: {PhpFolder})",
         required: true,
       },
       {
         name: "targetModules",
         description:
-          "要測試的模組名稱，逗號分隔 (例如: empmeetingnote, empdailyreport)",
+          "要測試的模組名稱，逗號分隔 (例如: module_a, module_b)",
         required: true,
       },
     ],
@@ -147,11 +147,11 @@ export async function getPrompt(name, args = {}) {
     };
   }
 
-  if (name === "php_net_to_php_test") {
+  if (name === "php_crud_test") {
     const projectDir = args.projectDir || "";
     const phpDir = args.phpDir || "";
     const targetModules = args.targetModules || "";
-    const skillPath = path.join(SKILLS_DIR, "php_net_to_php_net_to_php_test_agent.md");
+    const skillPath = path.join(SKILLS_DIR, "php_crud_test_agent.md");
     let content = await fs.readFile(skillPath, "utf-8");
     content = content.replace(/{{PROJECT_DIR}}/g, projectDir);
     content = content.replace(/{{PHP_DIR}}/g, phpDir);

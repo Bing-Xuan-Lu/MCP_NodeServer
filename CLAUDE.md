@@ -34,6 +34,7 @@ MCP_NodeServer/
         ├── docker/      ← Docker 維運部
         ├── dev_workflow/← 開發流程部
         ├── tooling/     ← 系統工具部
+        ├── claude_ops/  ← Claude 維運部（Skill 管理、MCP 維護）
         ├── content/     ← 內容擷取部
         └── life/        ← 生活自動化部（n8n, youtube）
 ```
@@ -57,9 +58,10 @@ MCP_NodeServer/
 
 **系統 B：斜線指令**（主要）
 
-- 存放：`Skills/commands/*.md`
+- 存放：`Skills/commands/{dept_folder}/*.md`（必須放在對應部門子資料夾，不可放根目錄）
 - 部署：呼叫 `save_claude_skill` 工具（自動儲存＋部署）或執行 `deploy-commands.bat`
 - 觸發：在 Claude Code 輸入 `/skill-name`
+- **上限：公開 Skill 總數不超過 50 個**，超過前先用 `/skill_audit` 審查並合併相似技能
 
 **Skills 清單**：見 `docs/dashboard.html` 或對話開始時的 system-reminder。
 
@@ -93,6 +95,7 @@ MCP_NodeServer/
 ## 注意事項
 
 - `skills/index.js`（小寫）= MCP Prompts 路由；`Skills/`（大寫）= MD 檔目錄，兩者不同
+- **所有 Skill MD 必須放在對應部門子資料夾**（`_skill_template.md` 例外）；部署到 `~/.claude/commands/` 才是 flat 結構
 - 新增 Skill 後更新 `docs/dashboard.html`（含 JS SKILLS 物件）；**不需修改此 CLAUDE.md**（目錄結構變動除外）
 - Playwright MCP：`npm install -g @playwright/mcp@latest`
 - **禁止在 Skill MD 檔（`Skills/commands/*.md`）中寫入客戶實際網址、域名、專案名稱、資料表名稱、模組名稱**，範例一律使用 `{ProjectFolder}`、`{TableName}`、`module_a`、`example.com`、`localhost` 等通用佔位符。`reports/` 目錄下的執行報告不受此限。

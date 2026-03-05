@@ -1,13 +1,22 @@
 #!/bin/bash
-echo "Deploying Claude Code slash commands..."
+# 動態部署 Skills/commands/ 下所有公開 Skill
+# 排除規則：以 _ 開頭、*_internal.md、*_steps.md
+# 新增 Skill 後直接重跑此腳本，無需修改。
 
+echo "Deploying Claude Code slash commands..."
 mkdir -p ~/.claude/commands
 
-cp -f Skills/commands/php_upgrade.md        ~/.claude/commands/php_upgrade.md
-cp -f Skills/commands/php_crud_generator.md ~/.claude/commands/php_crud_generator.md
-cp -f Skills/commands/bookmark_organizer.md ~/.claude/commands/bookmark_organizer.md
-cp -f Skills/commands/dotnet_to_php.md      ~/.claude/commands/dotnet_to_php.md
-cp -f Skills/commands/php_net_to_php_test.md           ~/.claude/commands/php_net_to_php_test.md
-cp -f Skills/commands/axshare_diff.md        ~/.claude/commands/axshare_diff.md
+count=0
+find Skills/commands -name "*.md" \
+  ! -name "_*" \
+  ! -name "*_internal.md" \
+  ! -name "*_steps.md" \
+| while read -r file; do
+  cp -f "$file" "$HOME/.claude/commands/$(basename "$file")"
+  echo "  ✓ $(basename "$file")"
+  count=$((count + 1))
+done
 
-echo "Done! Available commands: /php_upgrade  /php_crud_generator  /bookmark_organizer  /dotnet_to_php  /php_net_to_php_test  /axshare_diff"
+echo ""
+echo "Done! All public skills deployed to ~/.claude/commands/"
+echo "(Excluded: _skill_template.md, *_internal.md, *_steps.md)"
