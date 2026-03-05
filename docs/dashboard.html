@@ -141,7 +141,7 @@
       </div>
       <div class="stat-row">
         <span class="stat-dot"></span>
-        <span class="stat-text"><strong>58</strong> &nbsp;個能力已建立 &nbsp;·&nbsp; 32 Skills &nbsp;+&nbsp; 26 MCP Tools</span>
+        <span class="stat-text"><strong>59</strong> &nbsp;個能力已建立 &nbsp;·&nbsp; 33 Skills &nbsp;+&nbsp; 26 MCP Tools</span>
       </div>
     </div>
 
@@ -153,7 +153,7 @@
         <span class="section-title skills">Agent Skills</span>
         <span class="section-slash">/</span>
         <span class="section-subtitle">斜線指令，直接在 Claude Code 輸入觸發。點擊 tag 查看說明。</span>
-        <span class="section-total">11 departments &nbsp;·&nbsp; 32 skills &nbsp;·&nbsp; +1 規劃中</span>
+        <span class="section-total">11 departments &nbsp;·&nbsp; 33 skills &nbsp;·&nbsp; +1 規劃中</span>
       </div>
 
       <div class="dept-row">
@@ -250,8 +250,9 @@
           <span class="tag">/learn_claude_skill</span>
           <span class="tag">/git_commit</span>
           <span class="tag">/relocate_directory</span>
+          <span class="tag">/project_claudemd</span>
         </div>
-        <span class="dept-count">4</span>
+        <span class="dept-count">5</span>
       </div>
 
       <div class="dept-row">
@@ -466,6 +467,7 @@
     'learn_claude_skill':    { dept:'系統工具部',     title:'從對話學習並建立 Skill',          desc:'將對話中重複使用的操作模式提取為可重用 Skill，自動按規範撰寫 MD 檔並部署到 ~/.claude/commands/。',                 usage:'/learn_claude_skill',                       tools:['save_claude_skill','list_claude_skills'] },
     'git_commit':            { dept:'系統工具部',     title:'產生繁體中文 Git Commit 訊息',    desc:'分析 git diff 與 git status，自動產生符合專案慣例的繁體中文 Commit 訊息（含 Co-authored-by），並執行 commit。',    usage:'/git_commit',                               tools:[] },
     'relocate_directory':    { dept:'系統工具部',     title:'搬移目錄並更新所有路徑引用',       desc:'搬移目錄到新位置後，自動掃描並更新所有 .json、.bat、.md、設定檔中的舊路徑引用，確保不遺漏。',                     usage:'/relocate_directory',                       tools:['list_files','read_file','apply_diff'] },
+    'project_claudemd':      { dept:'系統工具部',     title:'為專案自動產生 CLAUDE.md 專案文件', desc:'系統性探索專案結構、設定檔、架構模式，自動產生結構化的 CLAUDE.md，讓 Claude 能快速理解專案全貌。',                  usage:'/project_claudemd [額外指示]',              tools:[] },
     'fetch_article':         { dept:'內容擷取部',     title:'網頁文章擷取與儲存',              desc:'抓取網頁內容，自動移除廣告與導覽列，擷取正文並儲存為純文字，方便後續 AI 分析、摘要或引用。',                       usage:'/fetch_article [URL]',                      tools:['send_http_request','create_file'] },
     'yt_transcript':         { dept:'內容擷取部',     title:'YouTube 字幕轉純文字',            desc:'從 YouTube 影片下載自動生成或手動字幕（支援中英），清理時間碼後輸出為可閱讀的純文字，方便筆記或摘要。',             usage:'/yt_transcript [YouTube URL]',              tools:['send_http_request','create_file'] },
     'youtube_organizer':     { dept:'生活自動化部',   title:'YouTube 播放清單自動分類',         desc:'分析播放清單中的影片，依語言（中文/日文/英文）與類型（流行/搖滾/古典/動漫）自動分類整理到不同歌單。',             usage:'/youtube_organizer [播放清單URL]',           tools:['send_http_request'] },
