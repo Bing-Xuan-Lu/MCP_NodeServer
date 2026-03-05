@@ -141,11 +141,25 @@
       </div>
       <div class="stat-row">
         <span class="stat-dot"></span>
-        <span class="stat-text"><strong>59</strong> &nbsp;個能力已建立 &nbsp;·&nbsp; 33 Skills &nbsp;+&nbsp; 26 MCP Tools</span>
+        <span class="stat-text"><strong>62</strong> &nbsp;個能力已建立 &nbsp;·&nbsp; 36 Skills &nbsp;+&nbsp; 26 MCP Tools</span>
       </div>
     </div>
 
     <div class="divider"></div>
+
+    <!-- ─── How to use ─── -->
+    <div style="margin: 20px 0 28px; padding: 12px 16px; background: rgba(163,113,247,0.06); border: 1px solid rgba(163,113,247,0.2); border-radius: 8px; display: flex; align-items: flex-start; gap: 12px;">
+      <span style="font-size: 16px; flex-shrink: 0; margin-top: 1px;">💡</span>
+      <div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #a371f7; letter-spacing: 1px; margin-bottom: 6px;">HOW TO USE</div>
+        <div style="font-size: 13px; color: #8b949e; line-height: 1.7;">
+          在 <strong style="color: #e6edf3;">Claude Code 對話框</strong>輸入斜線指令即可觸發，例如：
+          <code style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #d2a8ff; background: rgba(110,64,201,0.1); padding: 1px 6px; border-radius: 4px;">/git_commit</code>、
+          <code style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #d2a8ff; background: rgba(110,64,201,0.1); padding: 1px 6px; border-radius: 4px;">/php_crud_generator orders</code>。
+          點擊下方 <strong style="color: #e6edf3;">tag</strong> 可查看每個 Skill 的完整說明與用法。
+        </div>
+      </div>
+    </div>
 
     <!-- ─── Agent Skills ─── -->
     <div class="section skills">
@@ -153,7 +167,7 @@
         <span class="section-title skills">Agent Skills</span>
         <span class="section-slash">/</span>
         <span class="section-subtitle">斜線指令，直接在 Claude Code 輸入觸發。點擊 tag 查看說明。</span>
-        <span class="section-total">11 departments &nbsp;·&nbsp; 33 skills &nbsp;·&nbsp; +1 規劃中</span>
+        <span class="section-total">12 departments &nbsp;·&nbsp; 36 skills &nbsp;·&nbsp; +1 規劃中</span>
       </div>
 
       <div class="dept-row">
@@ -247,12 +261,22 @@
         <span class="dept-name">系統工具部</span>
         <div class="dept-tags">
           <span class="tag">/bookmark_organizer</span>
-          <span class="tag">/learn_claude_skill</span>
           <span class="tag">/git_commit</span>
           <span class="tag">/relocate_directory</span>
+        </div>
+        <span class="dept-count">3</span>
+      </div>
+
+
+      <div class="dept-row">
+        <span class="dept-icon">🤖</span>
+        <span class="dept-name">Claude 維運部</span>
+        <div class="dept-tags">
+          <span class="tag">/learn_claude_skill</span>
+          <span class="tag">/skill_audit</span>
           <span class="tag">/project_claudemd</span>
         </div>
-        <span class="dept-count">5</span>
+        <span class="dept-count">3</span>
       </div>
 
       <div class="dept-row">
@@ -261,8 +285,9 @@
         <div class="dept-tags">
           <span class="tag">/fetch_article</span>
           <span class="tag">/yt_transcript</span>
+          <span class="tag">/read_article</span>
         </div>
-        <span class="dept-count">2</span>
+        <span class="dept-count">3</span>
       </div>
 
       <!-- ── 生活 / 個人自動化 ── -->
@@ -280,8 +305,9 @@
           <span class="tag">/n8n_workflow_create</span>
           <span class="tag">/n8n_workflow_update</span>
           <span class="tag">/n8n_discord_dispatcher</span>
+          <span class="tag">/n8n_webhook_debug</span>
         </div>
-        <span class="dept-count">4</span>
+        <span class="dept-count">5</span>
       </div>
 
       <!-- ── 規劃中 ── -->
@@ -441,15 +467,15 @@
   <script>
   // ── Skill Data ──────────────────────────────────────────────────────────
   const SKILLS = {
-    'php_crud_generator':    { dept:'PHP 開發部',     title:'PHP後台CRUD模組產生器',           desc:'根據資料表名稱或功能描述，自動產生 PHP 後台增刪改查模組，包含列表、新增、編輯、刪除、表單驗證與資料庫操作。',      usage:'/php_crud_generator [資料表名稱或功能描述]', tools:['get_db_schema','execute_sql','create_file'] },
-    'php_upgrade':           { dept:'PHP 開發部',     title:'PHP 7.x → 8.4 升級',             desc:'掃描 PHP 專案所有過時語法，自動修正至 PHP 8.4 標準（Deprecated 函式、型別宣告、命名空間、create_function 等）。', usage:'/php_upgrade',                              tools:['list_files','read_file','apply_diff'] },
+    'php_crud_generator':    { dept:'PHP 開發部',     title:'PHP後台CRUD模組產生器',           desc:'開始開發新功能前，只要提供資料表名稱，即可自動產生完整 PHP 後台 CRUD 模組（列表、新增、編輯、刪除、表單驗證、DB 操作）。',      usage:'/php_crud_generator [資料表名稱或功能描述]', tools:['get_db_schema','execute_sql','create_file'] },
+    'php_upgrade':           { dept:'PHP 開發部',     title:'PHP 7.x → 8.4 升級',             desc:'當 PHP 7.x 專案出現 Deprecated 警告，或需要升級 PHP 版本時，自動掃描並修正所有過時語法至 PHP 8.4 標準。', usage:'/php_upgrade',                              tools:['list_files','read_file','apply_diff'] },
     'php_path_fix':          { dept:'PHP 開發部',     title:'修正 PHP 混合斜線路徑問題',        desc:'掃描 PHP 專案中所有 Windows 反斜線路徑寫法（如 include "\\Folder\\file.php"），統一修正為正斜線跨平台格式。',       usage:'/php_path_fix',                             tools:['list_files','read_file','apply_diff'] },
     'dotnet_to_php':         { dept:'程式移植部',     title:'.NET C# → PHP 翻寫',             desc:'將 .NET（C#）程式碼翻譯為 PHP，保留業務邏輯，轉換語言特性（型別系統、LINQ、async/await、泛型等）。',               usage:'/dotnet_to_php',                            tools:['read_file','create_file','apply_diff'] },
-    'php_crud_test':         { dept:'測試品管部',     title:'PHP CRUD 模組整合測試',              desc:'對 PHP 後台模組進行完整整合測試，包含資料寫入、讀取、更新、刪除，驗證 HTTP 回應碼與資料庫狀態一致性。',             usage:'/php_crud_test [模組描述]',                 tools:['send_http_request','execute_sql','run_php_test'] },
+    'php_crud_test':         { dept:'測試品管部',     title:'PHP CRUD 模組整合測試',              desc:'新功能開發完成後用於後端邏輯驗證：對 PHP 模組執行 CRUD 整合測試，逐步確認資料寫入與 DB 狀態一致性。',             usage:'/php_crud_test [模組描述]',                 tools:['send_http_request','execute_sql','run_php_test'] },
     'playwright_ui_test':    { dept:'測試品管部',     title:'Playwright UI 自動化測試、除錯與截圖總覽', desc:'使用 Playwright 對網頁進行 UI 自動化測試（CRUD）、互動式除錯（Xdebug），或截圖模式快速瀏覽系統功能。支援 DEV_MODE 驗證碼繞過。', usage:'/playwright_ui_test [目標描述]', tools:['Playwright MCP'] },
     'web_performance':       { dept:'測試品管部',     title:'網站前端效能檢測與優化建議',       desc:'量測 LCP、FCP、TTI、資源大小等效能指標，分析載入瓶頸（大圖、未壓縮 JS/CSS），提供具體優化建議。',                usage:'/web_performance',                          tools:['Playwright MCP','send_http_request'] },
     'axshare_diff':          { dept:'規格分析部',     title:'AxShare 規格書 vs 網站差異比對（全站/單一單元）',  desc:'比對 AxShare 原型規格與實際測試網站。全站模式產出完整差異報告；單一單元模式針對特定模組深度分析（含 DB 影響評估、ALTER TABLE SQL），結果直接整合進現有報告檔。',                  usage:'/axshare_diff [模組名稱]',                             tools:['Playwright MCP'] },
-    'db_schema_designer':    { dept:'資料庫規劃部',   title:'MySQL 資料表結構設計',             desc:'根據業務需求設計符合 3NF 的表格結構、FK 關聯、索引策略，輸出可直接執行的 CREATE TABLE SQL 與正規化說明。',          usage:'/db_schema_designer [業務描述]',             tools:['get_db_schema','execute_sql'] },
+    'db_schema_designer':    { dept:'資料庫規劃部',   title:'MySQL 資料表結構設計',             desc:'需求訪談後、開工前，根據業務描述設計符合 3NF 的資料表結構與索引策略，輸出可直接執行的 CREATE TABLE SQL。',          usage:'/db_schema_designer [業務描述]',             tools:['get_db_schema','execute_sql'] },
     'db_migration_generator':{ dept:'資料庫規劃部',   title:'Schema 差異遷移腳本產生器',        desc:'比對現有 DB Schema 與目標設計的差異，產生 ALTER TABLE 遷移腳本與回滾腳本，並標示 DROP COLUMN 等高風險操作。',       usage:'/db_migration_generator [目標描述]',         tools:['get_db_schema','execute_sql'] },
     'db_index_analyzer':     { dept:'資料庫規劃部',   title:'MySQL 查詢效能與索引優化分析',     desc:'執行 EXPLAIN 分析慢查詢，識別全表掃描、冗餘索引、索引順序錯誤等問題，產生 ADD/DROP INDEX 優化腳本與效能預估。',    usage:'/db_index_analyzer [SQL 或表格名稱]',        tools:['get_db_schema','execute_sql'] },
     'sftp_deploy':           { dept:'部署維運部',     title:'本機 PHP 專案部署到遠端測試機',    desc:'透過 SFTP 將本機 PHP 目錄上傳到遠端伺服器，部署前確認目標目錄內容，部署後驗證遠端檔案結果。',                    usage:'/sftp_deploy',                              tools:['sftp_connect','sftp_upload','sftp_list'] },
@@ -459,21 +485,24 @@
     'docker_short_url':      { dept:'Docker 維運部', title:'Docker Apache 短路徑映射設定',     desc:'為 Docker 容器中的 Apache 設定 mod_rewrite RewriteRule，讓長 URL 路徑可用短路徑存取，不影響其他專案。',            usage:'/docker_short_url',                         tools:['read_file','create_file','apply_diff','send_http_request'] },
     'git_worktree':          { dept:'開發流程部',     title:'建立隔離 Git Worktree',           desc:'為需要並行開發的分支建立 Git Worktree，自動設定相依性與環境，讓多分支同時開發互不干擾。',                          usage:'/git_worktree',                             tools:[] },
     'tdd':                   { dept:'開發流程部',     title:'TDD Red-Green-Refactor 循環指引', desc:'引導開發者按照 TDD 節奏：先寫失敗測試（Red）→ 最小實作（Green）→ 重構（Refactor），確保每步都有測試保護。',        usage:'/tdd [功能描述]',                            tools:['run_php_test','read_file','apply_diff'] },
-    'clean_arch':            { dept:'開發流程部',     title:'Clean Architecture 架構審查',     desc:'審查程式碼架構問題（God Class、業務邏輯混入 Controller、循環依賴等），提供依 Clean Architecture 的重構路線圖。',    usage:'/clean_arch',                               tools:['list_files','read_file'] },
+    'clean_arch':            { dept:'開發流程部',     title:'Clean Architecture 架構審查',     desc:'當發現現有程式碼混亂（God Class、業務邏輯散落 Controller、循環依賴）時，審查並提供 Clean Architecture 重構路線圖。',    usage:'/clean_arch',                               tools:['list_files','read_file'] },
     'ddd':                   { dept:'開發流程部',     title:'PHP DDD 架構規範指引',            desc:'開發新功能前的架構規範指引，提供 Clean Architecture 四層目錄結構、領域命名規範（避免 utils/helpers）、Early Return、DRY 等程式碼品質規則。', usage:'/ddd [模組名稱]',                          tools:['read_file'] },
     'sadd':                  { dept:'開發流程部',     title:'規格書驅動逐任務派遣開發',         desc:'有規格書後，以 SADD 模式建立任務清單，逐一派遣 SubAgent 執行並審查。支援循序（DB→Model→Controller）與並行（獨立模組同步）兩種模式，防止上下文污染與缺陷累積。', usage:'/sadd [規格書路徑]',                      tools:[] },
     'directory_reorganize':  { dept:'開發流程部',     title:'目錄結構自動分類整理',             desc:'分析目錄內所有檔案，根據功能與命名規律自動建立子資料夾分類，搬移檔案並產出整理報告。',                            usage:'/directory_reorganize [目錄路徑]',           tools:['list_files','create_file'] },
     'bookmark_organizer':    { dept:'系統工具部',     title:'Chrome 書籤整理助手',             desc:'整理 Chrome 書籤：掃描無效連結（404/DNS 失效）、移除重複書籤、依主題分類到資料夾、排序整理。',                    usage:'/bookmark_organizer',                       tools:['scan_and_clean_bookmarks','move_bookmarks','sort_bookmarks'] },
-    'learn_claude_skill':    { dept:'系統工具部',     title:'從對話學習並建立 Skill',          desc:'將對話中重複使用的操作模式提取為可重用 Skill，自動按規範撰寫 MD 檔並部署到 ~/.claude/commands/。',                 usage:'/learn_claude_skill',                       tools:['save_claude_skill','list_claude_skills'] },
+    'learn_claude_skill':    { dept:'Claude 維運部',  title:'從對話學習並建立 Skill',          desc:'當某個工作流程重複了 2-3 次、想固化為可重用指令時，從對話歷史提取模式、按規範撰寫 MD 並自動部署。',                 usage:'/learn_claude_skill',                       tools:['save_claude_skill','list_claude_skills'] },
     'git_commit':            { dept:'系統工具部',     title:'產生繁體中文 Git Commit 訊息',    desc:'分析 git diff 與 git status，自動產生符合專案慣例的繁體中文 Commit 訊息（含 Co-authored-by），並執行 commit。',    usage:'/git_commit',                               tools:[] },
     'relocate_directory':    { dept:'系統工具部',     title:'搬移目錄並更新所有路徑引用',       desc:'搬移目錄到新位置後，自動掃描並更新所有 .json、.bat、.md、設定檔中的舊路徑引用，確保不遺漏。',                     usage:'/relocate_directory',                       tools:['list_files','read_file','apply_diff'] },
-    'project_claudemd':      { dept:'系統工具部',     title:'為專案自動產生 CLAUDE.md 專案文件', desc:'系統性探索專案結構、設定檔、架構模式，自動產生結構化的 CLAUDE.md，讓 Claude 能快速理解專案全貌。',                  usage:'/project_claudemd [額外指示]',              tools:[] },
-    'fetch_article':         { dept:'內容擷取部',     title:'網頁文章擷取與儲存',              desc:'抓取網頁內容，自動移除廣告與導覽列，擷取正文並儲存為純文字，方便後續 AI 分析、摘要或引用。',                       usage:'/fetch_article [URL]',                      tools:['send_http_request','create_file'] },
+    'project_claudemd':      { dept:'Claude 維運部',  title:'為專案自動產生 CLAUDE.md 專案文件', desc:'系統性探索專案結構、設定檔、架構模式，自動產生結構化的 CLAUDE.md，讓 Claude 能快速理解專案全貌。',                  usage:'/project_claudemd [額外指示]',              tools:[] },
+    'skill_audit':           { dept:'Claude 維運部',  title:'Skill 耦合審計與合併建議',         desc:'技能越來越多不知用哪個時，掃描所有 Skill 找出重疊、命名混淆的技能，產出優先行動清單並執行合併或刪除。',           usage:'/skill_audit',                              tools:[] },
+    'fetch_article':         { dept:'內容擷取部',     title:'網頁文章擷取與儲存',              desc:'需要永久儲存文章時，擷取網頁正文並存為 .txt 檔（若只要當場閱讀與分析，請改用 /read_article）。',                       usage:'/fetch_article [URL]',                      tools:['send_http_request','create_file'] },
+    'read_article':          { dept:'內容擷取部',     title:'快速閱讀網頁文章並摘要',           desc:'丟一個 URL 立即獲得結構化摘要（主題、重點、洞察），適合技術文章、觀點評論的當場分析與討論。',                       usage:'/read_article [URL]',                       tools:['WebFetch'] },
     'yt_transcript':         { dept:'內容擷取部',     title:'YouTube 字幕轉純文字',            desc:'從 YouTube 影片下載自動生成或手動字幕（支援中英），清理時間碼後輸出為可閱讀的純文字，方便筆記或摘要。',             usage:'/yt_transcript [YouTube URL]',              tools:['send_http_request','create_file'] },
     'youtube_organizer':     { dept:'生活自動化部',   title:'YouTube 播放清單自動分類',         desc:'分析播放清單中的影片，依語言（中文/日文/英文）與類型（流行/搖滾/古典/動漫）自動分類整理到不同歌單。',             usage:'/youtube_organizer [播放清單URL]',           tools:['send_http_request'] },
     'n8n_workflow_create':   { dept:'生活自動化部',   title:'n8n 新建工作流 SOP',              desc:'從零開始在 n8n 建立並啟用 workflow，包含設定 Webhook 觸發器、節點串接、測試執行、啟用上線的完整 SOP。',           usage:'/n8n_workflow_create',                      tools:['send_http_request'] },
     'n8n_workflow_update':   { dept:'生活自動化部',   title:'n8n 工作流安全更新流程',          desc:'安全地更新現有 n8n workflow：先停用 → 備份 → 修改 → 測試 → 重新啟用，確保修改過程不影響正在執行的任務。',          usage:'/n8n_workflow_update',                      tools:['send_http_request'] },
     'n8n_discord_dispatcher':{ dept:'生活自動化部',   title:'n8n Discord 指令路由調度器',      desc:'建立 n8n Discord Bot 指令路由，讓不同的 Discord Slash Command 能觸發對應的 n8n workflow 分支處理。',              usage:'/n8n_discord_dispatcher',                   tools:['send_http_request'] },
+    'n8n_webhook_debug':     { dept:'生活自動化部',   title:'n8n Webhook 不觸發除錯',          desc:'診斷 n8n Webhook 節點無回應的根因：log 分析、HTTP method 測試、httpMethod 參數修復、deactivate→PUT→activate 流程。',  usage:'/n8n_webhook_debug',                        tools:['send_http_request'] },
   };
 
   // ── Panel Logic ─────────────────────────────────────────────────────────

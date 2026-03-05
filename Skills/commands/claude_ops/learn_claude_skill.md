@@ -101,13 +101,32 @@ ls ~/.claude/commands/*.md
 
 收到確認（或依據反饋修改完畢）後，再進入步驟 3。
 
-### 步驟 3：選擇指令類型
+### 步驟 3：選擇指令類型與所屬部門
 
 詢問使用者：
 
 > 這個 Skill 要設為哪種指令？
 > 1. **外部指令**（通用，會進版控，適用所有專案）
 > 2. **內部指令**（私有，不進版控，可寫死專案路徑與設定）
+
+確認後，依技能內容判斷所屬部門與子資料夾：
+
+| 技能類型 | 部門 | 子資料夾 |
+|---------|------|---------|
+| PHP 開發、CRUD、升級、路徑修正 | PHP 開發部 | `php_dev/` |
+| .NET、程式翻譯、移植 | 程式移植部 | `migration/` |
+| 測試、品管、整合測試、UI 測試 | 測試品管部 | `testing/` |
+| 規格書、文件比對、需求分析 | 規格分析部 | `spec/` |
+| 資料表設計、Schema、索引 | 資料庫規劃部 | `db_planning/` |
+| SFTP、上傳、部署到伺服器 | 部署維運部 | `deploy/` |
+| Docker、容器、Compose | Docker 維運部 | `docker/` |
+| Git、開發流程、架構、TDD | 開發流程部 | `dev_workflow/` |
+| 書籤、目錄整理、Git 工具 | 系統工具部 | `tooling/` |
+| Skill 管理、MCP 維護、CLAUDE.md | Claude 維運部 | `claude_ops/` |
+| 文章擷取、影片、內容處理 | 內容擷取部 | `content/` |
+| n8n、YouTube、生活自動化 | 生活自動化部 | `life/` |
+
+若無法確認，詢問使用者選擇部門。
 
 依選擇設定：
 
@@ -234,9 +253,10 @@ Glob pattern="**/Skills/commands/_skill_template.md"
 **方式 B（改進模式 / Fallback）— Claude Code 內建工具：**
 
 ```
-新增：Write {MCP_ROOT}/Skills/commands/[name].md
-改進：Edit {MCP_ROOT}/Skills/commands/[name].md（局部修改）
-部署：cp "{MCP_ROOT}/Skills/commands/[name].md" "$HOME/.claude/commands/[name].md"
+新增：Write {MCP_ROOT}/Skills/commands/{dept_folder}/[name].md
+改進：Edit {MCP_ROOT}/Skills/commands/{dept_folder}/[name].md（局部修改）
+部署：cp "{MCP_ROOT}/Skills/commands/{dept_folder}/[name].md" "$HOME/.claude/commands/[name].md"
+（注意：Skills/commands/ 有子資料夾分類；~/.claude/commands/ 是 flat，無子資料夾）
 ```
 
 ### 內部指令
@@ -244,9 +264,9 @@ Glob pattern="**/Skills/commands/_skill_template.md"
 內部指令**不使用 `save_claude_skill`**（該工具不處理 `_internal` 後綴的特殊部署邏輯）。
 
 ```
-新增：Write {MCP_ROOT}/Skills/commands/[name]_internal.md
-改進：Edit {MCP_ROOT}/Skills/commands/[name]_internal.md（局部修改）
-部署：cp "{MCP_ROOT}/Skills/commands/[name]_internal.md" "$HOME/.claude/commands/[name]_internal.md"
+新增：Write {MCP_ROOT}/Skills/commands/{dept_folder}/[name]_internal.md
+改進：Edit {MCP_ROOT}/Skills/commands/{dept_folder}/[name]_internal.md（局部修改）
+部署：cp "{MCP_ROOT}/Skills/commands/{dept_folder}/[name]_internal.md" "$HOME/.claude/commands/[name]_internal.md"
 ```
 
 > 內部指令的 `.md` 檔已被 `.gitignore` 排除（`*_internal*`），不會進版控。
