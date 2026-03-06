@@ -1,6 +1,6 @@
 # /web_performance — 網站前端效能檢測與優化建議
 
-你是前端效能分析專家，使用 Playwright 實測頁面載入指標，再搭配 Google PageSpeed Insights API 取得評分與建議，產出可執行的優化報告。
+你是前端效能分析專家，使用 Playwright 實測頁面載入指標，再搭配外部評分工具（PageSpeed Insights API → Lighthouse CLI → CrUX API，依可用性自動 fallback）取得評分與建議，產出可執行的優化報告。
 
 ---
 
@@ -25,12 +25,18 @@ $ARGUMENTS
 
 根據網址判斷可用的檢測方式：
 
-| 網址類型 | Playwright | PageSpeed API |
-|---------|------------|---------------|
-| `localhost` / `127.0.0.1` | 可用 | 不可用（本機無法從外網存取） |
-| 公開網址（https://...） | 可用 | 可用 |
+| 網址類型 | Playwright | PageSpeed API | Lighthouse CLI | CrUX API |
+|---------|------------|---------------|---------------|----------|
+| `localhost` / `127.0.0.1` | 可用 | 不可用 | 可用（本機也能測） | 不可用（無真實用戶數據） |
+| 公開網址（https://...） | 可用 | 可用（可能 429） | 可用（fallback） | 可用（需有足夠流量） |
 
 告知使用者將執行哪些檢測。
+
+**Lighthouse CLI 前置檢查**：執行 `lighthouse --version`，若未安裝則提示：
+```
+npm install -g lighthouse
+```
+Lighthouse 為免費工具，本機執行不受 API 速率限制。
 
 ### 步驟 1：Playwright 頁面實測
 
@@ -177,7 +183,11 @@ browser_evaluate function="() => {
 **正確順序**：Consent Manager → GTM Consent Mode default denied → GTM/GA
 若 GTM/GA 排在 Consent 之前，標記為 🔴 嚴重合規問題。
 
-### 步驟 2：PageSpeed Insights API（僅公開網址）
+### 步驟 2：外部評分工具（三層 Fallback）
+
+依序嘗試以下方案，成功一個就停止：
+
+#### 2a. PageSpeed Insights API（首選，僅公開網址）
 
 若網址為公開網址，呼叫 PageSpeed Insights API：
 
@@ -189,6 +199,93 @@ WebFetch url="https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url={UR
 ```
 WebFetch url="https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url={URL}&strategy=desktop&category=performance" prompt="提取同上資訊"
 ```
+
+**若回傳 429（速率限制）→ 進入 2b**
+
+#### 2b. Lighthouse CLI（Fallback 1，本機執行）
+
+PageSpeed API 不可用時（429 或 localhost），使用 Lighthouse CLI 本機執行：
+
+```bash
+# 先確認已安裝
+lighthouse --version
+
+# Mobile 測試（預設）
+lighthouse {URL} --output json --output-path .playwright-mcp/lighthouse-mobile.json --chrome-flags="--headless --no-sandbox" --only-categories=performance --form-factor=mobile --screenEmulation.mobile --throttling-method=simulate
+
+# Desktop 測試
+lighthouse {URL} --output json --output-path .playwright-mcp/lighthouse-desktop.json --chrome-flags="--headless --no-sandbox" --only-categories=performance --form-factor=desktop --screenEmulation.disabled --throttling-method=simulate
+```
+
+從 JSON 結果提取：
+- `categories.performance.score * 100` → 總分
+- `audits['largest-contentful-paint'].numericValue` → LCP
+- `audits['cumulative-layout-shift'].numericValue` → CLS
+- `audits['interactive'].numericValue` → TTI
+- `audits['total-blocking-time'].numericValue` → TBT（FID/INP 的替代指標）
+- `audits['first-contentful-paint'].numericValue` → FCP
+- `audits['speed-index'].numericValue` → Speed Index
+- 所有 `audits[*].score < 1` 的項目 → 待改善清單
+
+```bash
+# 快速提取重點（用 node 解析 JSON）
+node -e "
+const r = require('./.playwright-mcp/lighthouse-mobile.json');
+console.log('Score:', Math.round(r.categories.performance.score * 100));
+console.log('FCP:', r.audits['first-contentful-paint'].displayValue);
+console.log('LCP:', r.audits['largest-contentful-paint'].displayValue);
+console.log('CLS:', r.audits['cumulative-layout-shift'].displayValue);
+console.log('TBT:', r.audits['total-blocking-time'].displayValue);
+console.log('SI:', r.audits['speed-index'].displayValue);
+const failed = Object.values(r.audits).filter(a => a.score !== null && a.score < 1 && a.details).sort((a,b) => a.score - b.score);
+failed.forEach(a => console.log(a.score, a.title, a.displayValue || ''));
+"
+```
+
+**注意事項**：
+- Lighthouse 會自動啟動 Chrome，若 Playwright 正在使用 Chrome，需先關閉 Playwright 的瀏覽器（`browser_close`）再執行 Lighthouse，完成後再重新 `browser_navigate`
+- 若 Lighthouse 未安裝，提示使用者：`npm install -g lighthouse`
+- Lighthouse 執行時間較長（約 30-60 秒），告知使用者耐心等候
+
+**若 Lighthouse 也失敗（未安裝或執行錯誤）→ 進入 2c**
+
+#### 2c. CrUX API（Fallback 2，真實用戶數據，僅公開網址）
+
+Chrome User Experience Report API 提供真實 Chrome 用戶的效能數據（免費，不需 API Key）：
+
+```
+WebFetch url="https://chromeuxreport.googleapis.com/v1/records:queryRecord" prompt="提取以下資訊：1) 各指標的 p75 數值 2) 評級分佈（good/needs-improvement/poor 百分比）3) 涵蓋指標：LCP、CLS、INP、FCP、TTFB"
+```
+
+注意：CrUX API 需用 POST 方法，若 WebFetch 不支援 POST，改用 Bash：
+
+```bash
+curl -s -X POST "https://chromeuxreport.googleapis.com/v1/records:queryRecord" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "{URL}"}' | node -e "
+const chunks = [];
+process.stdin.on('data', c => chunks.push(c));
+process.stdin.on('end', () => {
+  const r = JSON.parse(chunks.join(''));
+  if (r.error) { console.log('CrUX 無數據:', r.error.message); process.exit(0); }
+  const m = r.record.metrics;
+  Object.keys(m).forEach(k => {
+    const p = m[k].percentiles;
+    const h = m[k].histogram;
+    console.log(k + ': p75=' + (p?.p75 || 'N/A') +
+      ' (good:' + ((h?.[0]?.density*100)||0).toFixed(0) + '%' +
+      ' / poor:' + ((h?.[2]?.density*100)||0).toFixed(0) + '%)');
+  });
+});
+"
+```
+
+**CrUX 限制**：
+- 只有流量足夠的網站才有數據（小型活動頁面可能無數據）
+- 數據為過去 28 天的彙總，不是即時測試結果
+- 不提供具體的優化建議，僅提供指標數值
+
+**若 CrUX 也無數據** → 在報告中標註「外部評分工具均不可用，僅使用 Playwright 實測數據」
 
 ### 步驟 3：產出效能報告
 
@@ -223,7 +320,7 @@ WebFetch url="https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url={UR
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🌐 PageSpeed Insights（若有）
+🌐 外部評分（PageSpeed / Lighthouse / CrUX，若有）
 
 | | Mobile | Desktop |
 |--|--------|---------|
@@ -273,7 +370,7 @@ Write {MCP_ROOT}/reports/web_performance_{domain}_{YYYYMMDD}.md
 - **頁面標題**：{title}
 - **檢測日期**：{date}
 - **檢測工具**：Playwright MCP + Network Analysis
-- **PageSpeed API**：{有/無/429 限制}
+- **外部評分工具**：{PageSpeed API / Lighthouse CLI / CrUX API / 均不可用}
 
 ## 1. 載入時間指標
 （含評級標準對照表）
@@ -349,8 +446,23 @@ Write {MCP_ROOT}/reports/web_performance_{domain}_{YYYYMMDD}.md
 
 ## 注意事項
 
-- `localhost` 網址只能用 Playwright 實測，無法用 PageSpeed API
-- PageSpeed API 免費版有速率限制（約每分鐘 1-2 次），避免連續大量呼叫
+- `localhost` 網址只能用 Playwright 實測和 Lighthouse CLI，無法用 PageSpeed API 和 CrUX API
+- PageSpeed API 免費版有速率限制（約每分鐘 1-2 次），遇 429 自動 fallback 到 Lighthouse CLI
+- Lighthouse CLI 需先安裝：`npm install -g lighthouse`（免費，本機執行無速率限制）
+- Lighthouse 執行時會佔用 Chrome，若 Playwright 正在使用需先 `browser_close`，Lighthouse 完成後再重新開啟
+- CrUX API 免費、不需 API Key，但只有流量足夠的網站才有數據（過去 28 天彙總）
 - Playwright 測試結果受本機效能影響，數值僅供相對比較
 - 報告中的「建議修正」應具體到可執行的程式碼或設定修改
 - 若需要登入才能測試的頁面，先用 Playwright 完成登入流程再分析
+
+### 三層 Fallback 摘要
+
+```
+PageSpeed API（公開網址首選）
+  ↓ 429 或失敗
+Lighthouse CLI（本機執行，需安裝）
+  ↓ 未安裝或失敗
+CrUX API（真實用戶數據，流量不足可能無數據）
+  ↓ 無數據
+僅使用 Playwright 實測指標
+```
