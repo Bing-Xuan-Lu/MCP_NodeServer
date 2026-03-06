@@ -10,7 +10,7 @@ set count=0
 for /r "Skills\commands" %%F in (*.md) do (
   echo %%~nxF | findstr /I /B "_" > nul
   if errorlevel 1 (
-    echo %%~nxF | findstr /I /E "_internal.md" "_steps.md" > nul
+    echo %%~nxF | findstr /I /E /C:"_internal.md" /C:"_steps.md" > nul
     if errorlevel 1 (
       copy /Y "%%F" "%USERPROFILE%\.claude\commands\%%~nxF" > nul
       echo   copied %%~nxF
