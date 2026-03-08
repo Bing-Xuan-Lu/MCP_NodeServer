@@ -78,16 +78,25 @@ export const definitions = [
 ];
 
 // ============================================
+// 內部：統一錯誤回應格式（含根因 + 建議動作）
+// ============================================
+function errorResp(message, nextActions = []) {
+  const parts = [message];
+  if (nextActions.length > 0) {
+    parts.push("建議動作：");
+    nextActions.forEach((a) => parts.push(`  • ${a}`));
+  }
+  return { isError: true, content: [{ type: "text", text: parts.join("\n") }] };
+}
+
+// ============================================
 // 內部：確認已設定連線
 // ============================================
 function requireSftp() {
   if (!currentSftp) {
     return {
       ok: false,
-      error: {
-        isError: true,
-        content: [{ type: "text", text: "尚未設定 SFTP 連線，請先呼叫 sftp_connect。" }],
-      },
+      error: errorResp("尚未設定 SFTP 連線。", ["呼叫 sftp_connect 設定連線後重試"]),
     };
   }
   return { ok: true, config: currentSftp };
@@ -130,7 +139,10 @@ export async function handle(name, args) {
       try {
         config.privateKey = fs.readFileSync(args.private_key_path);
       } catch (e) {
-        return { isError: true, content: [{ type: "text", text: `讀取私鑰失敗: ${e.message}` }] };
+        return errorResp(`讀取私鑰失敗：${e.message}`, [
+          "確認私鑰檔案路徑是否正確",
+          "改用 password 參數進行密碼認證",
+        ]);
       }
     }
 
@@ -140,7 +152,14 @@ export async function handle(name, args) {
       client = await createClient(config);
       await client.list("/");
     } catch (err) {
-      return { isError: true, content: [{ type: "text", text: `SFTP 連線失敗: ${err.message}` }] };
+      const isAuth = /auth|credential|password/i.test(err.message);
+      const isConn = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND/i.test(err.message);
+      const hints = isAuth
+        ? ["確認使用者名稱與密碼（或私鑰）是否正確", "確認遠端伺服器允許此使用者登入"]
+        : isConn
+        ? ["確認主機 IP 與 port 是否正確", "確認防火牆已開放 SSH port（預設 22）"]
+        : ["確認主機、port、帳號、密碼後重新呼叫 sftp_connect"];
+      return errorResp(`SFTP 連線失敗：${err.message}`, hints);
     } finally {
       if (client) await client.end().catch(() => {});
     }
@@ -163,11 +182,14 @@ export async function handle(name, args) {
     try {
       localAbs = resolveSecurePath(args.local_path);
     } catch (e) {
-      return { isError: true, content: [{ type: "text", text: e.message }] };
+      return errorResp(e.message, ["呼叫 grant_path_access 開放此路徑後重試"]);
     }
 
     if (!fs.existsSync(localAbs)) {
-      return { isError: true, content: [{ type: "text", text: `本機路徑不存在: ${localAbs}` }] };
+      return errorResp(`本機路徑不存在：${localAbs}`, [
+        "確認路徑是否相對 basePath（D:\\Project\\）",
+        "若路徑在 basePath 之外，先呼叫 grant_path_access 後重試",
+      ]);
     }
 
     let client;
@@ -187,7 +209,10 @@ export async function handle(name, args) {
         };
       }
     } catch (err) {
-      return { isError: true, content: [{ type: "text", text: `上傳失敗: ${err.message}` }] };
+      return errorResp(`上傳失敗：${err.message}`, [
+        `呼叫 sftp_list ${path.dirname(args.remote_path)} 確認遠端目錄存在`,
+        "確認遠端使用者對目標路徑有寫入權限",
+      ]);
     } finally {
       if (client) await client.end().catch(() => {});
     }
@@ -202,7 +227,7 @@ export async function handle(name, args) {
     try {
       localAbs = resolveSecurePath(args.local_path);
     } catch (e) {
-      return { isError: true, content: [{ type: "text", text: e.message }] };
+      return errorResp(e.message, ["呼叫 grant_path_access 開放此路徑後重試"]);
     }
 
     let client;
@@ -224,7 +249,11 @@ export async function handle(name, args) {
         };
       }
     } catch (err) {
-      return { isError: true, content: [{ type: "text", text: `下載失敗: ${err.message}` }] };
+      const isNotFound = /no such file|ENOENT/i.test(err.message);
+      return errorResp(`下載失敗：${err.message}`, isNotFound
+        ? [`呼叫 sftp_list ${path.dirname(args.remote_path)} 確認來源路徑存在`]
+        : ["確認遠端路徑正確", "確認遠端使用者有讀取權限"]
+      );
     } finally {
       if (client) await client.end().catch(() => {});
     }
@@ -256,7 +285,10 @@ export async function handle(name, args) {
         }],
       };
     } catch (err) {
-      return { isError: true, content: [{ type: "text", text: `列目錄失敗: ${err.message}` }] };
+      return errorResp(`列目錄失敗：${err.message}`, [
+        "確認遠端路徑存在且為目錄",
+        "確認遠端使用者有讀取權限",
+      ]);
     } finally {
       if (client) await client.end().catch(() => {});
     }
@@ -280,7 +312,11 @@ export async function handle(name, args) {
         return { content: [{ type: "text", text: `✅ 檔案已刪除: ${args.remote_path}` }] };
       }
     } catch (err) {
-      return { isError: true, content: [{ type: "text", text: `刪除失敗: ${err.message}` }] };
+      const isNonEmpty = /non-empty|not empty|ENOTEMPTY/i.test(err.message);
+      return errorResp(`刪除失敗：${err.message}`, isNonEmpty
+        ? ["目錄非空，設定 recursive: true 後重試"]
+        : ["確認遠端路徑存在", "確認遠端使用者有刪除權限"]
+      );
     } finally {
       if (client) await client.end().catch(() => {});
     }
