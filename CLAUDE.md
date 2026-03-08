@@ -72,7 +72,7 @@ MCP_NodeServer/
 1. 先讀 `Skills/commands/_skill_template.md`（格式規範）
 2. 將 MD 檔寫入對應子資料夾（如 `Skills/commands/deploy/sftp_deploy.md`）
 3. 手動部署到 `~/.claude/commands/`（flat，不含子資料夾路徑）：
-   `cp Skills/commands/subfolder/skill.md ~/.claude/commands/skill.md`
+   `cp Skills/commands/subfolder/skill.md ~/.claude/commands/skill.md`（或直接重跑 `deploy-commands.bat`，會自動發現所有公開 Skill）
 4. 更新 `docs/dashboard.html`（**必做**，不可遺漏）：
    - 在對應部門加入 tag、更新 `dept-count`
    - 更新 section-total 數字與頂部總能力數
@@ -81,6 +81,10 @@ MCP_NodeServer/
 5. 重啟 Claude Code
 
 私有 Skill：檔名加 `_internal`（.gitignore 已排除），部署用 `deploy-commands-internal.bat`，**不列入 dashboard.html**
+
+伴隨參考檔：檔名加 `_steps`（如 `playwright_ui_test_steps.md`），由主 Skill 引用，**不獨立部署**
+
+YAML Frontmatter（選用）：在 Skill MD 頂部加入 `name` + `description`，可讓 Claude 在對話中主動建議該 Skill；不需主動建議時可省略。格式見 `_skill_template.md`。
 
 ---
 
