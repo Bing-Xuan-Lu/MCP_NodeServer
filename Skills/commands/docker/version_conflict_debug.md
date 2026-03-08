@@ -1,3 +1,10 @@
+---
+name: version_conflict_debug
+description: |
+  系統性診斷並修復兩個服務整合後出現的版本相容性衝突。涵蓋：版本資訊收集、log 訊號分析、通訊測試、根因判斷、修復套用。適用 Docker+Traefik、PHP+MySQL、Node+npm 等任意組合。
+  當使用者遇到「整合後連線失敗」「神秘 API 拒絕」「升版後壞掉」「版本不相容」時使用。
+---
+
 # /version_conflict_debug — 自動診斷並修復服務元件版本相容性衝突
 
 ## 背景

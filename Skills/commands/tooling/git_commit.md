@@ -1,3 +1,10 @@
+---
+name: git_commit
+description: |
+  分析 git diff 並產生繁體中文 commit 訊息後提交。涵蓋：staged/unstaged 變更分析、簡易版與完整版訊息產生、第三方目錄略過規則。
+  當使用者說「提交」「commit」「git commit」「記錄變更」，或工作告一段落準備記錄時使用。
+---
+
 # /git_commit — 產生繁體中文 Git Commit 訊息並提交
 
 分析目前 Git 工作區的變更，自動產生條列式繁體中文 Commit 訊息，確認後提交。**不執行 push。**

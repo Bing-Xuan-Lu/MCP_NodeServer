@@ -1,20 +1,22 @@
 ---
 name: skill-name
 description: |
-  做什麼：一句話描述技能功能（動詞開頭）
-  何時觸發：描述觸發時機（使用者說了什麼、遇到什麼情境）
+  一句話說明此 Skill 的功能（動詞開頭）。涵蓋：列出此 Skill 處理的主要場景或子任務（逗號分隔）。
+  當使用者說「觸發關鍵詞 A」、「觸發關鍵詞 B」，或遇到「情境描述」時使用。
 ---
 
 <!-- ▶ YAML frontmatter 說明：
      - name：與檔名一致（kebab-case 或 snake_case）
-     - description：兩行格式，第一行功能、第二行觸發時機
-     - description 決定 Claude 是否主動建議此 Skill，請認真填寫
-     - 若此 Skill 只靠斜線指令觸發（不需主動建議），可省略 frontmatter
+     - description：完整段落格式，寫越豐富 Claude 越容易主動建議
+         第一行：功能說明 + 涵蓋範圍（「涵蓋：A、B、C」）
+         第二行：觸發時機（「當使用者說…時使用」）
+     - 若此 Skill 只靠斜線指令觸發（不需主動建議），可省略整個 frontmatter
      範例：
        name: git_commit
        description: |
-         做什麼：分析 git diff 並產生繁體中文 commit 訊息
-         何時觸發：使用者說「提交」「commit」或工作結束準備記錄變更時
+         分析 git diff 並產生繁體中文 commit 訊息後提交。涵蓋：staged/unstaged 變更分析、
+         簡易版與完整版訊息產生、第三方目錄略過規則。
+         當使用者說「提交」「commit」「git commit」，或工作告一段落準備記錄變更時使用。
 -->
 
 # /skill-name — 一句話功能說明（動詞 + 名詞）
