@@ -167,7 +167,7 @@
         <span class="section-title skills">Agent Skills</span>
         <span class="section-slash">/</span>
         <span class="section-subtitle">斜線指令，直接在 Claude Code 輸入觸發。點擊 tag 查看說明。</span>
-        <span class="section-total">12 departments &nbsp;·&nbsp; 37 skills &nbsp;·&nbsp; +1 規劃中</span>
+        <span class="section-total">12 departments &nbsp;·&nbsp; 38 skills &nbsp;·&nbsp; +1 規劃中</span>
       </div>
 
       <div class="dept-row">
@@ -239,8 +239,9 @@
           <span class="tag">/docker_relocate</span>
           <span class="tag">/docker_compose_ops</span>
           <span class="tag">/docker_short_url</span>
+          <span class="tag">/version_conflict_debug</span>
         </div>
-        <span class="dept-count">3</span>
+        <span class="dept-count">4</span>
       </div>
 
       <div class="dept-row">
@@ -485,6 +486,7 @@
     'docker_relocate':       { dept:'Docker 維運部', title:'Docker Compose 開發環境搬遷',     desc:'將 Docker Compose 環境從一個路徑搬遷到另一個路徑，自動更新 Volume 掛載路徑與所有相關設定檔。',                    usage:'/docker_relocate',                          tools:['read_file','apply_diff','create_file'] },
     'docker_compose_ops':    { dept:'Docker 維運部', title:'Docker Compose 日常操作',          desc:'執行 docker compose up/down/restart/logs/ps 等日常操作，根據目前環境狀態自動判斷最佳操作方式。',                   usage:'/docker_compose_ops',                       tools:[] },
     'docker_short_url':      { dept:'Docker 維運部', title:'Docker Apache 短路徑映射設定',     desc:'為 Docker 容器中的 Apache 設定 mod_rewrite RewriteRule，讓長 URL 路徑可用短路徑存取，不影響其他專案。',            usage:'/docker_short_url',                         tools:['read_file','create_file','apply_diff','send_http_request'] },
+    'version_conflict_debug':{ dept:'Docker 維運部', title:'服務元件版本相容性衝突診斷修復',   desc:'當兩服務整合出現神秘連線失敗或 API 拒絕時，系統性收集版本、分析 log 訊號、測試通訊、判斷根因並套用修復。適用 Docker+Traefik、PHP+MySQL、Node+npm 等任意組合。', usage:'/version_conflict_debug [Component A] [Component B] [錯誤症狀]', tools:[] },
     'git_worktree':          { dept:'開發流程部',     title:'建立隔離 Git Worktree',           desc:'為需要並行開發的分支建立 Git Worktree，自動設定相依性與環境，讓多分支同時開發互不干擾。',                          usage:'/git_worktree',                             tools:[] },
     'tdd':                   { dept:'開發流程部',     title:'TDD Red-Green-Refactor 循環指引', desc:'引導開發者按照 TDD 節奏：先寫失敗測試（Red）→ 最小實作（Green）→ 重構（Refactor），確保每步都有測試保護。',        usage:'/tdd [功能描述]',                            tools:['run_php_test','read_file','apply_diff'] },
     'clean_arch':            { dept:'開發流程部',     title:'Clean Architecture 架構審查',     desc:'當發現現有程式碼混亂（God Class、業務邏輯散落 Controller、循環依賴）時，審查並提供 Clean Architecture 重構路線圖。',    usage:'/clean_arch',                               tools:['list_files','read_file'] },
