@@ -41,7 +41,7 @@ export const definitions = [
   },
   {
     name: "execute_sql",
-    description: "執行 SQL 指令 (DDL/DML)",
+    description: "執行 SQL 指令 (DDL/DML)，支援多條語句以分號分隔、逐條執行",
     inputSchema: {
       type: "object",
       properties: { sql: { type: "string" } },
@@ -73,6 +73,80 @@ function requireDb() {
     };
   }
   return { ok: true, config: currentDb };
+}
+
+// ============================================
+// 內部：SQL 錯誤分類提示
+// ============================================
+function sqlErrorHints(err) {
+  const isSyntax  = /ER_PARSE_ERROR|You have an error in your SQL/i.test(err.message);
+  const isNoTable = /ER_NO_SUCH_TABLE|doesn't exist/i.test(err.message);
+  const isNoCol   = /ER_BAD_FIELD_ERROR|Unknown column/i.test(err.message);
+  return isSyntax
+    ? ["檢查 SQL 語法，特別是引號、括號、關鍵字拼寫"]
+    : isNoTable
+    ? ["呼叫 get_db_schema 確認資料表名稱是否存在"]
+    : isNoCol
+    ? ["呼叫 get_db_schema 確認欄位名稱是否正確"]
+    : ["確認 SQL 語句後重試"];
+}
+
+// ============================================
+// 內部：拆分多條 SQL（考慮字串內分號）
+// ============================================
+function splitSQL(sql) {
+  const statements = [];
+  let current = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inBacktick = false;
+  let escaped = false;
+
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+
+    if (escaped) {
+      current += ch;
+      escaped = false;
+      continue;
+    }
+
+    if (ch === "\\") {
+      current += ch;
+      escaped = true;
+      continue;
+    }
+
+    if (ch === "'" && !inDoubleQuote && !inBacktick) {
+      inSingleQuote = !inSingleQuote;
+      current += ch;
+      continue;
+    }
+    if (ch === '"' && !inSingleQuote && !inBacktick) {
+      inDoubleQuote = !inDoubleQuote;
+      current += ch;
+      continue;
+    }
+    if (ch === "`" && !inSingleQuote && !inDoubleQuote) {
+      inBacktick = !inBacktick;
+      current += ch;
+      continue;
+    }
+
+    if (ch === ";" && !inSingleQuote && !inDoubleQuote && !inBacktick) {
+      const trimmed = current.trim();
+      if (trimmed) statements.push(trimmed);
+      current = "";
+      continue;
+    }
+
+    current += ch;
+  }
+
+  const trimmed = current.trim();
+  if (trimmed) statements.push(trimmed);
+
+  return statements;
 }
 
 // ============================================
@@ -172,40 +246,76 @@ export async function handle(name, args) {
     const check = requireDb();
     if (!check.ok) return check.error;
 
-    const conn = await mysql.createConnection(check.config);
-    try {
-      const [res] = await conn.execute(args.sql);
-      if (Array.isArray(res)) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `查詢結果 (${res.length} 筆)：\n${JSON.stringify(res, null, 2)}`,
-            },
-          ],
-        };
-      } else {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `✅ 執行成功。影響列數: ${res.affectedRows}, 新增 ID: ${res.insertId || "無"}`,
-            },
-          ],
-        };
+    // 拆分多條 SQL（以分號分隔，忽略字串內的分號）
+    const statements = splitSQL(args.sql);
+
+    // 單條：維持原邏輯
+    if (statements.length <= 1) {
+      const sql = statements[0] || args.sql.trim();
+      const conn = await mysql.createConnection(check.config);
+      try {
+        const [res] = await conn.execute(sql);
+        if (Array.isArray(res)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `查詢結果 (${res.length} 筆)：\n${JSON.stringify(res, null, 2)}`,
+              },
+            ],
+          };
+        } else {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `✅ 執行成功。影響列數: ${res.affectedRows}, 新增 ID: ${res.insertId || "無"}`,
+              },
+            ],
+          };
+        }
+      } catch (err) {
+        return errorResp(`SQL 執行失敗：${err.message}`, sqlErrorHints(err));
+      } finally {
+        await conn.end();
       }
-    } catch (err) {
-      const isSyntax  = /ER_PARSE_ERROR|You have an error in your SQL/i.test(err.message);
-      const isNoTable = /ER_NO_SUCH_TABLE|doesn't exist/i.test(err.message);
-      const isNoCol   = /ER_BAD_FIELD_ERROR|Unknown column/i.test(err.message);
-      const hints = isSyntax
-        ? ["檢查 SQL 語法，特別是引號、括號、關鍵字拼寫"]
-        : isNoTable
-        ? ["呼叫 get_db_schema 確認資料表名稱是否存在"]
-        : isNoCol
-        ? ["呼叫 get_db_schema 確認欄位名稱是否正確"]
-        : ["確認 SQL 語句後重試"];
-      return errorResp(`SQL 執行失敗：${err.message}`, hints);
+    }
+
+    // 多條：逐條執行，收集結果
+    const conn = await mysql.createConnection(check.config);
+    const results = [];
+    let successCount = 0;
+    let failCount = 0;
+    try {
+      for (let i = 0; i < statements.length; i++) {
+        const sql = statements[i];
+        const label = `[${i + 1}/${statements.length}]`;
+        try {
+          const [res] = await conn.execute(sql);
+          successCount++;
+          if (Array.isArray(res)) {
+            results.push(`${label} ✅ 查詢回傳 ${res.length} 筆\n    ${sql.substring(0, 80)}${sql.length > 80 ? '...' : ''}`);
+          } else {
+            results.push(`${label} ✅ 影響 ${res.affectedRows} 列\n    ${sql.substring(0, 80)}${sql.length > 80 ? '...' : ''}`);
+          }
+        } catch (err) {
+          failCount++;
+          results.push(`${label} ❌ ${err.message}\n    ${sql.substring(0, 80)}${sql.length > 80 ? '...' : ''}`);
+          // 遇到錯誤停止後續語句，避免後續 DDL 依賴失敗的前置語句
+          if (i < statements.length - 1) {
+            results.push(`⚠️ 因第 ${i + 1} 條失敗，已跳過剩餘 ${statements.length - i - 1} 條語句`);
+          }
+          break;
+        }
+      }
+      return {
+        content: [
+          {
+            type: "text",
+            text: `批次執行結果（共 ${statements.length} 條，成功 ${successCount}，失敗 ${failCount}）：\n\n${results.join('\n\n')}`,
+          },
+        ],
+      };
     } finally {
       await conn.end();
     }

@@ -11,3 +11,11 @@ package-lock.json
 Skills/commands/**/*_internal.md
 deploy-commands-internal.bat
 .playwright-mcp
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+tests/

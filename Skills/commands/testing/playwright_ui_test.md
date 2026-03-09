@@ -6,6 +6,9 @@
 - **測試模式**：自動跑 CRUD 測試，每步截圖，產出測試報告
 - **除錯模式**：搭配 Xdebug，逐步操作頁面觸發斷點，互動式重現 Bug
 
+> **開始前請先確保環境已初始化：**
+> 若為新專案，請先執行 `/playwright_setup` 進行標準化設定。
+>
 > **開始前請先讀取詳細步驟參考檔：**
 > `d:\Develop\MCP_NodeServer\Skills\commands\testing\playwright_ui_test_steps.md`
 
