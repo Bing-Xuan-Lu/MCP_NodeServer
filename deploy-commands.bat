@@ -1,10 +1,15 @@
 @echo off
-:: 動態部署 Skills/commands/ 下所有公開 Skill
-:: 排除規則：以 _ 開頭、*_internal.md、*_steps.md
-:: 新增 Skill 後直接重跑此腳本，無需修改。
+:: Deploy skills to Claude Code and Gemini CLI
+:: Exclude files starting with _ or ending with _internal.md / _steps.md
 
-echo Deploying Claude Code slash commands...
-if not exist "%USERPROFILE%\.claude\commands" mkdir "%USERPROFILE%\.claude\commands"
+set CLAUDE_DIR=%USERPROFILE%\.claude\commands
+set GEMINI_DIR=%USERPROFILE%\.gemini\skills
+
+echo Deploying skills to Claude Code and Gemini CLI...
+
+:: Ensure directories exist
+if not exist "%CLAUDE_DIR%" mkdir "%CLAUDE_DIR%"
+if not exist "%GEMINI_DIR%" mkdir "%GEMINI_DIR%"
 
 set count=0
 for /r "Skills\commands" %%F in (*.md) do (
@@ -12,13 +17,19 @@ for /r "Skills\commands" %%F in (*.md) do (
   if errorlevel 1 (
     echo %%~nxF | findstr /I /E /C:"_internal.md" /C:"_steps.md" > nul
     if errorlevel 1 (
-      copy /Y "%%F" "%USERPROFILE%\.claude\commands\%%~nxF" > nul
-      echo   copied %%~nxF
+      :: Copy to Claude
+      copy /Y "%%F" "%CLAUDE_DIR%\%%~nxF" > nul
+      :: Copy to Gemini
+      copy /Y "%%F" "%GEMINI_DIR%\%%~nxF" > nul
+      
+      echo   deployed %%~nxF
       set /a count+=1
     )
   )
 )
 
 echo.
-echo Done! All public skills deployed to %USERPROFILE%\.claude\commands\
+echo Done! %count% public skills deployed to:
+echo   Claude: %CLAUDE_DIR%
+echo   Gemini: %GEMINI_DIR%
 echo (Excluded: _skill_template.md, *_internal.md, *_steps.md)

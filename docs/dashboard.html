@@ -167,7 +167,7 @@
         <span class="section-title skills">Agent Skills</span>
         <span class="section-slash">/</span>
         <span class="section-subtitle">斜線指令，直接在 Claude Code 輸入觸發。點擊 tag 查看說明。</span>
-        <span class="section-total">12 departments &nbsp;·&nbsp; 39 skills &nbsp;·&nbsp; +1 規劃中</span>
+        <span class="section-total">12 departments &nbsp;·&nbsp; 41 skills &nbsp;·&nbsp; +1 規劃中</span>
       </div>
 
       <div class="dept-row">
@@ -265,9 +265,11 @@
         <div class="dept-tags">
           <span class="tag">/bookmark_organizer</span>
           <span class="tag">/git_commit</span>
+          <span class="tag">/gitignore_setup</span>
           <span class="tag">/relocate_directory</span>
+          <span class="tag">/windows_node_autostart</span>
         </div>
-        <span class="dept-count">3</span>
+        <span class="dept-count">5</span>
       </div>
 
 
@@ -499,6 +501,8 @@
     'learn_claude_skill':    { dept:'Claude 維運部',  title:'從對話學習並建立 Skill',          desc:'當某個工作流程重複了 2-3 次、想固化為可重用指令時，從對話歷史提取模式、按規範撰寫 MD 並自動部署。',                 usage:'/learn_claude_skill',                       tools:['save_claude_skill','list_claude_skills'] },
     'git_commit':            { dept:'系統工具部',     title:'產生繁體中文 Git Commit 訊息',    desc:'分析 git diff 與 git status，自動產生符合專案慣例的繁體中文 Commit 訊息（含 Co-authored-by），並執行 commit。',    usage:'/git_commit',                               tools:[] },
     'relocate_directory':    { dept:'系統工具部',     title:'搬移目錄並更新所有路徑引用',       desc:'搬移目錄到新位置後，自動掃描並更新所有 .json、.bat、.md、設定檔中的舊路徑引用，確保不遺漏。',                     usage:'/relocate_directory',                       tools:['list_files','read_file','apply_diff'] },
+    'windows_node_autostart':{ dept:'系統工具部',     title:'Windows Node.js 開機自動啟動',     desc:'使用 VBS 單例保護 + Task Scheduler XML 設定 Node.js 服務開機靜默啟動，防重複執行、延遲避免搶佔網路。',              usage:'/windows_node_autostart',                   tools:[] },
+    'gitignore_setup':       { dept:'系統工具部',     title:'掃描專案並自動補全 .gitignore',    desc:'掃描專案目錄識別機密、建置產出、OS/IDE 暫存等不應提交的檔案，與現有 .gitignore 比對後補全規則，並提示 git rm --cached 已追蹤的問題檔案。', usage:'/gitignore_setup [路徑或排除需求]',          tools:['list_files','read_file','apply_diff'] },
     'project_claudemd':      { dept:'Claude 維運部',  title:'為專案自動產生 CLAUDE.md 專案文件', desc:'系統性探索專案結構、設定檔、架構模式，自動產生結構化的 CLAUDE.md，讓 Claude 能快速理解專案全貌。',                  usage:'/project_claudemd [額外指示]',              tools:[] },
     'skill_audit':           { dept:'Claude 維運部',  title:'Skill 耦合審計與合併建議',         desc:'技能越來越多不知用哪個時，掃描所有 Skill 找出重疊、命名混淆的技能，產出優先行動清單並執行合併或刪除。',           usage:'/skill_audit',                              tools:[] },
     'fetch_article':         { dept:'內容擷取部',     title:'網頁文章擷取與儲存',              desc:'需要永久儲存文章時，擷取網頁正文並存為 .txt 檔（若只要當場閱讀與分析，請改用 /read_article）。',                       usage:'/fetch_article [URL]',                      tools:['send_http_request','create_file'] },

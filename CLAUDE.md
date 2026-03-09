@@ -71,14 +71,26 @@ MCP_NodeServer/
 
 1. 先讀 `Skills/commands/_skill_template.md`（格式規範）
 2. 將 MD 檔寫入對應子資料夾（如 `Skills/commands/deploy/sftp_deploy.md`）
-3. 手動部署到 `~/.claude/commands/`（flat，不含子資料夾路徑）：
-   `cp Skills/commands/subfolder/skill.md ~/.claude/commands/skill.md`（或直接重跑 `deploy-commands.bat`，會自動發現所有公開 Skill）
+3. 部署到 `~/.claude/commands/`（flat，不含子資料夾路徑）：
+   - 單檔：`cp Skills/commands/subfolder/skill.md ~/.claude/commands/skill.md`
+   - 全部：重跑 `deploy-commands.bat`（自動發現所有公開 Skill）
+   - 使用 `save_claude_skill` 工具時**步驟 3 自動完成**，但步驟 4 仍需手動執行
 4. 更新 `docs/dashboard.html`（**必做**，不可遺漏）：
    - 在對應部門加入 tag、更新 `dept-count`
    - 更新 section-total 數字與頂部總能力數
    - 在 JS `SKILLS` 物件中新增 click-to-detail 資料
    - **`_internal` Skill 不寫入 dashboard.html**（不加 tag、不計入數字）
 5. 重啟 Claude Code
+
+**完成後自我核對（每次新增/修改 Skill 後必做）：**
+
+```text
+☐ ~/.claude/commands/skill.md 存在？
+☐ dashboard.html tag 已新增？
+☐ dept-count 數字已更新？
+☐ section-total（skills 數）已更新？
+☐ JS SKILLS 物件已新增條目？
+```
 
 私有 Skill：檔名加 `_internal`（.gitignore 已排除），部署用 `deploy-commands-internal.bat`，**不列入 dashboard.html**
 
