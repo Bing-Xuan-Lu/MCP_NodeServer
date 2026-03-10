@@ -1,81 +1,76 @@
 # 通用 Agentic UI 測試設定指南 (Gemini CLI 專用)
 
-本指南旨在為 Gemini CLI 提供與 Google Codelab 相同的「Agentic UI」能力，核心在於透過 **BrowserMCP** 連結你現有的 Chrome 瀏覽器，達成通用的自動化與手動協作測試。
+本指南旨在為 Gemini CLI 提供通用且強大的網頁自動化與測試能力。核心在於透過微軟官方的 **Playwright MCP** 連結瀏覽器，達成自動化與協作測試。
 
 ---
 
-## 1. 核心工具鏈 (核心安裝)
+## 1. 環境需求與核心工具
 
 這是所有環境都適用的通用工具：
 
-### A. 安裝 BrowserMCP (通訊橋樑)
-這是讓 AI 直接控制你目前開啟的 Chrome 分頁的最強工具。
-```bash
-npm install -g @browsermcp/mcp
-```
-> **啟動方式**：在終端機輸入 `npx @browsermcp/mcp`。
-
-### B. 安裝 Chrome 擴充功能
-1. 從 [Chrome Web Store](https://chromewebstore.google.com/detail/browsermcp/...) 安裝 **BrowserMCP**。
-2. 點擊擴充功能圖示，確保它顯示為 **「Connected」**。
+### 系統需求
+- **Node.js**: 需要 Node.js 18 或以上版本。
 
 ---
 
 ## 2. 全域設定 (Universal Config)
 
-讓 Gemini CLI 能夠識別這些工具。修改全域設定檔 `~/.gemini/settings.json`：
+讓 Gemini CLI 能夠識別 Playwright MCP 工具。修改全域設定檔 `~/.gemini/settings.json`：
 
 ```json
 {
   "mcpServers": {
-    "browsermcp": {
+    "playwright": {
       "command": "npx",
-      "args": ["-y", "@browsermcp/mcp@latest"]
+      "args": ["-y", "@playwright/mcp@latest"]
     }
   }
 }
 ```
 
+### 進階參數設定
+若你需要自訂瀏覽器行為，可以在 `args` 中加入額外參數：
+- `--headless`: 在背景執行瀏覽器 (無 UI)。
+- `--browser chromium` (或 `firefox`, `webkit`): 指定瀏覽器核心。
+- `--ignore-https-errors`: 忽略 HTTPS 憑證錯誤。
+- `--isolated`: 使用獨立的瀏覽器設定檔 (預設為持久性設定檔 Persistent Profile)。
+
+例如 (以 headless 模式啟動 chromium)：
+```json
+"args": [
+  "-y",
+  "@playwright/mcp@latest",
+  "--browser", "chromium",
+  "--headless"
+]
+```
+
 ---
 
-## 3. 技能部署 (Skill-Driven)
+## 3. 安裝瀏覽器核心 (Browser Binaries)
 
-Gemini 需要一份「操作手冊」才能正確執行 Agentic 測試。
-
-### 建立通用的 Playwright 技能包
-將本專案的技能同步至 Gemini：
-1. 確保 `~/.gemini/skills/playwright-cli/SKILL.md` 存在。
-2. 內容應包含：
-   - 如何使用 `browser_` 開頭的 MCP 工具（點擊、截圖、輸入）。
-   - 如何使用 `playwright-cli` 跑腳本。
+若執行時遇到瀏覽器未安裝的錯誤，可以在 Gemini CLI 成功掛載工具後，直接呼叫 MCP 工具：
+- 使用 `browser_install` 工具來自動安裝 Playwright 所需的瀏覽器二進位檔。
 
 ---
 
 ## 4. 通用操作流程 (如何使用)
 
-一旦設定完成，你可以在 Gemini CLI 中執行以下通用指令：
+一旦設定完成並重啟 Gemini CLI，你可以執行以下通用指令：
 
 1. **連線檢查**：
-   輸入 `List my MCP tools`。若看到 `browser_click`, `browser_navigate` 等工具，即代表成功。
+   輸入 `List my MCP tools`。若看到 `browser_navigate`, `browser_click`, `browser_fill` 等由 playwright 提供的工具，即代表成功。
 
-2. **操作目前分頁 (最通用方式)**：
-   「幫我查看我目前的 Chrome 分頁，並點擊畫面上的 'Login' 按鈕。」
-   *Gemini 會透過 BrowserMCP 傳送指令給你的 Chrome 擴充功能。*
+2. **操作瀏覽器**：
+   「幫我前往 https://example.com ，並點擊畫面上的 'Login' 按鈕。」
+   *Gemini 會透過 Playwright MCP 啟動並控制瀏覽器。*
 
-3. **視覺化測試**：
-   「幫我截圖目前的網頁，並分析是否有任何 UI 跑版。」
-
----
-
-## 5. 優勢：為什麼這是「通用」的？
-
-- **無須下載專案**：直接在你的開發環境（Gemini CLI）中運作。
-- **支援已登入狀態**：因為是操作你的 Chrome，所以不需要重新處理登入或 Session。
-- **跨平台一致性**：無論是 Windows 還是 Mac，只要有 Chrome + Node.js 就能執行。
+3. **視覺化與資料擷取**：
+   「幫我截圖目前的網頁，並擷取網頁的文字內容進行分析。」
 
 ---
 
 ## 疑難排解
 
-- **Gemini 說找不到工具**：請檢查 `~/.gemini/settings.json` 是否已正確載入 `browsermcp`。
-- **擴充功能圖示為紅色**：請確認 `npx @browsermcp/mcp` 伺服器正在執行。
+- **Gemini 說找不到工具**：請檢查 `~/.gemini/settings.json` 是否已正確載入 `playwright` 伺服器配置。
+- **瀏覽器無法啟動**：請確認是否已透過 `browser_install` 工具安裝瀏覽器，或 Node.js 版本是否大於等於 18。

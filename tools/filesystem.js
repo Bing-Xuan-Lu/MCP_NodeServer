@@ -17,10 +17,21 @@ export const definitions = [
   },
   {
     name: "read_file",
-    description: "讀取檔案內容",
+    description:
+      "讀取檔案內容（支援分段）。大檔案會自動截斷並提示用 offset/limit 分段讀取。",
     inputSchema: {
       type: "object",
-      properties: { path: { type: "string" } },
+      properties: {
+        path: { type: "string" },
+        offset: {
+          type: "integer",
+          description: "起始行號（從 1 開始，預設 1）",
+        },
+        limit: {
+          type: "integer",
+          description: "讀取行數（預設全部，大檔案自動截斷為 2000 行）",
+        },
+      },
       required: ["path"],
     },
   },
@@ -72,8 +83,31 @@ export async function handle(name, args) {
 
   if (name === "read_file") {
     const fullPath = resolveSecurePath(args.path);
-    const content = await fs.readFile(fullPath, "utf-8");
-    return { content: [{ type: "text", text: content }] };
+    const raw = await fs.readFile(fullPath, "utf-8");
+    const lines = raw.split(/\r?\n/);
+    const totalLines = lines.length;
+
+    const MAX_LINES = 2000;
+    const offset = Math.max(1, args.offset || 1);
+    const limit = args.limit || totalLines;
+    const startIdx = offset - 1; // 轉為 0-based
+    const slice = lines.slice(startIdx, startIdx + limit);
+
+    const truncated = !args.offset && !args.limit && totalLines > MAX_LINES;
+    const output = truncated ? lines.slice(0, MAX_LINES) : slice;
+    const actualEnd = truncated ? MAX_LINES : Math.min(startIdx + limit, totalLines);
+
+    let header = `📄 ${args.path}（${totalLines} 行，顯示 ${offset}–${actualEnd}）`;
+    if (truncated) {
+      header += `\n⚠️ 檔案過大，已截斷為前 ${MAX_LINES} 行。使用 offset/limit 參數分段讀取。`;
+    }
+
+    const numbered = output.map((line, i) => {
+      const lineNum = (truncated ? i : startIdx + i) + 1;
+      return `${String(lineNum).padStart(5)} | ${line}`;
+    });
+
+    return { content: [{ type: "text", text: `${header}\n${numbered.join("\n")}` }] };
   }
 
   if (name === "create_file") {
@@ -85,9 +119,28 @@ export async function handle(name, args) {
 
   if (name === "apply_diff") {
     const fullPath = resolveSecurePath(args.path);
-    const content = await fs.readFile(fullPath, "utf-8");
-    if (!content.includes(args.search)) throw new Error("比對失敗：找不到 search 區塊");
-    await fs.writeFile(fullPath, content.replace(args.search, args.replace), "utf-8");
+    const raw = await fs.readFile(fullPath, "utf-8");
+
+    // 偵測原始檔案的換行風格
+    const hasCRLF = raw.includes("\r\n");
+    const normalize = (s) => s.replace(/\r\n/g, "\n");
+
+    const content = normalize(raw);
+    const search = normalize(args.search);
+    const replace = normalize(args.replace);
+
+    if (!content.includes(search)) {
+      // 提供更有用的錯誤訊息：顯示 search 前 80 字元方便除錯
+      const preview = search.slice(0, 80).replace(/\n/g, "\\n");
+      throw new Error(`比對失敗：找不到 search 區塊（前 80 字元：${preview}）`);
+    }
+
+    let result = content.replace(search, replace);
+
+    // 還原原始換行風格
+    if (hasCRLF) result = result.replace(/\n/g, "\r\n");
+
+    await fs.writeFile(fullPath, result, "utf-8");
     return { content: [{ type: "text", text: `✅ 檔案已更新: ${args.path}` }] };
   }
 }

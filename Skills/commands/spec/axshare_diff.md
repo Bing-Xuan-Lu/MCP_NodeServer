@@ -18,6 +18,15 @@ $ARGUMENTS
 
 ---
 
+## 前置建議
+
+> **第一次使用前**：建議先執行 `/axshare_spec_index` 將整份規格書建成本地索引檔（`axshare_spec_reference.md`）。
+> 後續每次執行 `/axshare_diff` 時直接讀取該檔案，不需重爬規格書，速度快且不受 iframe 限制。
+>
+> 若已有 `axshare_spec_reference.md`，在「需要的資訊」中提供其路徑即可。
+
+---
+
 ## 需要的資訊
 
 若使用者未提供以下資訊，請主動詢問：
@@ -94,15 +103,46 @@ $ARGUMENTS
 
 #### 模式 A — AxShare 網址（Playwright）
 
+> **AxShare 架構提醒**：AxShare 頁面使用多層 iframe（導航在 sidebar iframe、內容在 content iframe），`browser_click` 無法直接穿透 iframe。**必須先用 `browser_evaluate` 抽取所有頁面 URL，再以 `browser_navigate` 直連**，不依賴點擊 nav。
+
 ```
 1. browser_navigate(url: "{AxShare 網址}")
-2. browser_snapshot() → 取得首頁結構，找到頁面導航清單
-3. 對每個目標頁面：
-   - browser_click(導航連結) 或 browser_navigate(直連 URL)
-   - 等待頁面載入完成
-   - browser_snapshot() → 取得 accessibility tree
+2. browser_snapshot() → 確認頁面載入，取得頂層結構
+
+3. 抽取導航連結（優先方式）：
+   browser_evaluate(script: `
+     // 嘗試取得 sidebar iframe 中的所有連結
+     const frames = Array.from(document.querySelectorAll('iframe'));
+     const links = [];
+     frames.forEach(f => {
+       try {
+         const doc = f.contentDocument;
+         doc.querySelectorAll('a[href]').forEach(a => {
+           links.push({ text: a.textContent.trim(), href: a.href });
+         });
+       } catch(e) {} // cross-origin 會拋例外，略過
+     });
+     // 若 iframe 取不到，改從主頁面找
+     if (links.length === 0) {
+       document.querySelectorAll('a[href*="#p="], a[href*="#id="]').forEach(a => {
+         links.push({ text: a.textContent.trim(), href: a.href });
+       });
+     }
+     return links;
+   `)
+   → 取得頁面清單 [{ text, href }, ...]
+
+4. 若 browser_evaluate 無法取得（cross-origin 限制）：
+   - 從 browser_snapshot 的 accessibility tree 找 nav 區塊
+   - 手動整理頁面 URL 清單（AxShare URL 格式通常是 #p=page_name）
+
+5. 對每個目標頁面：
+   - browser_navigate(url: "{頁面直連 URL}")  ← 直連，不 click nav
+   - browser_snapshot() → 取得 accessibility tree（已包含 content iframe 內容）
    - 從 snapshot 解析：文字標籤、表單元件、按鈕、表格結構
 ```
+
+> 若目標專案有現成的 `axshare_spec_reference.md` 快照檔（由 `/axshare_spec_index` 產生），**優先直接讀取該檔案**，跳過步驟 1-5 的網路爬取，速度快 10 倍且不受 iframe 限制。
 
 #### 模式 B — 本地匯出 HTML（HTTP server + Playwright）
 
@@ -444,6 +484,7 @@ ALTER TABLE ... ADD COLUMN ...
 - 三種報告格式都要產出（總覽表格 / 逐頁比對 / 待辦清單）
 
 ### 單一單元模式
+- **嚴禁擅自擴大比對範圍**：只比對使用者明確指定的模組/單元。即使在規格書導航中看到其他模組的頁面，也**不得**主動展開分析。若發現其他模組可能也有差異，僅在報告末尾「建議後續比對」中一句話列出，不讀取其規格書、不擷取其頁面、不分析其原始碼
 - **可以**讀取 DB schema (DBML) 和 Model 類別，用於 DB 影響評估
 - **不另外產出獨立報告**，所有結果直接整合進現有報告檔
 - 整合時保留原有的「開發者備註」，不刪除不覆蓋
