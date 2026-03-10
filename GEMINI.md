@@ -48,12 +48,23 @@
 2. **配置優化**：預設開啟 `ignoreHTTPSErrors: true` 並配置 `baseURL` 與 `html` reporter。
 3. **MCP 設定**：將 `playwright` 加入 `.mcp.json` 的 `mcpServers`。
 
-### B. Gemini CLI 環境 (BrowserMCP & Skills 模式)
-> 詳細參考：`docs/gemini-playwright-setup.md`
-1. **核心安裝**：`npm install -g @browsermcp/mcp` 與 `@playwright/cli`。
-2. **全域設定**：修改 `~/.gemini/settings.json` 加入 `browsermcp` 伺服器。
-3. **瀏覽器整合**：安裝 Chrome 擴充功能，確保可直接控制目前分頁。
-4. **驗證**：執行 `List my MCP tools` 確認工具已掛載。
+### B. Gemini CLI 環境 (Playwright MCP 模式)
+> 詳細參考：`Skills/commands/testing/gemini_playwright_setup.md`
+1. **環境需求**：Node.js 18 或以上版本。
+2. **設定方式**：修改 `~/.gemini/settings.json` (全域) 或專案目錄下的 `.gemini/settings.json` (區域)。
+3. **MCP 伺服器配置**：在 `mcpServers` 中加入以下設定：
+   ```json
+   {
+     "mcpServers": {
+       "playwright": {
+         "command": "npx",
+         "args": ["-y", "@playwright/mcp@latest"]
+       }
+     }
+   }
+   ```
+4. **安裝瀏覽器**：若初次使用出現錯誤，請在對話中輸入 `browser_install` 以自動安裝 Playwright 瀏覽器核心。
+5. **驗證**：重啟 Gemini CLI，執行 `List my MCP tools` 或直接使用 `browser_navigate` 測試功能。
 
 ## 📁 專案專屬規範
 - **MCP 工具**：新增工具需註冊於 `index.js` 的 `TOOL_MODULES`。
