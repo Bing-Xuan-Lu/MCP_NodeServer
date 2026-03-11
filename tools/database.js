@@ -1,4 +1,10 @@
 import mysql from "mysql2/promise";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DB_CONFIG_FILE = path.join(__dirname, "..", ".mcp_db_config.json");
 
 // ============================================
 // 記憶體狀態：當前資料庫連線設定
@@ -11,8 +17,7 @@ let currentDb = null;
 export const definitions = [
   {
     name: "set_database",
-    description:
-      "設定資料庫連線 (設定後同一次對話內的所有查詢都會使用此連線)",
+    description: "設定資料庫連線 (設定後同一次對話內的所有查詢都會使用此連線)",
     inputSchema: {
       type: "object",
       properties: {
@@ -21,9 +26,15 @@ export const definitions = [
         user: { type: "string", description: "使用者名稱 (預設 root)" },
         password: { type: "string", description: "密碼" },
         database: { type: "string", description: "資料庫名稱" },
+        remember: { type: "boolean", description: "是否記住此連線設定（密碼除外）供下次自動載入" },
       },
       required: ["database"],
     },
+  },
+  {
+    name: "load_db_connection",
+    description: "從本地設定檔載入上次記住的資料庫連線設定",
+    inputSchema: { type: "object", properties: {} },
   },
   {
     name: "get_current_db",
@@ -88,6 +99,31 @@ export const definitions = [
 ];
 
 // ============================================
+// 內部：保存連線設定 (不含密碼)
+// ============================================
+async function saveDbConfig(config) {
+  const { password, ...safeConfig } = config;
+  try {
+    await fs.writeFile(DB_CONFIG_FILE, JSON.stringify(safeConfig, null, 2), "utf-8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ============================================
+// 內部：讀取連線設定
+// ============================================
+async function loadDbConfig() {
+  try {
+    const data = await fs.readFile(DB_CONFIG_FILE, "utf-8");
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+// ============================================
 // 內部：統一錯誤回應格式（含根因 + 建議動作）
 // ============================================
 function errorResp(message, nextActions = []) {
@@ -106,7 +142,7 @@ function requireDb() {
   if (!currentDb) {
     return {
       ok: false,
-      error: errorResp("尚未設定資料庫連線。", ["呼叫 set_database 設定連線後重試"]),
+      error: errorResp("尚未設定資料庫連線。", ["呼叫 set_database 設定連線或 load_db_connection 載入設定後重試"]),
     };
   }
   return { ok: true, config: currentDb };
@@ -228,26 +264,42 @@ export async function handle(name, args) {
       await conn.ping();
     } catch (err) {
       const isAuth = /Access denied|ER_ACCESS_DENIED/i.test(err.message);
-      const isConn = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND/i.test(err.message);
-      const isDb   = /Unknown database|ER_BAD_DB_ERROR/i.test(err.message);
       const hints = isAuth
-        ? ["確認使用者名稱與密碼是否正確", "確認該使用者有權限存取此資料庫"]
-        : isConn
-        ? ["確認 host 與 port 是否正確", "確認 MySQL 服務正在執行中"]
-        : isDb
-        ? [`資料庫「${dbConfig.database}」不存在，確認資料庫名稱後重試`]
-        : ["確認 host、port、user、password、database 後重新呼叫 set_database"];
+        ? ["確認使用者名稱與密碼是否正確"]
+        : ["確認 host、port、database 是否正確"];
       return errorResp(`連線失敗：${err.message}`, hints);
     } finally {
       if (conn) await conn.end();
     }
 
     currentDb = dbConfig;
+    let msg = `✅ 已連線到 ${dbConfig.database}@${dbConfig.host}:${dbConfig.port} (user: ${dbConfig.user})`;
+    
+    if (args.remember) {
+      const saved = await saveDbConfig(dbConfig);
+      if (saved) msg += "\n💾 連線設定已持久化至 .mcp_db_config.json";
+    }
+
+    return { content: [{ type: "text", text: msg }] };
+  }
+
+  // ── load_db_connection ──
+  if (name === "load_db_connection") {
+    const config = await loadDbConfig();
+    if (!config) {
+      return errorResp("找不到已儲存的連線設定。", ["請先呼叫 set_database 並開啟 remember 選項"]);
+    }
+    
+    // 試著連線 (需要密碼)
+    // 注意：密碼不在 JSON 裡，如果需要自動載入，通常假設為空或由 env 提供
+    // 這裡我們僅載入設定，並提示使用者提供密碼 (如果不是空的話)
+    currentDb = { ...config, password: "" };
+    
     return {
       content: [
         {
           type: "text",
-          text: `✅ 已連線到 ${dbConfig.database}@${dbConfig.host}:${dbConfig.port} (user: ${dbConfig.user})`,
+          text: `📂 已載入連線設定：${config.database}@${config.host}:${config.port}\n⚠️ 目前密碼設為空，若連線失敗請手動呼叫 set_database 補足密碼。`,
         },
       ],
     };
@@ -289,11 +341,7 @@ export async function handle(name, args) {
         ],
       };
     } catch (err) {
-      const isNotFound = /Table .* doesn't exist|ER_NO_SUCH_TABLE/i.test(err.message);
-      return errorResp(`查詢結構失敗：${err.message}`, isNotFound
-        ? [`資料表「${args.table_name}」不存在，確認資料表名稱是否正確`]
-        : ["確認目前連線的資料庫是否正確（呼叫 get_current_db 確認）"]
-      );
+      return errorResp(`查詢結構失敗：${err.message}`);
     } finally {
       await conn.end();
     }
@@ -304,71 +352,25 @@ export async function handle(name, args) {
     const check = requireDb();
     if (!check.ok) return check.error;
 
-    // 拆分多條 SQL（以分號分隔，忽略字串內的分號）
     const statements = splitSQL(args.sql);
-
-    // 單條：維持原邏輯
-    if (statements.length <= 1) {
-      const sql = statements[0] || args.sql.trim();
-      const conn = await mysql.createConnection(check.config);
-      try {
-        const [res] = await conn.execute(sql);
-        if (Array.isArray(res)) {
-          return {
-            content: [{ type: "text", text: `查詢結果 (${res.length} 筆)：\n${formatRows(res)}` }],
-          };
-        } else {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `✅ 執行成功。影響列數: ${res.affectedRows}, 新增 ID: ${res.insertId || "無"}`,
-              },
-            ],
-          };
-        }
-      } catch (err) {
-        return errorResp(`SQL 執行失敗：${err.message}`, sqlErrorHints(err));
-      } finally {
-        await conn.end();
-      }
-    }
-
-    // 多條：逐條執行，收集結果
     const conn = await mysql.createConnection(check.config);
     const results = [];
-    let successCount = 0;
-    let failCount = 0;
     try {
       for (let i = 0; i < statements.length; i++) {
         const sql = statements[i];
-        const label = `[${i + 1}/${statements.length}]`;
         try {
           const [res] = await conn.execute(sql);
-          successCount++;
-          const preview = sql.substring(0, 60) + (sql.length > 60 ? "…" : "");
           if (Array.isArray(res)) {
-            results.push(`${label} ✅ ${res.length} 筆 ← ${preview}`);
+            results.push(`[${i + 1}] 查詢結果 (${res.length} 筆)：\n${formatRows(res)}`);
           } else {
-            results.push(`${label} ✅ 影響 ${res.affectedRows} 列 ← ${preview}`);
+            results.push(`[${i + 1}] ✅ 執行成功。影響列數: ${res.affectedRows}`);
           }
         } catch (err) {
-          failCount++;
-          results.push(`${label} ❌ ${err.message}\n  ${sql.substring(0, 80)}`);
-          if (i < statements.length - 1) {
-            results.push(`⚠️ 因第 ${i + 1} 條失敗，已跳過剩餘 ${statements.length - i - 1} 條語句`);
-          }
+          results.push(`[${i + 1}] ❌ 失敗：${err.message}`);
           break;
         }
       }
-      return {
-        content: [
-          {
-            type: "text",
-            text: `批次執行結果（共 ${statements.length} 條，成功 ${successCount}，失敗 ${failCount}）：\n\n${results.join('\n\n')}`,
-          },
-        ],
-      };
+      return { content: [{ type: "text", text: results.join("\n\n") }] };
     } finally {
       await conn.end();
     }
@@ -385,15 +387,13 @@ export async function handle(name, args) {
       for (const table of args.table_names) {
         try {
           const [rows] = await conn.execute(`DESCRIBE \`${table}\``);
-          const cols = rows.map((r) => `  ${r.Field} (${r.Type})${r.Key === "PRI" ? " [PK]" : ""}${r.Extra ? ` ${r.Extra}` : ""}`);
-          results.push(`📋 ${table}（${rows.length} 欄）:\n${cols.join("\n")}`);
+          const cols = rows.map((r) => `  ${r.Field} (${r.Type})`);
+          results.push(`📋 ${table}:\n${cols.join("\n")}`);
         } catch (err) {
           results.push(`❌ ${table}：${err.message}`);
         }
       }
-      return {
-        content: [{ type: "text", text: results.join("\n\n") }],
-      };
+      return { content: [{ type: "text", text: results.join("\n\n") }] };
     } finally {
       await conn.end();
     }
@@ -406,34 +406,16 @@ export async function handle(name, args) {
 
     const conn = await mysql.createConnection(check.config);
     const results = [];
-    let successCount = 0;
-    let failCount = 0;
-
     try {
-      for (let i = 0; i < args.queries.length; i++) {
-        const q = args.queries[i];
-        const label = q.label || `Query ${i + 1}`;
-        const tag = `[${i + 1}/${args.queries.length}] ${label}`;
+      for (const q of args.queries) {
         try {
           const [res] = await conn.execute(q.sql);
-          successCount++;
-          if (Array.isArray(res)) {
-            results.push(`${tag} ✅ ${res.length} 筆\n${formatRows(res)}`);
-          } else {
-            results.push(`${tag} ✅ 影響 ${res.affectedRows} 列${res.insertId ? `，ID: ${res.insertId}` : ""}`);
-          }
+          results.push(`${q.label || "SQL"}: ✅ 成功`);
         } catch (err) {
-          failCount++;
-          results.push(`${tag} ❌ ${err.message}\n  ${q.sql.substring(0, 80)}`);
-          // 不中斷：批次模式各查詢獨立，繼續執行下一條
+          results.push(`${q.label || "SQL"}: ❌ ${err.message}`);
         }
       }
-      return {
-        content: [{
-          type: "text",
-          text: `批次結果（${args.queries.length} 條，✅${successCount} ❌${failCount}）：\n\n${results.join("\n\n---\n\n")}`,
-        }],
-      };
+      return { content: [{ type: "text", text: results.join("\n") }] };
     } finally {
       await conn.end();
     }

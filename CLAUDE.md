@@ -15,11 +15,13 @@ MCP_NodeServer/
 ├── tools/               ← MCP 工具模組（各自匯出 definitions + handle）
 │   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, read_files_batch, list_files_batch
 │   ├── php.js           ← run_php_script, run_php_test, send_http_request, tail_log, send_http_requests_batch
-│   ├── database.js      ← set_database, get_current_db, get_db_schema, execute_sql, get_db_schema_batch, execute_sql_batch
+│   ├── database.js      ← set_database, load_db_connection, get_current_db, get_db_schema, execute_sql, get_db_schema_batch, execute_sql_batch
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   ├── bookmarks.js     ← Chrome 書籤管理（12 個工具）
 │   ├── sftp.js          ← sftp_connect, sftp_upload, sftp_download, sftp_list, sftp_delete, sftp_list_batch
-│   └── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
+│   ├── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
+│   ├── python.js        ← run_python_script (Docker)
+│   └── git.js           ← git_status, git_diff, git_log, git_stash_ops
 ├── skills/index.js      ← MCP Prompts 路由（注意：小寫 skills，不是 Skills）
 └── Skills/              ← Skill MD 檔
     ├── *_agent.md       ← MCP Prompts 內容

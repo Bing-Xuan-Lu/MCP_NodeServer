@@ -15,34 +15,22 @@ description: |
 
 ### 步驟 1：取得變更概況
 
-執行以下指令，了解當前狀態：
-
-```bash
-git status
-git diff --cached --stat
-git diff --stat
-```
+優先使用 **MCP 工具** 了解當前狀態：
+1. 執行 `git_status` 查看整體變更
+2. 若有暫存檔案，執行 `git_diff {staged: true}` 查看已暫存內容
+3. 執行 `git_diff` 查看未暫存改動
 
 **判斷提交範圍（重要）：**
 
-- 若 `git diff --cached --stat` 有輸出 → **已有暫存檔案，只提交暫存內容**，不執行 `git add`
-- 若 `git diff --cached --stat` 無輸出 → **無暫存，將全部變更加入暫存**（步驟 6 執行 `git add -A`）
+- 若 `git_status` 顯示有 **Staged changes** → **只提交暫存內容**，不執行 `git add`
+- 若無暫存 → **將全部變更加入暫存**（步驟 6 執行 `git add -A`）
 
 ### 步驟 2：讀取變更內容
 
-依步驟 1 判斷的提交範圍，讀取對應的 diff：
+依步驟 1 判斷的提交範圍，讀取對應的 diff 詳細內容。
 
-**已有暫存** — 只讀暫存區的差異：
-
-```bash
-git diff --cached -- <file>
-```
-
-**無暫存（全部）** — 讀取工作區差異：
-
-```bash
-git diff HEAD -- <file>
-```
+**已有暫存** — 使用 `git_diff {staged: true}`
+**無暫存（全部）** — 使用 `git_diff`
 
 **第三方套件／編譯產物目錄** — 只記錄目錄名稱，**不逐一讀取內部檔案**：
 

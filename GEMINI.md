@@ -39,17 +39,16 @@
      - [ ] Dashboard 的 `section-total` 數字與頂部總數一致。
      - [ ] JS `SKILLS` 物件已新增 detail 資料。
 
-## 🌐 Playwright 初始化標準 (SOP)
+## 🌐 Playwright & Browser MCP 初始化標準 (SOP)
 根據使用的工具環境，參考對應的安裝指南：
 
 ### A. Claude Code 環境 (MCP 模式)
 > 詳細參考：`docs/playwright-setup.md`
 1. **環境初始化**：`npm init playwright@latest -- --yes --quiet --browser=chromium --lang=JavaScript`。
-2. **配置優化**：預設開啟 `ignoreHTTPSErrors: true` 並配置 `baseURL` 與 `html` reporter。
-3. **MCP 設定**：將 `playwright` 加入 `.mcp.json` 的 `mcpServers`。
+2. **MCP 設定**：將 `playwright` 加入 `.mcp.json` 的 `mcpServers`。
 
-### B. Gemini CLI 環境 (Playwright MCP 模式)
-> 詳細參考：`Skills/commands/testing/gemini_playwright_setup.md`
+### B. Gemini CLI 環境 (Standalone Browser 模式 - 推薦)
+> **功能描述**：使用官方 Playwright MCP，讓 AI 具備完全自主的瀏覽器控制能力，不需手動點擊 Connect 即可進行自動化測試與截圖。
 1. **環境需求**：Node.js 18 或以上版本。
 2. **設定方式**：修改 `~/.gemini/settings.json` (全域) 或專案目錄下的 `.gemini/settings.json` (區域)。
 3. **MCP 伺服器配置**：在 `mcpServers` 中加入以下設定：
@@ -58,20 +57,26 @@
      "mcpServers": {
        "playwright": {
          "command": "npx",
-         "args": ["-y", "@playwright/mcp@latest"]
+         "args": ["-y", "@modelcontextprotocol/server-playwright"]
        }
      }
    }
    ```
-4. **安裝瀏覽器**：若初次使用出現錯誤，請在對話中輸入 `browser_install` 以自動安裝 Playwright 瀏覽器核心。
-5. **驗證**：重啟 Gemini CLI，執行 `List my MCP tools` 或直接使用 `browser_navigate` 測試功能。
+4. **安裝瀏覽器核心**：執行 `npx playwright install chromium`。
+5. **驗證**：重啟 Gemini CLI，看到 `playwright - Ready` 即表示成功。您可以直接下令：「使用 playwright 導航至 localhost 並截圖」。
 
 ## 📁 專案專屬規範
 - **MCP 工具**：新增工具需註冊於 `index.js` 的 `TOOL_MODULES`。
 - **路徑存取**：預設 `basePath = D:\Project\`。跨目錄需呼叫 `grant_path_access`。
-- **環境限制**：
-    - 資料庫連線 (`set_database`) 僅在**單次對話**有效。
+- **環境限制與連線記憶**：
+    - **預設資料庫**：Host: `127.0.0.1`, User: `root`, Database: `test`。啟動後優先呼叫 `load_db_connection` 嘗試載入設定。
+    - **連線持久化**：連線成功後建議開啟 `remember: true` 以維持 Session 間的一致性。
+    - **SFTP 限制**：基於安全考量，SFTP 僅在**單次對話**有效，不進行持久化。
     - 書籤操作前**必須關閉 Chrome 瀏覽器**。
+- **Git 操作流程**：
+    - 任何修改前，應先執行 `git_status` 確認當前分支狀態。
+    - 修改後、Commit 前，必須執行 `git_diff` 核對改動內容。
+    - 頻繁改動或切換任務時，善用 `git_stash_ops` 保存臨時狀態。
 - **語言偏好**：產出的註解、Commit 訊息、報告應優先使用 **繁體中文**。
 
 ## 📜 Commit 規範
