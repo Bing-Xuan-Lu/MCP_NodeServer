@@ -141,7 +141,7 @@
       </div>
       <div class="stat-row">
         <span class="stat-dot"></span>
-        <span class="stat-text"><strong>64</strong> &nbsp;個能力已建立 &nbsp;·&nbsp; 38 Skills &nbsp;+&nbsp; 26 MCP Tools</span>
+        <span class="stat-text"><strong>74</strong> &nbsp;個能力已建立 &nbsp;·&nbsp; 42 Skills &nbsp;+&nbsp; 32 MCP Tools</span>
       </div>
     </div>
 
@@ -340,7 +340,7 @@
         <span class="section-title tools">MCP Tools</span>
         <span class="section-slash">/</span>
         <span class="section-subtitle">工具模組，透過 MCP Server 自動調用</span>
-        <span class="section-total">6 departments &nbsp;·&nbsp; 26 tools &nbsp;·&nbsp; +1 規劃中</span>
+        <span class="section-total">6 departments &nbsp;·&nbsp; 32 tools &nbsp;·&nbsp; +1 規劃中</span>
       </div>
 
       <div class="dept-row">
@@ -351,8 +351,10 @@
           <span class="tag">read_file</span>
           <span class="tag">create_file</span>
           <span class="tag">apply_diff</span>
+          <span class="tag">read_files_batch</span>
+          <span class="tag">list_files_batch</span>
         </div>
-        <span class="dept-count">4</span>
+        <span class="dept-count">6</span>
       </div>
 
       <div class="dept-row">
@@ -363,8 +365,10 @@
           <span class="tag">get_current_db</span>
           <span class="tag">get_db_schema</span>
           <span class="tag">execute_sql</span>
+          <span class="tag">get_db_schema_batch</span>
+          <span class="tag">execute_sql_batch</span>
         </div>
-        <span class="dept-count">4</span>
+        <span class="dept-count">6</span>
       </div>
 
       <div class="dept-row">
@@ -375,8 +379,9 @@
           <span class="tag">run_php_test</span>
           <span class="tag">send_http_request</span>
           <span class="tag">tail_log</span>
+          <span class="tag">send_http_requests_batch</span>
         </div>
-        <span class="dept-count">4</span>
+        <span class="dept-count">5</span>
       </div>
 
       <div class="dept-row">
@@ -413,8 +418,9 @@
           <span class="tag">sftp_download</span>
           <span class="tag">sftp_list</span>
           <span class="tag">sftp_delete</span>
+          <span class="tag">sftp_list_batch</span>
         </div>
-        <span class="dept-count">5</span>
+        <span class="dept-count">6</span>
       </div>
 
       <!-- ── 規劃中 ── -->
@@ -473,22 +479,22 @@
   <script>
   // ── Skill Data ──────────────────────────────────────────────────────────
   const SKILLS = {
-    'php_crud_generator':    { dept:'PHP 開發部',     title:'PHP後台CRUD模組產生器',           desc:'開始開發新功能前，只要提供資料表名稱，即可自動產生完整 PHP 後台 CRUD 模組（列表、新增、編輯、刪除、表單驗證、DB 操作）。',      usage:'/php_crud_generator [資料表名稱或功能描述]', tools:['get_db_schema','execute_sql','create_file'] },
-    'php_upgrade':           { dept:'PHP 開發部',     title:'PHP 7.x → 8.4 升級',             desc:'當 PHP 7.x 專案出現 Deprecated 警告，或需要升級 PHP 版本時，自動掃描並修正所有過時語法至 PHP 8.4 標準。', usage:'/php_upgrade',                              tools:['list_files','read_file','apply_diff'] },
+    'php_crud_generator':    { dept:'PHP 開發部',     title:'PHP後台CRUD模組產生器',           desc:'開始開發新功能前，只要提供資料表名稱，即可自動產生完整 PHP 後台 CRUD 模組（列表、新增、編輯、刪除、表單驗證、DB 操作）。',      usage:'/php_crud_generator [資料表名稱或功能描述]', tools:['get_db_schema','get_db_schema_batch','execute_sql','create_file','read_files_batch','send_http_requests_batch'] },
+    'php_upgrade':           { dept:'PHP 開發部',     title:'PHP 7.x → 8.4 升級',             desc:'當 PHP 7.x 專案出現 Deprecated 警告，或需要升級 PHP 版本時，自動掃描並修正所有過時語法至 PHP 8.4 標準。', usage:'/php_upgrade',                              tools:['list_files','list_files_batch','read_file','read_files_batch','apply_diff'] },
     'php_path_fix':          { dept:'PHP 開發部',     title:'修正 PHP 混合斜線路徑問題',        desc:'掃描 PHP 專案中所有 Windows 反斜線路徑寫法（如 include "\\Folder\\file.php"），統一修正為正斜線跨平台格式。',       usage:'/php_path_fix',                             tools:['list_files','read_file','apply_diff'] },
-    'dotnet_to_php':         { dept:'程式移植部',     title:'.NET C# → PHP 翻寫',             desc:'將 .NET（C#）程式碼翻譯為 PHP，保留業務邏輯，轉換語言特性（型別系統、LINQ、async/await、泛型等）。',               usage:'/dotnet_to_php',                            tools:['read_file','create_file','apply_diff'] },
-    'php_crud_test':         { dept:'測試品管部',     title:'PHP CRUD 模組整合測試',              desc:'新功能開發完成後用於後端邏輯驗證：對 PHP 模組執行 CRUD 整合測試，逐步確認資料寫入與 DB 狀態一致性。',             usage:'/php_crud_test [模組描述]',                 tools:['send_http_request','execute_sql','run_php_test'] },
+    'dotnet_to_php':         { dept:'程式移植部',     title:'.NET C# → PHP 翻寫',             desc:'將 .NET（C#）程式碼翻譯為 PHP，保留業務邏輯，轉換語言特性（型別系統、LINQ、async/await、泛型等）。',               usage:'/dotnet_to_php',                            tools:['read_file','create_file','apply_diff','get_db_schema_batch'] },
+    'php_crud_test':         { dept:'測試品管部',     title:'PHP CRUD 模組整合測試',              desc:'新功能開發完成後用於後端邏輯驗證：對 PHP 模組執行 CRUD 整合測試，逐步確認資料寫入與 DB 狀態一致性。',             usage:'/php_crud_test [模組描述]',                 tools:['send_http_request','send_http_requests_batch','execute_sql','execute_sql_batch','run_php_test','list_files_batch','read_files_batch','get_db_schema_batch'] },
     'playwright_ui_test':    { dept:'測試品管部',     title:'Playwright UI 自動化測試、除錯與截圖總覽', desc:'使用 Playwright 對網頁進行 UI 自動化測試（CRUD）、互動式除錯（Xdebug），或截圖模式快速瀏覽系統功能。支援 DEV_MODE 驗證碼繞過。', usage:'/playwright_ui_test [目標描述]', tools:['Playwright MCP'] },
     'web_performance':       { dept:'測試品管部',     title:'網站前端效能檢測與優化建議',       desc:'量測 LCP、FCP、TTI、資源大小等效能指標，分析載入瓶頸（大圖、未壓縮 JS/CSS），提供具體優化建議。',                usage:'/web_performance',                          tools:['Playwright MCP','send_http_request'] },
     'axshare_diff':          { dept:'規格分析部',     title:'AxShare 規格書 vs 網站差異比對（全站/單一單元）',  desc:'比對 AxShare 原型規格與實際測試網站。全站模式產出完整差異報告；單一單元模式針對特定模組深度分析（含 DB 影響評估、ALTER TABLE SQL），結果直接整合進現有報告檔。建議先執行 /axshare_spec_index 建立快照後再使用。',  usage:'/axshare_diff [模組名稱]',  tools:['Playwright MCP'] },
     'axshare_spec_index':    { dept:'規格分析部',     title:'AxShare 規格書一次性建立本地索引',              desc:'一次爬取整份 AxShare 規格書（或本地匯出 HTML），將所有頁面的欄位、按鈕、邏輯、日期標記整理成結構化 Markdown 索引檔。後續 /axshare_diff 可直接讀取此檔案，不需每次重爬規格書，速度快且不受 iframe 限制。', usage:'/axshare_spec_index [規格書來源]', tools:['Playwright MCP','list_files','create_file'] },
-    'db_schema_designer':    { dept:'資料庫規劃部',   title:'MySQL 資料表結構設計',             desc:'需求訪談後、開工前，根據業務描述設計符合 3NF 的資料表結構與索引策略，輸出可直接執行的 CREATE TABLE SQL。',          usage:'/db_schema_designer [業務描述]',             tools:['get_db_schema','execute_sql'] },
-    'db_migration_generator':{ dept:'資料庫規劃部',   title:'Schema 差異遷移腳本產生器',        desc:'比對現有 DB Schema 與目標設計的差異，產生 ALTER TABLE 遷移腳本與回滾腳本，並標示 DROP COLUMN 等高風險操作。',       usage:'/db_migration_generator [目標描述]',         tools:['get_db_schema','execute_sql'] },
-    'db_migration_run':      { dept:'資料庫規劃部',   title:'批次執行 DB 遷移並追蹤版本',       desc:'與 /db_migration_generator 互補：批次執行遷移 SQL、建立 _migrations 版本追蹤表、紀錄執行歷史，並支援 rollback 回滾。', usage:'/db_migration_run [SQL檔案或描述]',          tools:['execute_sql','get_db_schema','read_file'] },
-    'db_index_analyzer':     { dept:'資料庫規劃部',   title:'MySQL 查詢效能與索引優化分析',     desc:'執行 EXPLAIN 分析慢查詢，識別全表掃描、冗餘索引、索引順序錯誤等問題，產生 ADD/DROP INDEX 優化腳本與效能預估。',    usage:'/db_index_analyzer [SQL 或表格名稱]',        tools:['get_db_schema','execute_sql'] },
+    'db_schema_designer':    { dept:'資料庫規劃部',   title:'MySQL 資料表結構設計',             desc:'需求訪談後、開工前，根據業務描述設計符合 3NF 的資料表結構與索引策略，輸出可直接執行的 CREATE TABLE SQL。',          usage:'/db_schema_designer [業務描述]',             tools:['get_db_schema','get_db_schema_batch','execute_sql'] },
+    'db_migration_generator':{ dept:'資料庫規劃部',   title:'Schema 差異遷移腳本產生器',        desc:'比對現有 DB Schema 與目標設計的差異，產生 ALTER TABLE 遷移腳本與回滾腳本，並標示 DROP COLUMN 等高風險操作。',       usage:'/db_migration_generator [目標描述]',         tools:['get_db_schema','get_db_schema_batch','execute_sql','execute_sql_batch'] },
+    'db_migration_run':      { dept:'資料庫規劃部',   title:'批次執行 DB 遷移並追蹤版本',       desc:'與 /db_migration_generator 互補：批次執行遷移 SQL、建立 _migrations 版本追蹤表、紀錄執行歷史，並支援 rollback 回滾。', usage:'/db_migration_run [SQL檔案或描述]',          tools:['execute_sql','execute_sql_batch','get_db_schema','get_db_schema_batch','read_file'] },
+    'db_index_analyzer':     { dept:'資料庫規劃部',   title:'MySQL 查詢效能與索引優化分析',     desc:'執行 EXPLAIN 分析慢查詢，識別全表掃描、冗餘索引、索引順序錯誤等問題，產生 ADD/DROP INDEX 優化腳本與效能預估。',    usage:'/db_index_analyzer [SQL 或表格名稱]',        tools:['get_db_schema','get_db_schema_batch','execute_sql','execute_sql_batch'] },
     'sftp_deploy':           { dept:'部署維運部',     title:'本機 PHP 專案部署到遠端測試機',    desc:'透過 SFTP 將本機 PHP 目錄上傳到遠端伺服器，部署前確認目標目錄內容，部署後驗證遠端檔案結果。',                    usage:'/sftp_deploy',                              tools:['sftp_connect','sftp_upload','sftp_list'] },
-    'sftp_pull':             { dept:'部署維運部',     title:'從遠端測試機拉取程式到本機',       desc:'透過 SFTP 將遠端伺服器的檔案或目錄下載到本機，適用於取回測試機改動、備份遠端資料或同步最新版本。',               usage:'/sftp_pull',                                tools:['sftp_connect','sftp_download','sftp_list'] },
-    'sftp_ops':              { dept:'部署維運部',     title:'遠端主機即時除錯與環境檢查',       desc:'透過 SFTP 連線遠端主機，讀取 error log、檢查設定檔、確認目錄結構。UI 測試失敗時可直接查看後端報錯，快速定位問題。', usage:'/sftp_ops [除錯目標描述]',                   tools:['sftp_connect','sftp_list','sftp_download','tail_log'] },
+    'sftp_pull':             { dept:'部署維運部',     title:'從遠端測試機拉取程式到本機',       desc:'透過 SFTP 將遠端伺服器的檔案或目錄下載到本機，適用於取回測試機改動、備份遠端資料或同步最新版本。',               usage:'/sftp_pull',                                tools:['sftp_connect','sftp_download','sftp_list','sftp_list_batch'] },
+    'sftp_ops':              { dept:'部署維運部',     title:'遠端主機即時除錯與環境檢查',       desc:'透過 SFTP 連線遠端主機，讀取 error log、檢查設定檔、確認目錄結構。UI 測試失敗時可直接查看後端報錯，快速定位問題。', usage:'/sftp_ops [除錯目標描述]',                   tools:['sftp_connect','sftp_list','sftp_list_batch','sftp_download','read_files_batch','tail_log'] },
     'docker_relocate':       { dept:'Docker 維運部', title:'Docker Compose 開發環境搬遷',     desc:'將 Docker Compose 環境從一個路徑搬遷到另一個路徑，自動更新 Volume 掛載路徑與所有相關設定檔。',                    usage:'/docker_relocate',                          tools:['read_file','apply_diff','create_file'] },
     'docker_compose_ops':    { dept:'Docker 維運部', title:'Docker Compose 日常操作',          desc:'執行 docker compose up/down/restart/logs/ps 等日常操作，根據目前環境狀態自動判斷最佳操作方式。',                   usage:'/docker_compose_ops',                       tools:[] },
     'docker_short_url':      { dept:'Docker 維運部', title:'Docker Apache 短路徑映射設定',     desc:'為 Docker 容器中的 Apache 設定 mod_rewrite RewriteRule，讓長 URL 路徑可用短路徑存取，不影響其他專案。',            usage:'/docker_short_url',                         tools:['read_file','create_file','apply_diff','send_http_request'] },

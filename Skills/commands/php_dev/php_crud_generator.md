@@ -37,14 +37,17 @@ D:\Project\
 
 | 工具 | 用途 |
 |------|------|
-| `get_db_schema` | 查詢資料表結構（自動取得欄位清單）|
+| `get_db_schema` | 查詢單張資料表結構 |
+| `get_db_schema_batch` | 一次取得多張表結構（多模組時優先使用） |
 | `execute_sql` | 建立資料表、執行 DDL |
-| `read_file` | 讀取 PHP 範本檔 |
+| `read_file` | 讀取單一檔案 |
+| `read_files_batch` | 一次讀取多個範本檔（Step 3 優先使用） |
 | `create_file` | 將產生的程式碼寫入專案目錄 |
 | `apply_diff` | 修改既有檔案（局部替換）|
 | `list_files` | 確認目錄結構與檔案是否存在 |
 | `run_php_script` | 執行 PHP 驗證語法正確性 |
-| `send_http_request` | 測試產生的頁面是否正常回應 |
+| `send_http_request` | 測試單一頁面回應 |
+| `send_http_requests_batch` | 批次測試多個頁面（Step 7 驗證多個 CRUD 頁面） |
 | `tail_log` | 查看 PHP error log 排查錯誤 |
 
 ---
@@ -130,15 +133,17 @@ list_files("skills/templates")
   確認無誤後繼續？
 ```
 
-### Step 3：讀取所有範本檔
+### Step 3：讀取所有範本檔（一次批次讀取）
 ```
-read_file("skills/templates/class.tpl.php")
-read_file("skills/templates/add.tpl.php")
-read_file("skills/templates/add_.tpl.php")
-read_file("skills/templates/update.tpl.php")
-read_file("skills/templates/update_.tpl.php")
-read_file("skills/templates/del.tpl.php")
-read_file("skills/templates/list.tpl.php")
+read_files_batch([
+  "skills/templates/class.tpl.php",
+  "skills/templates/add.tpl.php",
+  "skills/templates/add_.tpl.php",
+  "skills/templates/update.tpl.php",
+  "skills/templates/update_.tpl.php",
+  "skills/templates/del.tpl.php",
+  "skills/templates/list.tpl.php"
+])
 ```
 
 ### Step 4：產生程式碼

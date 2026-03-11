@@ -29,7 +29,9 @@ $ARGUMENTS
 | 工具 | 用途 |
 |------|------|
 | `execute_sql` | 執行遷移 SQL 與版本追蹤查詢 |
-| `get_db_schema` | 執行前後比對 Schema 變化 |
+| `execute_sql_batch` | 批次執行多組獨立查詢（不因單條失敗中斷） |
+| `get_db_schema` | 查看單張表結構 |
+| `get_db_schema_batch` | 遷移後一次驗證多張表結構 |
 | `get_current_db` | 確認目前連線的資料庫 |
 | `read_file` | 讀取 SQL 遷移檔案 |
 
@@ -142,7 +144,7 @@ VALUES ('{version}', '{description}', '{sql_up}', '{sql_down}', {ms}, 'success')
 
 ### 步驟 7：驗證與報告
 
-用 `get_db_schema` 驗證變更後的表結構，產出報告：
+用 `get_db_schema_batch` 一次驗證所有受影響的表結構，產出報告：
 
 ```
 ✅ 遷移執行完成！

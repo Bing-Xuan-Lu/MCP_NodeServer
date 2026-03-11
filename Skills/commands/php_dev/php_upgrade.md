@@ -12,8 +12,10 @@
 
 | 工具 | 用途 |
 |------|------|
-| `list_files` | 掃描資料夾取得所有 .php 檔案清單 |
-| `read_file` | 讀取 PHP 檔案內容 |
+| `list_files` | 掃描單一資料夾 |
+| `list_files_batch` | 一次掃描多個資料夾（多目錄升級時優先使用） |
+| `read_file` | 讀取單一 PHP 檔案 |
+| `read_files_batch` | 一次讀取多個 PHP 檔案（批次分析時優先使用） |
 | `apply_diff` | 對檔案進行精準修改（局部替換）|
 | `run_php_script` | 用 `php -l` 驗證語法正確性 |
 | `tail_log` | 查看 PHP error log 排查問題 |

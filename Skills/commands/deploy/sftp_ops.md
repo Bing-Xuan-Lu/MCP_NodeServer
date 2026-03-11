@@ -48,9 +48,11 @@ $ARGUMENTS
 | 工具 | 用途 |
 |------|------|
 | `sftp_connect` | 建立 SFTP 連線（後續操作需先連線） |
-| `sftp_list` | 列出遠端目錄結構，確認檔案是否存在 |
+| `sftp_list` | 列出單一遠端目錄 |
+| `sftp_list_batch` | 一次列出多個遠端目錄（比對多個路徑時優先使用） |
 | `sftp_download` | 下載遠端檔案到本機查看 |
-| `read_file` | 讀取已下載的檔案內容 |
+| `read_file` | 讀取已下載的單一檔案 |
+| `read_files_batch` | 一次讀取多個已下載的檔案 |
 | `tail_log` | 即時讀取遠端 log 檔尾端內容 |
 
 ---

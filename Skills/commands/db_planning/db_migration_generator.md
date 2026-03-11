@@ -26,9 +26,10 @@ $ARGUMENTS
 
 | 工具 | 用途 |
 |------|------|
-| `get_db_schema` | 取得現有表格結構 |
-| `execute_sql` | 執行 SHOW CREATE TABLE 查看完整定義 |
-| `execute_sql` | 執行遷移 SQL（使用者確認後） |
+| `get_db_schema` | 取得單張表格結構 |
+| `get_db_schema_batch` | 一次取得多張表格結構（多表遷移時優先使用） |
+| `execute_sql` | 執行 SHOW CREATE TABLE / 遷移 SQL |
+| `execute_sql_batch` | 一次取多張表的 SHOW CREATE TABLE |
 
 ---
 
@@ -37,11 +38,14 @@ $ARGUMENTS
 ### 步驟 1：取得現有 Schema
 
 ```
-get_db_schema("table_name")
-→ 記錄現有欄位、型別、索引、FK 約束
+# 多表遷移時一次取回所有結構
+get_db_schema_batch(["table_a", "table_b"])
 
-execute_sql("SHOW CREATE TABLE table_name")
-→ 取得完整定義（含 DEFAULT 值、COMMENT）
+# 同時取多張表的完整定義
+execute_sql_batch([
+  { label: "table_a", sql: "SHOW CREATE TABLE table_a" },
+  { label: "table_b", sql: "SHOW CREATE TABLE table_b" }
+])
 ```
 
 ---

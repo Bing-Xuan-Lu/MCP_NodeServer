@@ -48,6 +48,43 @@ export const definitions = [
       required: ["sql"],
     },
   },
+  {
+    name: "get_db_schema_batch",
+    description: "批次查看多張資料表結構（減少 tool call 來回）",
+    inputSchema: {
+      type: "object",
+      properties: {
+        table_names: {
+          type: "array",
+          items: { type: "string" },
+          description: "資料表名稱陣列",
+        },
+      },
+      required: ["table_names"],
+    },
+  },
+  {
+    name: "execute_sql_batch",
+    description: "批次執行多組獨立 SQL（各自獨立連線，互不影響，不會因某條失敗而中斷）",
+    inputSchema: {
+      type: "object",
+      properties: {
+        queries: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string", description: "查詢標籤（選填，方便識別）" },
+              sql: { type: "string", description: "SQL 語句" },
+            },
+            required: ["sql"],
+          },
+          description: "SQL 查詢陣列",
+        },
+      },
+      required: ["queries"],
+    },
+  },
 ];
 
 // ============================================
@@ -147,6 +184,27 @@ function splitSQL(sql) {
   if (trimmed) statements.push(trimmed);
 
   return statements;
+}
+
+// ============================================
+// 內部：SELECT 結果格式化（緊湊表格，省 token）
+// ============================================
+const MAX_ROWS = 100;       // 回傳行數上限
+const MAX_COL_WIDTH = 120;  // 單欄位截斷字元數
+
+function formatRows(rows) {
+  if (!rows.length) return "(0 筆)";
+  const display = rows.slice(0, MAX_ROWS);
+  const keys = Object.keys(display[0]);
+  const lines = display.map((r) =>
+    keys.map((k) => {
+      const v = r[k] == null ? "NULL" : String(r[k]);
+      return v.length > MAX_COL_WIDTH ? v.slice(0, MAX_COL_WIDTH) + "…" : v;
+    }).join(" | ")
+  );
+  let out = keys.join(" | ") + "\n" + lines.join("\n");
+  if (rows.length > MAX_ROWS) out += `\n... 共 ${rows.length} 筆，僅顯示前 ${MAX_ROWS} 筆`;
+  return out;
 }
 
 // ============================================
@@ -257,12 +315,7 @@ export async function handle(name, args) {
         const [res] = await conn.execute(sql);
         if (Array.isArray(res)) {
           return {
-            content: [
-              {
-                type: "text",
-                text: `查詢結果 (${res.length} 筆)：\n${JSON.stringify(res, null, 2)}`,
-              },
-            ],
+            content: [{ type: "text", text: `查詢結果 (${res.length} 筆)：\n${formatRows(res)}` }],
           };
         } else {
           return {
@@ -293,15 +346,15 @@ export async function handle(name, args) {
         try {
           const [res] = await conn.execute(sql);
           successCount++;
+          const preview = sql.substring(0, 60) + (sql.length > 60 ? "…" : "");
           if (Array.isArray(res)) {
-            results.push(`${label} ✅ 查詢回傳 ${res.length} 筆\n    ${sql.substring(0, 80)}${sql.length > 80 ? '...' : ''}`);
+            results.push(`${label} ✅ ${res.length} 筆 ← ${preview}`);
           } else {
-            results.push(`${label} ✅ 影響 ${res.affectedRows} 列\n    ${sql.substring(0, 80)}${sql.length > 80 ? '...' : ''}`);
+            results.push(`${label} ✅ 影響 ${res.affectedRows} 列 ← ${preview}`);
           }
         } catch (err) {
           failCount++;
-          results.push(`${label} ❌ ${err.message}\n    ${sql.substring(0, 80)}${sql.length > 80 ? '...' : ''}`);
-          // 遇到錯誤停止後續語句，避免後續 DDL 依賴失敗的前置語句
+          results.push(`${label} ❌ ${err.message}\n  ${sql.substring(0, 80)}`);
           if (i < statements.length - 1) {
             results.push(`⚠️ 因第 ${i + 1} 條失敗，已跳過剩餘 ${statements.length - i - 1} 條語句`);
           }
@@ -315,6 +368,71 @@ export async function handle(name, args) {
             text: `批次執行結果（共 ${statements.length} 條，成功 ${successCount}，失敗 ${failCount}）：\n\n${results.join('\n\n')}`,
           },
         ],
+      };
+    } finally {
+      await conn.end();
+    }
+  }
+
+  // ── get_db_schema_batch ──
+  if (name === "get_db_schema_batch") {
+    const check = requireDb();
+    if (!check.ok) return check.error;
+
+    const conn = await mysql.createConnection(check.config);
+    const results = [];
+    try {
+      for (const table of args.table_names) {
+        try {
+          const [rows] = await conn.execute(`DESCRIBE \`${table}\``);
+          const cols = rows.map((r) => `  ${r.Field} (${r.Type})${r.Key === "PRI" ? " [PK]" : ""}${r.Extra ? ` ${r.Extra}` : ""}`);
+          results.push(`📋 ${table}（${rows.length} 欄）:\n${cols.join("\n")}`);
+        } catch (err) {
+          results.push(`❌ ${table}：${err.message}`);
+        }
+      }
+      return {
+        content: [{ type: "text", text: results.join("\n\n") }],
+      };
+    } finally {
+      await conn.end();
+    }
+  }
+
+  // ── execute_sql_batch ──
+  if (name === "execute_sql_batch") {
+    const check = requireDb();
+    if (!check.ok) return check.error;
+
+    const conn = await mysql.createConnection(check.config);
+    const results = [];
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      for (let i = 0; i < args.queries.length; i++) {
+        const q = args.queries[i];
+        const label = q.label || `Query ${i + 1}`;
+        const tag = `[${i + 1}/${args.queries.length}] ${label}`;
+        try {
+          const [res] = await conn.execute(q.sql);
+          successCount++;
+          if (Array.isArray(res)) {
+            results.push(`${tag} ✅ ${res.length} 筆\n${formatRows(res)}`);
+          } else {
+            results.push(`${tag} ✅ 影響 ${res.affectedRows} 列${res.insertId ? `，ID: ${res.insertId}` : ""}`);
+          }
+        } catch (err) {
+          failCount++;
+          results.push(`${tag} ❌ ${err.message}\n  ${q.sql.substring(0, 80)}`);
+          // 不中斷：批次模式各查詢獨立，繼續執行下一條
+        }
+      }
+      return {
+        content: [{
+          type: "text",
+          text: `批次結果（${args.queries.length} 條，✅${successCount} ❌${failCount}）：\n\n${results.join("\n\n---\n\n")}`,
+        }],
       };
     } finally {
       await conn.end();

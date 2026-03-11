@@ -64,6 +64,21 @@ export const definitions = [
     },
   },
   {
+    name: "sftp_list_batch",
+    description: "批次列出多個遠端目錄內容（共用一條連線，減少 tool call 來回）",
+    inputSchema: {
+      type: "object",
+      properties: {
+        remote_paths: {
+          type: "array",
+          items: { type: "string" },
+          description: "遠端目錄路徑陣列",
+        },
+      },
+      required: ["remote_paths"],
+    },
+  },
+  {
     name: "sftp_delete",
     description: "刪除遠端檔案或目錄",
     inputSchema: {
@@ -100,6 +115,22 @@ function requireSftp() {
     };
   }
   return { ok: true, config: currentSftp };
+}
+
+// ============================================
+// 內部：格式化目錄列表（共用，省 token）
+// ============================================
+function formatListing(remotePath, items) {
+  const lines = items
+    .sort((a, b) => (b.type === "d") - (a.type === "d") || a.name.localeCompare(b.name))
+    .map((f) => {
+      const type = f.type === "d" ? "[D] " : "    ";
+      const size = f.type === "d" ? "" : ` ${(f.size / 1024).toFixed(1)}K`;
+      const d = new Date(f.modifyTime);
+      const date = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      return `${type}${f.name}${size} ${date}`;
+    });
+  return `📁 ${remotePath} (${items.length}):\n${lines.join("\n")}`;
 }
 
 // ============================================
@@ -268,27 +299,43 @@ export async function handle(name, args) {
     try {
       client = await createClient(check.config);
       const items = await client.list(args.remote_path);
-
-      const lines = items
-        .sort((a, b) => (b.type === "d") - (a.type === "d") || a.name.localeCompare(b.name))
-        .map((f) => {
-          const type = f.type === "d" ? "[DIR] " : "      ";
-          const size = f.type === "d" ? "        " : `${(f.size / 1024).toFixed(1).padStart(7)} KB`;
-          const date = new Date(f.modifyTime).toLocaleString("zh-TW", { hour12: false });
-          return `${type}${f.name.padEnd(32)} ${size}  ${date}`;
-        });
-
       return {
-        content: [{
-          type: "text",
-          text: `📁 ${args.remote_path} (${items.length} 項):\n\n${lines.join("\n")}`,
-        }],
+        content: [{ type: "text", text: formatListing(args.remote_path, items) }],
       };
     } catch (err) {
       return errorResp(`列目錄失敗：${err.message}`, [
         "確認遠端路徑存在且為目錄",
         "確認遠端使用者有讀取權限",
       ]);
+    } finally {
+      if (client) await client.end().catch(() => {});
+    }
+  }
+
+  // ── sftp_list_batch ──
+  if (name === "sftp_list_batch") {
+    const check = requireSftp();
+    if (!check.ok) return check.error;
+
+    let client;
+    try {
+      client = await createClient(check.config);
+      const results = [];
+
+      for (const remotePath of args.remote_paths) {
+        try {
+          const items = await client.list(remotePath);
+          results.push(formatListing(remotePath, items));
+        } catch (err) {
+          results.push(`❌ ${remotePath}：${err.message}`);
+        }
+      }
+
+      return {
+        content: [{ type: "text", text: results.join("\n\n") }],
+      };
+    } catch (err) {
+      return errorResp(`SFTP 連線失敗：${err.message}`, ["確認 SFTP 連線設定是否正確"]);
     } finally {
       if (client) await client.end().catch(() => {});
     }
