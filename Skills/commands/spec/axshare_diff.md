@@ -18,12 +18,18 @@ $ARGUMENTS
 
 ---
 
-## 前置建議
+## 規格書來源優先順序（重要）
 
-> **第一次使用前**：建議先執行 `/axshare_spec_index` 將整份規格書建成本地索引檔（`axshare_spec_reference.md`）。
-> 後續每次執行 `/axshare_diff` 時直接讀取該檔案，不需重爬規格書，速度快且不受 iframe 限制。
+> **一律先找本地索引檔，找到就用，不開 Playwright。**
 >
-> 若已有 `axshare_spec_reference.md`，在「需要的資訊」中提供其路徑即可。
+> 1. **優先**：讀取專案目錄下的本地索引（由 `/axshare_spec_index` 產生）：
+>    - `spec/axshare_spec_reference_backend.md` — 後台（開發時預設讀這份）
+>    - `spec/axshare_spec_reference_frontend.md` — 前台
+>    - 舊版單檔 `spec/axshare_spec_reference.md` 也相容
+> 2. **次選**：使用者提供的其他本地索引檔路徑
+> 3. **最後才用 Playwright**：只有在沒有任何本地索引時，才透過 Playwright 開 AxShare
+>
+> 本地索引不需 Playwright，無 output too large 問題，速度快 10 倍。
 
 ---
 
@@ -33,7 +39,7 @@ $ARGUMENTS
 
 | 參數 | 說明 | 範例 |
 |------|------|------|
-| 規格書來源 | AxShare 網址或本地 Axure 匯出 HTML 目錄 | `https://xxx.axshare.com` 或 `D:\specs\export\` |
+| 規格書來源 | 本地索引檔路徑（優先）或 AxShare 網址 | `{ProjectFolder}/spec/axshare_spec_reference_backend.md` 或 `https://xxx.axshare.com` |
 | 測試網站網址 | 測試網站的基礎 URL | `http://localhost/project/adminControl` |
 | 比對頁面 | 要比對的頁面清單 | `list, add, detail, update` |
 | 登入資訊 | 測試帳號密碼（後台需登入） | `admin / password` |
@@ -101,7 +107,23 @@ $ARGUMENTS
 
 ### 步驟 1：擷取規格書內容
 
-#### 模式 A — AxShare 網址（Playwright）
+#### 模式 L — 本地索引檔（預設，優先使用）
+
+> **這是預設模式。** 先嘗試讀取本地索引檔，有就用，跳過所有 Playwright 步驟。
+
+```
+1. 依比對內容決定讀哪份索引：
+   - 後台比對（預設）→ read_file `{ProjectFolder}/spec/axshare_spec_reference_backend.md`
+   - 前台比對 → read_file `{ProjectFolder}/spec/axshare_spec_reference_frontend.md`
+   - 舊版單檔 → read_file `{ProjectFolder}/spec/axshare_spec_reference.md`（向下相容）
+2. 若檔案存在且內容非空：
+   - 直接從 Markdown 解析出各頁面的欄位/按鈕/邏輯
+   - 跳過步驟 1 其餘模式，直接進入步驟 2
+3. 若檔案不存在 → 提示使用者先執行 `/axshare_spec_index`，
+   或改用下方模式 A/B/C 作為 fallback
+```
+
+#### 模式 A — AxShare 網址（Playwright fallback，僅在無本地索引時使用）
 
 > **AxShare 架構提醒**：AxShare 頁面使用多層 iframe（導航在 sidebar iframe、內容在 content iframe），`browser_click` 無法直接穿透 iframe。**必須先用 `browser_evaluate` 抽取所有頁面 URL，再以 `browser_navigate` 直連**，不依賴點擊 nav。
 
@@ -141,8 +163,6 @@ $ARGUMENTS
    - browser_snapshot() → 取得 accessibility tree（已包含 content iframe 內容）
    - 從 snapshot 解析：文字標籤、表單元件、按鈕、表格結構
 ```
-
-> 若目標專案有現成的 `axshare_spec_reference.md` 快照檔（由 `/axshare_spec_index` 產生），**優先直接讀取該檔案**，跳過步驟 1-5 的網路爬取，速度快 10 倍且不受 iframe 限制。
 
 #### 模式 B — 本地匯出 HTML（HTTP server + Playwright）
 
