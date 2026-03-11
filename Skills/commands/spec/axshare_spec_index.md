@@ -24,7 +24,7 @@ $ARGUMENTS
 | 參數 | 說明 | 範例 |
 |------|------|------|
 | 規格書來源 | AxShare 網址 或 本地匯出目錄 | `https://xxx.axshare.com` 或 `D:\specs\export\` |
-| 輸出路徑 | 索引檔存放位置 | `D:\Project\{ProjectFolder}\axshare_spec_reference.md` |
+| 輸出目錄 | 索引檔存放目錄 | `D:\Project\{ProjectFolder}\spec\` |
 | 掃描範圍 | 全部頁面 或 指定模組 | `全部` 或 `首頁管理,訂單管理` |
 
 ---
@@ -47,10 +47,14 @@ $ARGUMENTS
 
 詢問使用者確認：
 - 規格書來源（A. AxShare 網址 / B. 本地匯出 HTML）
-- 輸出路徑（預設 `{ProjectFolder}/axshare_spec_reference.md`）
+- 輸出目錄（預設 `{ProjectFolder}/spec/`）
 - 掃描範圍（預設全部）
 
 顯示計畫後等使用者確認再開始。
+
+> 輸出固定為兩個檔案（按前後台分離），不可合併成單檔：
+> - `spec/axshare_spec_reference_backend.md` — 後台頁面
+> - `spec/axshare_spec_reference_frontend.md` — 前台頁面
 
 ---
 
@@ -104,6 +108,27 @@ $ARGUMENTS
 
 ---
 
+### 步驟 2b：分類前台 / 後台
+
+根據 AxShare 導航樹的結構，將頁面分為兩組：
+
+```
+分類規則（依導航樹的父節點判斷）：
+- 「後台」組：父節點為「後台」「後台管理」「adminControl」或類似名稱的頁面
+- 「前台」組：父節點為「前台」「前台頁面」或類似名稱的頁面
+- 「共用」頁面（如「主機架構環境」「規格說明」「網站大單元架構」）：
+  兩份索引都包含，放在最前面的「通用規格」區塊
+
+若導航樹無明確前後台分層，依頁面名稱關鍵字判斷：
+- 含「管理」「列表」「新增」「編輯」「設定」→ 後台
+- 含「首頁」「商品頁」「購物車」「結帳」「會員中心」→ 前台
+- 無法判斷 → 兩份都放
+```
+
+產出兩份頁面清單：`backendPages[]` 和 `frontendPages[]`
+
+---
+
 ### 步驟 3：逐頁擷取內容
 
 對每個頁面（若掃描範圍有限制，只處理指定模組）：
@@ -124,12 +149,12 @@ $ARGUMENTS
 
 ---
 
-### 步驟 4：整理結構化索引
+### 步驟 4：整理結構化索引（分前後台兩份）
 
-將所有頁面內容整理為以下格式的 Markdown：
+分別對 `backendPages[]` 和 `frontendPages[]` 各整理一份 Markdown，格式相同：
 
 ```markdown
-# AxShare 規格書索引
+# AxShare 規格書索引（後台 / 前台）
 來源: {規格書 URL 或 本地路徑}
 建立時間: {今日日期}
 頁面總數: N 頁
@@ -164,12 +189,17 @@ $ARGUMENTS
 
 ---
 
-### 步驟 5：寫入索引檔
+### 步驟 5：寫入索引檔（兩份）
 
 ```
 create_file(
-  path: "{輸出路徑}",
-  content: {步驟 4 整理的完整 Markdown}
+  path: "{輸出目錄}/axshare_spec_reference_backend.md",
+  content: {後台頁面的完整 Markdown}
+)
+
+create_file(
+  path: "{輸出目錄}/axshare_spec_reference_frontend.md",
+  content: {前台頁面的完整 Markdown}
 )
 ```
 
@@ -179,14 +209,16 @@ create_file(
 ✅ 規格書索引建立完成！
 
 📊 統計：
-  頁面總數：N 頁
+  後台頁面：X 頁（axshare_spec_reference_backend.md, ~XX KB）
+  前台頁面：Y 頁（axshare_spec_reference_frontend.md, ~XX KB）
   涵蓋模組：M 個
   有日期標記的頁面：K 頁
-  索引檔大小：~XX KB
 
-📄 輸出檔案：{輸出路徑}
+📄 輸出檔案：
+  {輸出目錄}/axshare_spec_reference_backend.md
+  {輸出目錄}/axshare_spec_reference_frontend.md
 
-下次執行 /axshare_diff 時，提供此檔案路徑即可直接讀取，
+下次執行 /axshare_diff 時，會自動讀取對應檔案，
 無需重新爬取規格書。
 ```
 
@@ -194,7 +226,8 @@ create_file(
 
 ## 輸出
 
-- `{ProjectFolder}/axshare_spec_reference.md`：結構化規格書索引，供 `/axshare_diff` 直接讀取
+- `{ProjectFolder}/spec/axshare_spec_reference_backend.md`：後台規格書索引
+- `{ProjectFolder}/spec/axshare_spec_reference_frontend.md`：前台規格書索引
 
 ---
 
