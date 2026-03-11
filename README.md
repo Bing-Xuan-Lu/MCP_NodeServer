@@ -1,391 +1,69 @@
-# Project Migration Assistant Pro (MCP Server 個人向開發者使用)
+# MCP NodeServer — 程式設計師的私人 AI 助理員工
 
-基於 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 構建的多功能伺服器，整合檔案系統、資料庫、Excel 邏輯分析、PHP 測試以及 **Chrome 書籤管理** 等功能。
+Node.js MCP Server，為 Claude Code 提供 **41 個 Skill 指令** 與 **38 個 MCP 工具**，讓 AI 直接讀寫檔案、操作 DB、執行 PHP、部署 SFTP。
 
 > 📊 **[查看技能儀表板 →](https://bing-xuan-lu.github.io/MCP_NodeServer/dashboard.html)**
 
-## 專案結構
+---
 
-```text
-MCP_NodeServer/
-├── index.js              ← 啟動 + 路由整合 (77 行)
-├── config.js             ← 共用設定 + resolveSecurePath
-├── tools/
-│   ├── filesystem.js     ← 檔案系統工具 (6)
-│   ├── php.js            ← PHP 執行工具 (5)
-│   ├── database.js       ← 資料庫工具 (6)
-│   ├── excel.js          ← Excel 分析工具 (3)
-│   ├── bookmarks.js      ← Chrome 書籤工具 (12)
-│   ├── sftp.js           ← SFTP 連線工具 (6)
-│   └── skill_factory.js  ← 技能管理工具 (6)
-├── skills/
-│   └── index.js          ← Agent Skill 路由
-└── Skills/
-    ├── php_crud_agent.md      ← PHP CRUD 產生器 Skill
-    ├── php_upgrade_agent.md   ← PHP 7.x → 8.4 升級 Skill
-    └── bookmark_agent.md      ← 書籤整理範例 Prompt
-```
+## 前置條件
 
-每個 `tools/` 模組統一介面：
-
-```js
-export const definitions = [...];          // 工具 Schema 清單
-export async function handle(name, args)   // 工具邏輯
-```
+| 工具 | 版本 | 說明 |
+|------|------|------|
+| [Node.js](https://nodejs.org/) | 18+ | 執行 MCP Server 必需 |
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | 最新版 | Python 容器（`run_python_script` 工具） |
+| [Git](https://git-scm.com/) | 任意版 | Clone 專案 |
 
 ---
 
-## 工具總覽 (44 個)
-
-### 1. 檔案系統 (6)
-
-| 工具 | 說明 |
-|------|------|
-| `list_files` | 列出目錄內容 |
-| `read_file` | 讀取檔案內容 |
-| `create_file` | 建立或覆寫檔案 |
-| `apply_diff` | Search & Replace 模式修改檔案 |
-| `read_files_batch` | 批次讀取多個檔案（減少 tool call 來回） |
-| `list_files_batch` | 批次列出多個目錄內容 |
-
-> 所有檔案操作限制在 `BASE_PROJECT_PATH` 目錄下 (預設 `D:\Project\`)。
-
-### 2. PHP 執行 (5)
-
-| 工具 | 說明 |
-|------|------|
-| `run_php_script` | 執行 PHP 腳本 (CLI 模式)，回傳 Stdout/Stderr |
-| `run_php_test` | 自動建立測試環境 (模擬 `$_SESSION` / `$_POST`) 並執行 PHP |
-| `send_http_request` | 發送 HTTP 請求，支援 Multipart 檔案上傳 |
-| `tail_log` | 讀取檔案最後 N 行 (適用 PHP Error Log) |
-| `send_http_requests_batch` | 批次發送多個 HTTP 請求（並行執行） |
-
-### 3. 資料庫 MySQL (6)
-
-| 工具 | 說明 |
-|------|------|
-| `set_database` | 設定資料庫連線 (host/port/user/password/database)，設定後同一對話內有效 |
-| `get_current_db` | 查看目前的資料庫連線設定 |
-| `get_db_schema` | 查看資料表結構 (欄位與型別) |
-| `execute_sql` | 執行 SQL 指令 (DDL/DML) |
-| `get_db_schema_batch` | 批次取得多張表結構（共用連線） |
-| `execute_sql_batch` | 批次執行多條獨立 SQL（不因單條失敗中斷） |
-
-> 使用 `get_db_schema` / `execute_sql` 前，需先呼叫 `set_database` 設定連線。連線設定保存在記憶體中，MCP Server 重啟後需重新設定。
-
-### 4. Excel 分析 (3)
-
-| 工具 | 說明 |
-|------|------|
-| `get_excel_values_batch` | 批次讀取儲存格，支援範圍 (`A1:B10`) 或列表 (`['A1','C3']`) |
-| `trace_excel_logic` | 追蹤公式邏輯鏈 — 引用來源 (Precedents) 或影響範圍 (Dependents) |
-| `simulate_excel_change` | 模擬修改數值並重算結果 (不動原檔) |
-
-> 整合 [HyperFormula](https://github.com/handsontable/hyperformula) 引擎，支援跨工作表公式解析。
-
-### 5. Chrome 書籤管理 (12)
-
-| 工具 | 說明 |
-|------|------|
-| `get_bookmark_structure` | 取得書籤資料夾樹狀結構 (僅資料夾名稱 + 書籤數量) |
-| `get_folder_contents` | 列出資料夾內所有書籤 (ID / Title) |
-| `create_bookmark_folder` | 在指定父資料夾下建立新資料夾 |
-| `rename_bookmark_folder` | 重新命名資料夾 |
-| `delete_bookmark_folder` | 刪除資料夾 (預設僅空資料夾，可強制刪除) |
-| `move_bookmarks` | 整批搬移書籤/子資料夾，支援關鍵字篩選 |
-| `move_specific_bookmarks` | 依 ID 精準搬移書籤 (每次上限 20 個) |
-| `sort_bookmarks` | 資料夾置頂 + 名稱 A-Z / 中文筆畫排序 |
-| `scan_and_clean_bookmarks` | 掃描無效連結 (404/DNS Error)，可自動移除 |
-| `remove_duplicates` | 移除重複網址 (保留最早建立的) |
-| `remove_chrome_bookmarks` | 依 URL 刪除特定書籤 |
-| `export_bookmarks_to_html` | 匯出為 Netscape HTML 格式 (可匯入任何瀏覽器) |
-
-**書籤工具特色：**
-- 自動排除內網 IP (192.168.x / 10.x / localhost) 避免誤判
-- HEAD → GET 降級策略，減少 405/403 誤報
-- 每次操作自動備份原始 Bookmarks 檔案
-- 支援搬移子資料夾 (不只是書籤連結)
-
-### 6. SFTP 連線 (6)
-
-| 工具 | 說明 |
-|------|------|
-| `sftp_connect` | 建立 SFTP 連線（密碼或私鑰認證） |
-| `sftp_upload` | 上傳本機檔案或目錄到遠端 |
-| `sftp_download` | 從遠端下載檔案或目錄到本機 |
-| `sftp_list` | 列出遠端目錄內容 |
-| `sftp_delete` | 刪除遠端檔案或目錄 |
-| `sftp_list_batch` | 批次列出多個遠端目錄（共用連線） |
-
-### 7. 技能管理 (6)
-
-| 工具 | 說明 |
-|------|------|
-| `save_claude_skill` | 儲存並部署斜線指令 Skill |
-| `list_claude_skills` | 列出所有已部署的 Skill |
-| `delete_claude_skill` | 刪除指定 Skill |
-| `grant_path_access` | 開放 basePath 以外的路徑存取 |
-| `list_allowed_paths` | 列出已開放的額外路徑 |
-| `revoke_path_access` | 撤銷已開放的額外路徑 |
-
----
-
-## Agent Skills
-
-MCP Prompts 功能，可在 Claude 中直接呼叫完整的 Agent 技能書。
-
-| Skill 名稱 | 說明 | MD 檔案 |
-| --- | --- | --- |
-| `php_crud_generator` | 根據資料表自動產生完整後台模組 (model + CRUD 頁面) | `Skills/php_crud_agent.md` |
-| `php_upgrade` | PHP 7.x → 8.4 升級 Agent — 掃描資料夾、自動修正為 PHP 8.4 相容語法（13 條升遷規則） | `Skills/php_upgrade_agent.md` |
-| `dotnet_to_php` | .NET → PHP 翻寫 Agent — 讀取 C# Controller/View，翻寫為 PHP CRUD 模組 | `Skills/dotnet_to_php_agent.md` |
-| `php_net_to_php_test` | PHP 整合測試 Agent — 對 .NET 轉 PHP 模組進行 CRUD、資料寫入、檔案上傳的完整測試 | `Skills/php_net_to_php_test_agent.md` |
-| `axshare_diff` | AxShare 規格書差異比對 — 比對 Axure 規格與測試網站的功能差異 | `Skills/axshare_diff_agent.md` |
-| `bookmark_organizer` | Chrome 書籤整理 SOP + 範例 Prompt 集 | `Skills/bookmark_agent.md` |
-
----
-
-## 新增 Skill 步驟
-
-### Step 1 — 撰寫技能書 MD 檔
-
-在 `Skills/` 目錄下建立 `.md` 檔，描述 Agent 的角色、可用工具、執行流程：
-
-```text
-Skills/
-└── my_new_skill.md
-```
-
-MD 檔撰寫建議：
-
-- **角色定義**：你是什麼 Agent，能做什麼
-- **可用 MCP 工具**：列出此 Skill 會用到的工具名稱
-- **輸入格式**：使用者應該提供什麼資訊
-- **執行流程**：Step by Step 的操作步驟
-- **完成提示**：完成後要告知使用者什麼
-
-### Step 2 — 在 `skills/index.js` 登記
-
-```js
-// 1. 在 definitions 陣列加入 Skill 描述
-export const definitions = [
-  // ... 現有 Skills ...
-  {
-    name: "my_new_skill",
-    description: "這個 Skill 的簡短說明",
-    arguments: [
-      { name: "someParam", description: "參數說明", required: false },
-    ],
-  },
-];
-
-// 2. 在 getPrompt() 加入對應的讀取邏輯
-export async function getPrompt(name, args = {}) {
-  // ... 現有 Skills ...
-
-  if (name === "my_new_skill") {
-    const skillPath = path.join(SKILLS_DIR, "my_new_skill.md");
-    const content = await fs.readFile(skillPath, "utf-8");
-    // 可選：用 args 替換 MD 裡的 {{PLACEHOLDER}}
-    return {
-      messages: [{ role: "user", content: { type: "text", text: content } }],
-    };
-  }
-}
-```
-
-### Step 3 — 重啟 MCP Server
-
-重新啟動後，Claude 即可透過 Prompts 清單看到並呼叫新 Skill。
-
----
-
-## 新增工具模組步驟
-
-### Step 1 — 建立 `tools/my_module.js`
-
-```js
-import { resolveSecurePath } from "../config.js";
-
-export const definitions = [
-  {
-    name: "my_tool",
-    description: "工具說明",
-    inputSchema: {
-      type: "object",
-      properties: { param: { type: "string" } },
-      required: ["param"],
-    },
-  },
-];
-
-export async function handle(name, args) {
-  if (name === "my_tool") {
-    // 工具邏輯
-    return { content: [{ type: "text", text: "結果" }] };
-  }
-}
-```
-
-### Step 2 — 在 `index.js` 加入模組
-
-```js
-import * as myModule from "./tools/my_module.js";
-
-const TOOL_MODULES = [filesystem, php, database, excel, bookmarks, myModule]; // 加到陣列末尾
-```
-
----
-
-## 安裝與設定
-
-### 前置需求
-- Node.js v18+
-- MySQL (選用，書籤功能不需要)
-- Chrome 瀏覽器 (書籤功能)
-- Playwright MCP (選用，UI 自動化測試需要，見 Step 1.5)
-
-### 安裝
-```bash
-npm install
-```
-
-### 資料庫連線
-
-不再使用 `.env` 設定資料庫。改為在對話中透過 `set_database` 工具動態設定連線。
-
-### 啟動
-```bash
-node index.js
-```
-
-## 整合設定
-
-### 從 Git Clone 後的完整設定步驟
-
-#### Step 1 — 安裝依賴
-```bash
-npm install
-```
-
-#### Step 1.5 — 安裝 Playwright MCP（選用）
-
-若需要 UI 自動化測試、網頁截圖、自動登入等功能：
+## 快速開始
 
 ```bash
-# 安裝 Playwright MCP 套件
-npm install -g @playwright/mcp@latest
-
-# 安裝 Chromium 瀏覽器（約 170MB）
-npx playwright install chromium
+git clone https://github.com/Bing-Xuan-Lu/MCP_NodeServer.git
+cd MCP_NodeServer
+setup.bat          # 一鍵初始化（npm install + Python 容器 + 部署 Skills）
 ```
 
-> **注意**：套件名稱是 `@playwright/mcp`，不是 `@anthropic-ai/playwright-mcp`。
-> 詳細說明見 [docs/playwright-setup.md](docs/playwright-setup.md)
+設定 `~/.claude/mcp_settings.json` 或專案根目錄的 `.mcp.json`：
 
-#### Step 2 — 設定環境變數
-複製 `.env.example` 並填入資料庫密碼：
-```bash
-cp .env.example .env
-```
-
-#### Step 3 — 連接 Claude Code（MCP Server）
-
-將專案內的 `.mcp.json` **複製到家目錄**，讓 Claude Code 能自動啟動 MCP Server：
-
-```bash
-# Windows
-copy .mcp.json %USERPROFILE%\.mcp.json
-
-# macOS / Linux
-cp .mcp.json ~/.mcp.json
-```
-
-> ⚠️ 複製後請將 `.mcp.json` 內的路徑改為你本機的實際路徑：
-> ```json
-> {
->   "mcpServers": {
->     "project-migration-assistant-pro": {
->       "type": "stdio",
->       "command": "node",
->       "args": ["C:\\實際路徑\\MCP_Server\\index.js"]
->     },
->     "playwright": {
->       "type": "stdio",
->       "command": "npx",
->       "args": ["@playwright/mcp@latest"]
->     }
->   }
-> }
-> ```
->
-> **Playwright 注意事項**：
-> - `playwright` 必須放在 `mcpServers` **內部**，放到外面會讀不到
-> - 預設就是 headed 模式（開啟可見瀏覽器視窗），不需要加 `--headed` 參數
-> - 若要無頭模式，加 `"--headless"` 到 args 陣列
-
-#### Step 4 — 部署斜線指令
-
-執行專案根目錄的部署腳本，將 `Skills/commands/` 複製到 `~/.claude/commands/`：
-
-```bash
-# Windows
-.\deploy-commands.bat
-
-# macOS / Linux
-bash deploy-commands.sh
-```
-
-部署完成後可直接使用：`/php_upgrade`、`/php_crud_generator`、`/bookmark_organizer`
-
-> 💡 **維護說明**：只需修改 `Skills/commands/` 內的 `.md` 檔，改完後重新執行部署腳本即可。
-
-#### Step 5 — 重啟 Claude Code
-
-完全關閉並重新開啟 Claude Code，MCP Server 會自動啟動。
-
-之後輸入 `/skills` 即可看到所有可用 Skill 清單。
-
----
-
-### 設定完成後的使用方式
-
-| 輸入 | 效果 |
-|------|------|
-| `/skills` | 顯示所有可用 Skill 清單 |
-| 告訴 Claude 要用哪個 Skill | Claude 自動透過 MCP 調用 |
-
----
-
-### Claude Desktop 設定（選用）
-若使用 Claude Desktop，在 `claude_desktop_config.json` 中加入：
 ```json
 {
   "mcpServers": {
     "project-migration-assistant-pro": {
+      "type": "stdio",
       "command": "node",
-      "args": ["C:\\實際路徑\\MCP_Server\\index.js"]
+      "args": ["{YourProjectPath}\\index.js"]  // 請填入 index.js 的絕對路徑
     }
   }
 }
 ```
 
+重啟 Claude Code 後，在對話輸入 `/skill-name` 即可觸發 Skill。
+
 ---
 
-## 技術細節
+## 目錄結構
 
-- **MCP SDK**: `@modelcontextprotocol/sdk` v1.25+
-- **架構**: 模組化 — 每個工具類別獨立為 `tools/*.js`，Skills 路由在 `skills/index.js`
-- **Excel 引擎**: HyperFormula — 解析公式、追蹤引用鏈、模擬計算
-- **路徑安全**: `resolveSecurePath()` 防止目錄穿越攻擊，限制在 `D:\Project\` 以內
-- **ESM 相容**: `createRequire()` 在 ES Module 中載入 CommonJS 套件 (xlsx, hyperformula)
-- **書籤路徑**: 自動偵測 Chrome User Data 路徑，支援自訂 `profilePath`
+```text
+MCP_NodeServer/
+├── index.js             ← MCP Server 主程式
+├── config.js            ← resolveSecurePath (預設 basePath 為 D:\Project\)
+├── tools/               ← MCP 工具模組
+│   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, *_batch
+│   ├── php.js           ← run_php_script, run_php_test, send_http_request, tail_log, *_batch
+│   ├── database.js      ← set_database, load_db_connection, get_db_schema, execute_sql, *_batch
+│   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
+│   ├── bookmarks.js     ← Chrome 書籤管理 (12 工具)
+│   ├── sftp.js          ← sftp_connect/upload/download/list/delete, sftp_list_batch
+│   ├── python.js        ← run_python_script (via Docker python_runner)
+│   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops
+│   └── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
+├── skills/index.js      ← MCP Prompts 路由
+├── Skills/commands/     ← Skill MD 檔（12 個部門子資料夾）
+├── python/              ← Python Docker 環境（python_runner 容器）
+├── docs/                ← 技能儀表板 (dashboard.html / style.css / script.js)
+├── setup.bat            ← 一鍵環境初始化
+└── deploy-commands.bat  ← 部署所有 Skills 到 ~/.claude/commands/
+```
 
-## 注意事項
-
-- 書籤操作前請先關閉 Chrome，避免檔案鎖定衝突
-- `move_specific_bookmarks` 每次最多 20 個，大量搬移需分批呼叫
-- Excel 邏輯追蹤預設深度 3 層，可透過 `depth` 參數調整
-- SQL 指令請謹慎操作，建議先在測試環境驗證
-- 新增 Skill 後需重啟 MCP Server 才會生效
-- Playwright MCP 遇驗證碼時，可在彈出的瀏覽器視窗中手動輸入，或由 Claude 截圖辨識
+詳細開發規範見 [CLAUDE.md](CLAUDE.md)。

@@ -247,7 +247,7 @@ Glob pattern="**/Skills/commands/_skill_template.md"
 **方式 A（新增，優先）— MCP 工具 `save_claude_skill`：**
 
 注意：`save_claude_skill` 的 `content` 參數會**覆蓋**整個檔案。
-- 新增模式：直接傳入完整 MD 內容
+- 新增模式：傳入完整 MD 內容，並帶上 `dept_folder`（例如 `php_dev`、`testing`、`deploy`），確保存到正確部門子資料夾
 - 改進模式：**不要用 save_claude_skill**，改用方式 B
 
 **方式 B（改進模式 / Fallback）— Claude Code 內建工具：**

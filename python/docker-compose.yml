@@ -1,0 +1,12 @@
+services:
+  python:
+    image: python:3.12-slim
+    container_name: python_runner
+    restart: unless-stopped
+    volumes:
+      - ..:/develop   # 自動對應專案根目錄，跨電腦通用
+    working_dir: /develop
+    command: tail -f /dev/null  # 保持容器常駐，等待 docker exec 呼叫
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
