@@ -42,8 +42,9 @@ $ARGUMENTS
 **關注點分離**
 
 - 業務邏輯混入 Controller / View
-- 資料庫查詢寫在 Controller 內
+- 資料庫查詢寫在 Controller / 頁面 / AJAX 端點內（Repository Pattern 違規：SQL 應封裝在 Domain Model 的 Repository 方法中）
 - UI 邏輯混入 Domain 層
+- Infrastructure 層（DB 驅動、郵件、快取）的具體實作洩漏到 Application / Domain 層（如直接呼叫 `$pdo->prepare()` 而非透過 Repository 抽象）
 
 **重造輪子**
 
@@ -120,4 +121,6 @@ $ARGUMENTS
 - 自定邏輯的理由：領域專屬、效能關鍵、安全敏感、外部依賴過重
 - 不要把「utils 就是放雜物的地方」這個習慣帶進新 code
 - Clean Architecture 層次：Domain（業務規則）→ Application（用例）→ Infrastructure（資料庫/API）→ Presentation（UI）
+- **Repository Pattern**：每個 Model class 是該 Aggregate 的唯一資料存取入口。頁面/AJAX 只呼叫 Model 方法，不直接寫 SQL 或呼叫 `$db->execute()`
+- **Infrastructure 層換底原則**：替換 DB 驅動（如 ADOdb → PDO）不應改動 Domain/Application 層任何一行程式碼。若換底後需修改 Model 或頁面，代表抽象洩漏，需先修補相容層（Adapter/Proxy）
 - 搭配 `/tdd` 使用：重構前先確保有測試，重構後跑測試確認

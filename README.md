@@ -11,11 +11,13 @@ MCP_NodeServer/
 ├── index.js              ← 啟動 + 路由整合 (77 行)
 ├── config.js             ← 共用設定 + resolveSecurePath
 ├── tools/
-│   ├── filesystem.js     ← 檔案系統工具 (4)
-│   ├── php.js            ← PHP 執行工具 (4)
-│   ├── database.js       ← 資料庫工具 (2)
+│   ├── filesystem.js     ← 檔案系統工具 (6)
+│   ├── php.js            ← PHP 執行工具 (5)
+│   ├── database.js       ← 資料庫工具 (6)
 │   ├── excel.js          ← Excel 分析工具 (3)
-│   └── bookmarks.js      ← Chrome 書籤工具 (12)
+│   ├── bookmarks.js      ← Chrome 書籤工具 (12)
+│   ├── sftp.js           ← SFTP 連線工具 (6)
+│   └── skill_factory.js  ← 技能管理工具 (6)
 ├── skills/
 │   └── index.js          ← Agent Skill 路由
 └── Skills/
@@ -33,9 +35,9 @@ export async function handle(name, args)   // 工具邏輯
 
 ---
 
-## 工具總覽 (28 個)
+## 工具總覽 (44 個)
 
-### 1. 檔案系統 (4)
+### 1. 檔案系統 (6)
 
 | 工具 | 說明 |
 |------|------|
@@ -43,10 +45,12 @@ export async function handle(name, args)   // 工具邏輯
 | `read_file` | 讀取檔案內容 |
 | `create_file` | 建立或覆寫檔案 |
 | `apply_diff` | Search & Replace 模式修改檔案 |
+| `read_files_batch` | 批次讀取多個檔案（減少 tool call 來回） |
+| `list_files_batch` | 批次列出多個目錄內容 |
 
 > 所有檔案操作限制在 `BASE_PROJECT_PATH` 目錄下 (預設 `D:\Project\`)。
 
-### 2. PHP 執行 (4)
+### 2. PHP 執行 (5)
 
 | 工具 | 說明 |
 |------|------|
@@ -54,8 +58,9 @@ export async function handle(name, args)   // 工具邏輯
 | `run_php_test` | 自動建立測試環境 (模擬 `$_SESSION` / `$_POST`) 並執行 PHP |
 | `send_http_request` | 發送 HTTP 請求，支援 Multipart 檔案上傳 |
 | `tail_log` | 讀取檔案最後 N 行 (適用 PHP Error Log) |
+| `send_http_requests_batch` | 批次發送多個 HTTP 請求（並行執行） |
 
-### 3. 資料庫 MySQL (4)
+### 3. 資料庫 MySQL (6)
 
 | 工具 | 說明 |
 |------|------|
@@ -63,6 +68,8 @@ export async function handle(name, args)   // 工具邏輯
 | `get_current_db` | 查看目前的資料庫連線設定 |
 | `get_db_schema` | 查看資料表結構 (欄位與型別) |
 | `execute_sql` | 執行 SQL 指令 (DDL/DML) |
+| `get_db_schema_batch` | 批次取得多張表結構（共用連線） |
+| `execute_sql_batch` | 批次執行多條獨立 SQL（不因單條失敗中斷） |
 
 > 使用 `get_db_schema` / `execute_sql` 前，需先呼叫 `set_database` 設定連線。連線設定保存在記憶體中，MCP Server 重啟後需重新設定。
 
@@ -99,11 +106,27 @@ export async function handle(name, args)   // 工具邏輯
 - 每次操作自動備份原始 Bookmarks 檔案
 - 支援搬移子資料夾 (不只是書籤連結)
 
-### 6. 網頁工具 (1)
+### 6. SFTP 連線 (6)
 
 | 工具 | 說明 |
 |------|------|
-| `fetch_page_summary` | 讀取網頁並提取摘要 (標題 + 描述 + 前 2000 字) |
+| `sftp_connect` | 建立 SFTP 連線（密碼或私鑰認證） |
+| `sftp_upload` | 上傳本機檔案或目錄到遠端 |
+| `sftp_download` | 從遠端下載檔案或目錄到本機 |
+| `sftp_list` | 列出遠端目錄內容 |
+| `sftp_delete` | 刪除遠端檔案或目錄 |
+| `sftp_list_batch` | 批次列出多個遠端目錄（共用連線） |
+
+### 7. 技能管理 (6)
+
+| 工具 | 說明 |
+|------|------|
+| `save_claude_skill` | 儲存並部署斜線指令 Skill |
+| `list_claude_skills` | 列出所有已部署的 Skill |
+| `delete_claude_skill` | 刪除指定 Skill |
+| `grant_path_access` | 開放 basePath 以外的路徑存取 |
+| `list_allowed_paths` | 列出已開放的額外路徑 |
+| `revoke_path_access` | 撤銷已開放的額外路徑 |
 
 ---
 

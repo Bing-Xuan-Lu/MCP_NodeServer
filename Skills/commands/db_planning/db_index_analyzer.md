@@ -33,10 +33,10 @@ $ARGUMENTS
 
 | 工具 | 用途 |
 |------|------|
-| `get_db_schema` | 取得表格欄位與現有索引 |
-| `execute_sql` | 執行 EXPLAIN 分析查詢計畫 |
-| `execute_sql` | 執行 SHOW INDEX 查看詳細索引資訊 |
-| `execute_sql` | 執行 SHOW TABLE STATUS 查看表格大小 |
+| `get_db_schema` | 取得單張表格欄位與現有索引 |
+| `get_db_schema_batch` | 一次取得多張表格結構（多表分析時優先使用） |
+| `execute_sql` | 執行單條 EXPLAIN / SHOW INDEX |
+| `execute_sql_batch` | 一次執行多條查詢（如同時取 SHOW INDEX + SHOW TABLE STATUS） |
 
 ---
 
@@ -45,14 +45,17 @@ $ARGUMENTS
 ### 步驟 1：取得表格現狀
 
 ```
+# 單表
 get_db_schema("table_name")
-→ 記錄欄位清單、現有索引
 
-execute_sql("SHOW INDEX FROM table_name")
-→ 查看索引 Cardinality（基數）、是否重複
+# 多表時用 batch 一次取回
+get_db_schema_batch(["table_a", "table_b", "table_c"])
 
-execute_sql("SHOW TABLE STATUS LIKE 'table_name'")
-→ 取得總行數（Rows）、資料大小，判斷優化效益
+# 同時查索引與表格大小（省 tool call）
+execute_sql_batch([
+  { label: "索引", sql: "SHOW INDEX FROM table_name" },
+  { label: "表狀態", sql: "SHOW TABLE STATUS LIKE 'table_name'" }
+])
 ```
 
 ---

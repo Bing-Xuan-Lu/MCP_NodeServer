@@ -26,7 +26,8 @@ $ARGUMENTS
 
 | 工具 | 用途 |
 |------|------|
-| `get_db_schema` | 查看現有表格結構，避免設計重複欄位 |
+| `get_db_schema` | 查看單張現有表格結構 |
+| `get_db_schema_batch` | 一次取得多張現有表格結構（設計關聯表時優先使用） |
 | `execute_sql` | 驗證 CREATE TABLE 語法是否正確 |
 
 ---

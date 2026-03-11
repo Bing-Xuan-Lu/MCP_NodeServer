@@ -48,6 +48,40 @@ export const definitions = [
     },
   },
   {
+    name: "read_files_batch",
+    description: "批次讀取多個檔案（減少 tool call 來回）。每個檔案回傳前 200 行摘要。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        paths: {
+          type: "array",
+          items: { type: "string" },
+          description: "檔案路徑陣列",
+        },
+        summary_lines: {
+          type: "integer",
+          description: "每個檔案回傳的行數上限（預設 200）",
+        },
+      },
+      required: ["paths"],
+    },
+  },
+  {
+    name: "list_files_batch",
+    description: "批次列出多個目錄內容（減少 tool call 來回）",
+    inputSchema: {
+      type: "object",
+      properties: {
+        paths: {
+          type: "array",
+          items: { type: "string" },
+          description: "目錄路徑陣列",
+        },
+      },
+      required: ["paths"],
+    },
+  },
+  {
     name: "apply_diff",
     description: "修改檔案 (Search & Replace 模式)",
     inputSchema: {
@@ -108,6 +142,41 @@ export async function handle(name, args) {
     });
 
     return { content: [{ type: "text", text: `${header}\n${numbered.join("\n")}` }] };
+  }
+
+  if (name === "read_files_batch") {
+    const maxLines = args.summary_lines || 200;
+    const results = [];
+    for (const p of args.paths) {
+      try {
+        const fullPath = resolveSecurePath(p);
+        const raw = await fs.readFile(fullPath, "utf-8");
+        const lines = raw.split(/\r?\n/);
+        const truncated = lines.length > maxLines;
+        const output = truncated ? lines.slice(0, maxLines) : lines;
+        const numbered = output.map((line, i) => `${String(i + 1).padStart(5)} | ${line}`);
+        let header = `📄 ${p}（${lines.length} 行${truncated ? `，顯示前 ${maxLines} 行` : ""}）`;
+        results.push(`${header}\n${numbered.join("\n")}`);
+      } catch (err) {
+        results.push(`❌ ${p}：${err.message}`);
+      }
+    }
+    return { content: [{ type: "text", text: results.join("\n\n---\n\n") }] };
+  }
+
+  if (name === "list_files_batch") {
+    const results = [];
+    for (const p of args.paths) {
+      try {
+        const fullPath = resolveSecurePath(p || ".");
+        const entries = await fs.readdir(fullPath, { withFileTypes: true });
+        const lines = entries.map((e) => (e.isDirectory() ? `[DIR] ${e.name}` : `[FILE] ${e.name}`));
+        results.push(`📁 ${p}（${entries.length} 項）:\n${lines.join("\n")}`);
+      } catch (err) {
+        results.push(`❌ ${p}：${err.message}`);
+      }
+    }
+    return { content: [{ type: "text", text: results.join("\n\n") }] };
   }
 
   if (name === "create_file") {

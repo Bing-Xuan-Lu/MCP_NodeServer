@@ -33,12 +33,12 @@ $ARGUMENTS
 
 ## 執行步驟
 
-1. **環境確認**：`set_database` 設定連線，確認模組檔案和資料表存在
-2. **分析模組**：讀取 Model class + 頁面檔案，了解必填欄位、上傳需求、子表關聯
+1. **環境確認**：`set_database` 設定連線，用 `list_files_batch` 一次確認所有模組目錄存在，用 `get_db_schema_batch` 一次取回所有相關表結構
+2. **分析模組**：用 `read_files_batch` 一次讀取 Model class + 頁面檔案，了解必填欄位、上傳需求、子表關聯
 3. **列出測試計畫**：告知使用者要測哪些項目，等確認後開始
 4. **載入測試**：用 `run_php_test` + configPath 確認類別可正常載入（不要用 `run_php_script` 做 `php -l`）
-5. **CRUD 測試**：逐步測試 list / add / detail / del，每步用 `execute_sql` 驗證 DB
-6. **檔案測試**：若有上傳功能，用 `send_http_request` 測試上傳/下載
+5. **CRUD 測試**：逐步測試 list / add / detail / del，用 `execute_sql_batch` 批次驗證多筆 DB 寫入
+6. **檔案測試**：若有上傳功能，用 `send_http_requests_batch` 批次測試多個上傳/下載端點
 7. **清理**：刪除測試資料和測試腳本
 8. **產出報告**：列出每個測試項目的結果、發現的問題、建議
 

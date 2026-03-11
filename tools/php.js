@@ -76,6 +76,31 @@ export const definitions = [
       required: ["targetPath"],
     },
   },
+  {
+    name: "send_http_requests_batch",
+    description: "批次發送多個 HTTP 請求（並行執行，減少 tool call 來回）",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requests: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string", description: "請求標籤（選填，方便識別）" },
+              url: { type: "string", description: "完整網址" },
+              method: { type: "string", enum: ["GET", "POST", "PUT", "DELETE"], default: "GET" },
+              headers: { type: "object", description: "自訂標頭" },
+              data: { type: "string", description: "請求資料 (JSON 字串)" },
+            },
+            required: ["url"],
+          },
+          description: "HTTP 請求陣列",
+        },
+      },
+      required: ["requests"],
+    },
+  },
 ];
 
 // ============================================
@@ -203,5 +228,42 @@ export async function handle(name, args) {
     } finally {
       await fs.unlink(tempFile).catch(() => {});
     }
+  }
+
+  if (name === "send_http_requests_batch") {
+    const tasks = args.requests.map(async (req, i) => {
+      const label = req.label || `Request ${i + 1}`;
+      try {
+        const headers = req.headers || {};
+        let body = null;
+
+        if (req.data) {
+          body = req.data;
+          if (headers["Content-Type"]?.includes("application/x-www-form-urlencoded")) {
+            try { body = new URLSearchParams(JSON.parse(req.data)).toString(); } catch (e) {}
+          }
+        }
+
+        const options = { method: req.method || "GET", headers };
+        if (req.method !== "GET" && req.method !== "HEAD" && body) options.body = body;
+
+        const response = await fetch(req.url, options);
+        const text = await response.text();
+        return `[${i + 1}] ${label} ✅ HTTP ${response.status} ${req.method || "GET"} ${req.url}\n${text.substring(0, 1000)}${text.length > 1000 ? "\n... (截斷)" : ""}`;
+      } catch (err) {
+        return `[${i + 1}] ${label} ❌ ${req.method || "GET"} ${req.url}\n${err.message}`;
+      }
+    });
+
+    const results = await Promise.all(tasks);
+    const successCount = results.filter((r) => r.includes("✅")).length;
+    const failCount = results.length - successCount;
+
+    return {
+      content: [{
+        type: "text",
+        text: `批次 HTTP（${results.length} 個，✅${successCount} ❌${failCount}）：\n\n${results.join("\n\n---\n\n")}`,
+      }],
+    };
   }
 }

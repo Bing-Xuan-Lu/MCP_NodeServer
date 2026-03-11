@@ -30,7 +30,8 @@ description: |
 | 工具 | 用途 |
 |------|------|
 | `sftp_connect` | 建立 SFTP 連線 |
-| `sftp_list` | 列出遠端目錄，確認要下載的內容 |
+| `sftp_list` | 列出單一遠端目錄 |
+| `sftp_list_batch` | 一次列出多個遠端目錄（確認多個來源時優先使用） |
 | `sftp_download` | 下載遠端檔案或目錄到本機 |
 
 ---
