@@ -19,3 +19,6 @@ deploy-commands-internal.bat
 /playwright/.cache/
 /playwright/.auth/
 tests/
+
+# GitHub Skill 參考庫（學習用，不納入版控）
+Skills/references/

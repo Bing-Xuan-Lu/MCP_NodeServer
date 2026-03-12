@@ -30,9 +30,9 @@
       <!-- ── Hero Section (Span 8) ── -->
       <section class="bento-item span-8 hero-item">
         <h1>私人 AI<br>助理員工</h1>
-        <p>一個 Node.js MCP Server，提供 41 個 Skill 與 38 個工具，讓 AI 具備讀寫檔案、操作 DB 與執行 PHP 的能力。</p>
+        <p>您的專屬 Node.js MCP 助理，配備 47 個 Skill 與 38 個工具，隨時準備好處理檔案、操作資料庫與執行 PHP 任務。</p>
         <div style="margin-top:32px; display:flex; gap:16px;">
-          <a href="#skills" style="background:white; color:black; padding:12px 24px; border-radius:30px; font-weight:700; font-size:14px;">瀏覽技能庫 →</a>
+          <a href="#skills" style="background:white; color:black; padding:12px 24px; border-radius:30px; font-weight:700; font-size:14px;">開始工作吧 →</a>
           <div style="font-family:var(--font-mono); font-size:12px; font-weight:700; opacity:0.8; display:flex; align-items:center; border-left:1px solid rgba(255,255,255,0.3); padding-left:16px;">V5.1.0 EST. 2026</div>
         </div>
       </section>
@@ -42,7 +42,7 @@
         <h2 style="font-size:16px; font-weight:700; text-transform:uppercase; color:var(--muted); margin-bottom:24px;">Quick Stats</h2>
         <div style="display:flex; flex-direction:column; gap:20px;">
           <div style="border-left:4px solid var(--purple); padding-left:16px;">
-            <div style="font-size:32px; font-weight:800; line-height:1;">41</div>
+            <div style="font-size:32px; font-weight:800; line-height:1;">47</div>
             <div style="font-size:12px; font-weight:600; color:var(--muted); margin-top:4px;">SKILLS COMMANDS</div>
           </div>
           <div style="border-left:4px solid var(--cyan); padding-left:16px;">
@@ -50,15 +50,92 @@
             <div style="font-size:12px; font-weight:600; color:var(--muted); margin-top:4px;">MCP CORE TOOLS</div>
           </div>
           <div style="border-left:4px solid var(--green); padding-left:16px;">
-            <div style="font-size:32px; font-weight:800; line-height:1;">12</div>
+            <div style="font-size:32px; font-weight:800; line-height:1;">13</div>
             <div style="font-size:12px; font-weight:600; color:var(--muted); margin-top:4px;">DEPARTMENTS</div>
           </div>
         </div>
       </section>
 
-      <!-- ── 全新電腦注意事項 (Span 12) ── -->
+      <!-- ── 今天要做什麼？ (Span 12) ── -->
+      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border);">
+        <h2 style="font-size:24px; font-weight:700; text-transform:uppercase; color:var(--text); margin-bottom:20px; letter-spacing:0.05em;">這個 MCP 伺服器能幫你做什麼？</h2>
+        <p style="font-size:18px; color:var(--muted); margin-bottom:32px; line-height:1.6;">
+          這是您的專屬開發助理。我可以直接讀寫您的專案目錄、連線資料庫執行 SQL、操作 Docker、打包部署，甚至是自動化整理文件與書籤。<br>
+          您可以直接在對話中提出需求，或者參考下方的 <b>快速指令 (Snippets)</b> 來啟動特定的工作流程。
+        </p>
+
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:24px;">
+
+          <div>
+            <div style="font-size:16px; font-weight:700; color:var(--purple); margin-bottom:16px; text-transform:uppercase;">🚀 開發與維護 PHP 功能</div>
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">新增 CRUD 模組</div>
+                <div style="font-size:14px; color:var(--muted); margin-bottom:12px;">自動讀取 Schema，產出前後端與 Model。</div>
+                <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--purple); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/php_crud_generator [資料表名稱]</code>
+              </div>
+              <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">撰寫自動化測試</div>
+                <div style="font-size:14px; color:var(--muted); margin-bottom:12px;">執行整合測試，驗證資料寫入與狀態。</div>
+                <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--purple); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/php_crud_test [專案名稱] [PHP資料夾] [模組名稱]</code>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size:16px; font-weight:700; color:var(--cyan); margin-bottom:16px; text-transform:uppercase;">⚙️ 規格分析與比對</div>
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">建立規格書快照</div>
+                <div style="font-size:14px; color:var(--muted); margin-bottom:12px;">將 AxShare 爬取成本地索引檔。</div>
+                <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--cyan); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/axshare_spec_index [網址或本地路徑]</code>
+              </div>
+              <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">規格差異比對</div>
+                <div style="font-size:14px; color:var(--muted); margin-bottom:12px;">自動比對規格書與實際測試機網站。</div>
+                <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--cyan); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/axshare_diff [模組名稱 或 "全站"]</code>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size:16px; font-weight:700; color:var(--green); margin-bottom:16px; text-transform:uppercase;">🤖 資料庫規劃與設計</div>
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">設計資料庫結構</div>
+                <div style="font-size:14px; color:var(--muted); margin-bottom:12px;">依據業務描述規劃 Schema 與索引。</div>
+                <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--green); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/db_schema_designer [業務描述]</code>
+              </div>
+              <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">產生 Migration 腳本</div>
+                <div style="font-size:14px; color:var(--muted); margin-bottom:12px;">比對現有 DB 產生 Alter Table 語法。</div>
+                <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--green); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/db_migration_generator [目標描述]</code>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size:16px; font-weight:700; color:var(--text); margin-bottom:16px; text-transform:uppercase;">🛠️ 部署與通用工具</div>
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">部署到測試機</div>
+                <div style="font-size:14px; color:var(--muted); margin-bottom:12px;">透過 SFTP 上傳修改後的檔案。</div>
+                <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--text); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/sftp_deploy</code>
+              </div>
+              <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">產生標準 Commit</div>
+                <div style="font-size:14px; color:var(--muted); margin-bottom:12px;">分析 diff 內容，自動撰寫 Commit 訊息。</div>
+                <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--text); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/git_commit</code>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ── 助理員工辦公環境 (Span 12) ── -->
       <section class="bento-item span-12 notes-item">
-        <h2 class="notes-title">全新電腦環境注意事項 (SOP)</h2>
+        <h2 class="notes-title">🏠 助理員工的辦公環境準備 (Setup SOP)</h2>
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:24px;">
           <ul style="list-style:none;">
             <li>Git & Node.js 18+ 安裝並加入系統 PATH</li>
@@ -131,16 +208,87 @@
         </div>
       </section>
 
-      <!-- 更多部門... (由於檔案長度，此處僅展示核心結構，我會補齊所有技能) -->
-      <section class="bento-item span-12 dept-card">
-        <div class="dept-name">更多技能分類</div>
+      <!-- 研究開發部 -->
+      <section class="bento-item span-4 dept-card">
+        <div class="dept-name">研究開發部</div>
+        <div class="dept-desc">GitHub 技能研究、外部 Skill 匯入</div>
         <div class="tag-container">
-          <a class="tag" href="javascript:void(0)">/axshare_diff</a><a class="tag" href="javascript:void(0)">/axshare_spec_index</a>
-          <a class="tag" href="javascript:void(0)">/dotnet_to_php</a><a class="tag" href="javascript:void(0)">/clean_arch</a>
-          <a class="tag" href="javascript:void(0)">/ddd</a><a class="tag" href="javascript:void(0)">/tdd</a><a class="tag" href="javascript:void(0)">/sadd</a>
-          <a class="tag" href="javascript:void(0)">/git_worktree</a><a class="tag" href="javascript:void(0)">/directory_reorganize</a>
-          <a class="tag" href="javascript:void(0)">/bookmark_organizer</a><a class="tag" href="javascript:void(0)">/git_commit</a>
-          <a class="tag" href="javascript:void(0)">/yt_transcript</a><a class="tag" href="javascript:void(0)">/n8n_workflow_ops</a>
+          <a class="tag" href="javascript:void(0)">/github_skill_import</a>
+        </div>
+      </section>
+
+      <!-- 開發流程部 -->
+      <section class="bento-item span-4 dept-card">
+        <div class="dept-name">開發流程部</div>
+        <div class="dept-desc">架構規範、TDD 與任務派遣</div>
+        <div class="tag-container">
+          <a class="tag" href="javascript:void(0)">/clean_arch</a>
+          <a class="tag" href="javascript:void(0)">/ddd</a>
+          <a class="tag" href="javascript:void(0)">/tdd</a>
+          <a class="tag" href="javascript:void(0)">/sadd</a>
+          <a class="tag" href="javascript:void(0)">/git_worktree</a>
+          <a class="tag" href="javascript:void(0)">/directory_reorganize</a>
+          <a class="tag" href="javascript:void(0)">/checkpoint</a>
+        </div>
+      </section>
+
+      <!-- 系統工具部 -->
+      <section class="bento-item span-4 dept-card">
+        <div class="dept-name">系統工具部</div>
+        <div class="dept-desc">Git Commit、環境自動化與書籤整理</div>
+        <div class="tag-container">
+          <a class="tag" href="javascript:void(0)">/git_commit</a>
+          <a class="tag" href="javascript:void(0)">/gitignore_setup</a>
+          <a class="tag" href="javascript:void(0)">/bookmark_organizer</a>
+          <a class="tag" href="javascript:void(0)">/relocate_directory</a>
+          <a class="tag" href="javascript:void(0)">/windows_node_autostart</a>
+        </div>
+      </section>
+
+      <!-- Claude 維運部 -->
+      <section class="bento-item span-4 dept-card">
+        <div class="dept-name">Claude 維運部</div>
+        <div class="dept-desc">產出專案文件、學習與審計技能</div>
+        <div class="tag-container">
+          <a class="tag" href="javascript:void(0)">/project_claudemd</a>
+          <a class="tag" href="javascript:void(0)">/learn_claude_skill</a>
+          <a class="tag" href="javascript:void(0)">/skill_audit</a>
+          <a class="tag" href="javascript:void(0)">/harness_audit</a>
+          <a class="tag" href="javascript:void(0)">/update_codemaps</a>
+        </div>
+      </section>
+
+      <!-- 內容擷取與生活部 -->
+      <section class="bento-item span-6 dept-card">
+        <div class="dept-name">內容擷取部</div>
+        <div class="dept-desc">文章閱讀摘要與 YouTube 字幕擷取</div>
+        <div class="tag-container">
+          <a class="tag" href="javascript:void(0)">/read_article</a>
+          <a class="tag" href="javascript:void(0)">/fetch_article</a>
+          <a class="tag" href="javascript:void(0)">/yt_transcript</a>
+        </div>
+      </section>
+
+      <section class="bento-item span-6 dept-card">
+        <div class="dept-name">生活自動化部</div>
+        <div class="dept-desc">n8n 工作流管理與 YouTube 分類</div>
+        <div class="tag-container">
+          <a class="tag" href="javascript:void(0)">/n8n_workflow_ops</a>
+          <a class="tag" href="javascript:void(0)">/n8n_webhook_debug</a>
+          <a class="tag" href="javascript:void(0)">/n8n_discord_dispatcher</a>
+          <a class="tag" href="javascript:void(0)">/youtube_organizer</a>
+        </div>
+      </section>
+
+      <!-- 程式移植與規格部 -->
+      <section class="bento-item span-12 dept-card">
+        <div class="dept-name">程式移植與規格分析部</div>
+        <div class="dept-desc">.NET 轉 PHP、AxShare 規格書比對分析</div>
+        <div class="tag-container">
+          <a class="tag" href="javascript:void(0)">/dotnet_to_php</a>
+          <a class="tag" href="javascript:void(0)">/axshare_spec_index</a>
+          <a class="tag" href="javascript:void(0)">/axshare_diff</a>
+          <a class="tag" href="javascript:void(0)">/verify</a>
         </div>
       </section>
 
