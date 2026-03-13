@@ -8,7 +8,7 @@
  * 觸發條件：工具名稱為 Write 或 Edit 時
  */
 
-const path = require('path');
+import path from 'path';
 
 // 敏感檔案模式（發出警告但不阻擋）
 const PROTECTED_PATTERNS = [

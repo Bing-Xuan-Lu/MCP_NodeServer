@@ -15,8 +15,8 @@
  * { session_id, transcript_path, trigger }
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 const HOME = process.env.HOME || process.env.USERPROFILE;
 const SESSIONS_DIR = path.join(HOME, '.claude', 'sessions');

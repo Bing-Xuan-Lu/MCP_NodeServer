@@ -1,7 +1,51 @@
 import SftpClient from "ssh2-sftp-client";
+import { Client as SSH2Client } from "ssh2";
 import fs from "fs";
 import path from "path";
 import { resolveSecurePath } from "../config.js";
+
+// ============================================
+// SSH 指令安全檢查
+// ============================================
+const BLOCKED_PATTERNS = [
+  // 毀滅性檔案系統操作
+  { re: /\brm\s+(-[^\s]*\s+)*-[^\s]*r[^\s]*\s+\/\s*$/,    msg: "禁止 rm -rf /" },
+  { re: /\brm\s+(-[^\s]*\s+)*-[^\s]*r[^\s]*\s+\/[a-z]+\s*$/i, msg: "禁止 rm -rf 根目錄子目錄（如 /var, /etc）" },
+  { re: /\bmkfs\b/,                                          msg: "禁止格式化磁碟 (mkfs)" },
+  { re: /\bdd\s+.*\bof=\/dev\//,                             msg: "禁止 dd 寫入裝置" },
+  { re: /:\(\)\s*\{\s*:\|:\s*&\s*\}\s*;/,                   msg: "禁止 fork bomb" },
+  { re: />\s*\/dev\/[sh]da/,                                 msg: "禁止寫入磁碟裝置" },
+  { re: /\bchmod\s+(-[^\s]+\s+)*777\s+\/\s*$/,              msg: "禁止 chmod 777 /" },
+  { re: /\bchown\s+(-[^\s]+\s+)*-R\s+.*\s+\/\s*$/,         msg: "禁止遞迴 chown /" },
+];
+
+const WARN_PATTERNS = [
+  { re: /\brm\s/,              msg: "刪除檔案 (rm)" },
+  { re: /\bkill\s/,            msg: "終止程序 (kill)" },
+  { re: /\bkillall\s/,         msg: "終止所有同名程序 (killall)" },
+  { re: /\bsystemctl\s+stop\b/, msg: "停止服務 (systemctl stop)" },
+  { re: /\bsystemctl\s+disable\b/, msg: "停用服務 (systemctl disable)" },
+  { re: /\bshutdown\b/,        msg: "關機 (shutdown)" },
+  { re: /\breboot\b/,          msg: "重新開機 (reboot)" },
+  { re: /\binit\s+[06]\b/,     msg: "系統狀態切換 (init)" },
+  { re: /\biptables\s+.*-[FX]/, msg: "清除防火牆規則 (iptables flush)" },
+  { re: /\btruncate\b/,        msg: "截斷檔案 (truncate)" },
+  { re: /\b>\s*\/etc\//,       msg: "覆寫 /etc/ 設定檔" },
+  { re: /\bDROP\s+(TABLE|DATABASE)\b/i, msg: "刪除資料表/資料庫 (DROP)" },
+  { re: /\buseradd\b|\buserdel\b/, msg: "新增/刪除使用者" },
+  { re: /\bpasswd\b/,          msg: "變更密碼 (passwd)" },
+];
+
+function checkCommandSafety(command) {
+  const cmd = command.trim();
+  for (const { re, msg } of BLOCKED_PATTERNS) {
+    if (re.test(cmd)) return { level: "blocked", msg };
+  }
+  for (const { re, msg } of WARN_PATTERNS) {
+    if (re.test(cmd)) return { level: "warn", msg };
+  }
+  return { level: "safe" };
+}
 
 // ============================================
 // 記憶體狀態：當前 SFTP 連線設定
@@ -76,6 +120,21 @@ export const definitions = [
         },
       },
       required: ["remote_paths"],
+    },
+  },
+  {
+    name: "ssh_exec",
+    description:
+      "透過 SSH 在遠端主機執行指令（需先 sftp_connect）。" +
+      "內建危險指令防護：毀滅性操作會被攔截，高風險操作會附帶警告。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        command:        { type: "string", description: "要執行的 shell 指令" },
+        timeout:        { type: "number", description: "逾時秒數（預設 30，最大 300）" },
+        confirm_risky:  { type: "boolean", description: "若指令被標記為高風險，設為 true 以確認執行" },
+      },
+      required: ["command"],
     },
   },
   {
@@ -339,6 +398,114 @@ export async function handle(name, args) {
     } finally {
       if (client) await client.end().catch(() => {});
     }
+  }
+
+  // ── ssh_exec ──
+  if (name === "ssh_exec") {
+    const check = requireSftp();
+    if (!check.ok) return check.error;
+
+    const command = (args.command || "").trim();
+    if (!command) return errorResp("指令不可為空。");
+
+    // 安全檢查
+    const safety = checkCommandSafety(command);
+    if (safety.level === "blocked") {
+      return errorResp(`🚫 指令被攔截：${safety.msg}\n指令：${command}`, [
+        "此指令具有不可逆的毀滅性風險，已被硬性禁止",
+        "請改用更安全的替代方案",
+      ]);
+    }
+    if (safety.level === "warn" && !args.confirm_risky) {
+      return errorResp(
+        `⚠️ 高風險指令偵測：${safety.msg}\n指令：${command}`,
+        [
+          "若確定要執行，請加上 confirm_risky: true 重新呼叫",
+          "請先確認指令的影響範圍",
+        ]
+      );
+    }
+
+    const timeout = Math.min(Math.max((args.timeout || 30), 1), 300) * 1000;
+    const config = check.config;
+
+    return new Promise((resolve) => {
+      const conn = new SSH2Client();
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          conn.end();
+          resolve(errorResp(`指令逾時（${timeout / 1000} 秒）：${command}`, [
+            "增加 timeout 參數後重試",
+            "檢查指令是否需要互動式輸入（ssh_exec 不支援互動）",
+          ]));
+        }
+      }, timeout);
+
+      conn.on("ready", () => {
+        conn.exec(command, (err, stream) => {
+          if (err) {
+            settled = true;
+            clearTimeout(timer);
+            conn.end();
+            resolve(errorResp(`執行失敗：${err.message}`));
+            return;
+          }
+
+          let stdout = "";
+          let stderr = "";
+
+          stream.on("data", (data) => { stdout += data.toString(); });
+          stream.stderr.on("data", (data) => { stderr += data.toString(); });
+
+          stream.on("close", (code) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            conn.end();
+
+            // 截斷過長的輸出（防止 token 爆炸）
+            const MAX = 50000;
+            if (stdout.length > MAX) stdout = stdout.slice(0, MAX) + `\n... (truncated, total ${stdout.length} chars)`;
+            if (stderr.length > MAX) stderr = stderr.slice(0, MAX) + `\n... (truncated, total ${stderr.length} chars)`;
+
+            const parts = [];
+            const warn = safety.level === "warn" ? `⚠️ 已確認執行高風險指令：${safety.msg}\n` : "";
+            parts.push(`${warn}$ ${command}\nExit code: ${code}`);
+            if (stdout) parts.push(`--- stdout ---\n${stdout.trimEnd()}`);
+            if (stderr) parts.push(`--- stderr ---\n${stderr.trimEnd()}`);
+            if (!stdout && !stderr) parts.push("（無輸出）");
+
+            resolve({
+              content: [{ type: "text", text: parts.join("\n\n") }],
+            });
+          });
+        });
+      });
+
+      conn.on("error", (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(errorResp(`SSH 連線失敗：${err.message}`, [
+          "確認 sftp_connect 連線設定是否正確",
+          "確認遠端主機 SSH 服務正常",
+        ]));
+      });
+
+      const connOpts = {
+        host: config.host,
+        port: config.port || 22,
+        username: config.user,
+      };
+      if (config.privateKey) {
+        connOpts.privateKey = config.privateKey;
+      } else {
+        connOpts.password = config.password || "";
+      }
+      conn.connect(connOpts);
+    });
   }
 
   // ── sftp_delete ──
