@@ -56,6 +56,18 @@ MCP_NodeServer/
 
 ---
 
+## 環境變數（Git Bash）
+
+Claude Code 在 Windows 上透過 Git Bash 執行指令，部分工具不在預設 PATH 中，需手動補充（已寫入 `~/.bashrc`）：
+
+| 工具 | 路徑 | 用途 |
+|------|------|------|
+| `gh` | `/c/Program Files/GitHub CLI` | GitHub CLI（PR、Issue、API 操作） |
+
+如遇 `command not found`，先檢查 `~/.bashrc` 是否有對應的 `export PATH` 設定。
+
+---
+
 ## 兩套 Skills 系統
 
 **系統 A：MCP Prompts**（較少用）
