@@ -1,6 +1,6 @@
 # MCP NodeServer — 程式設計師的私人 AI 助理員工
 
-Node.js MCP Server，為 Claude Code 提供 **41 個 Skill 指令** 與 **38 個 MCP 工具**，讓 AI 直接讀寫檔案、操作 DB、執行 PHP、部署 SFTP。
+Node.js MCP Server，為 Claude Code 提供 **41 個 Skill 指令** 與 **44 個 MCP 工具**，讓 AI 直接讀寫檔案、操作 DB、執行 PHP、部署 SFTP。
 
 > 📊 **[查看技能儀表板 →](https://bing-xuan-lu.github.io/MCP_NodeServer/dashboard.html)**
 
@@ -56,6 +56,9 @@ MCP_NodeServer/
 │   ├── bookmarks.js     ← Chrome 書籤管理 (12 工具)
 │   ├── sftp.js          ← sftp_connect/upload/download/list/delete, sftp_list_batch
 │   ├── python.js        ← run_python_script (via Docker python_runner)
+│   ├── word.js          ← read_word_file, read_word_files_batch (.docx → Markdown/HTML/Text)
+│   ├── pptx.js          ← read_pptx_file, read_pptx_files_batch (.pptx → Markdown/Text + 圖片)
+│   ├── pdf.js           ← read_pdf_file, read_pdf_files_batch (.pdf → Markdown/Text)
 │   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops
 │   └── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
 ├── skills/index.js      ← MCP Prompts 路由

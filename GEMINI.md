@@ -18,18 +18,22 @@
 - **工具與內容**：`tooling/` (系統工具)、`content/` (內容擷取)、`life/` (自動化)。
 
 ### Skills 系統規範
-- **結構限制**：所有 Skill MD 必須存放在 `Skills/commands/{部門}/` 子資料夾內。
-- **命名約定**：
-    - 私有技能：檔名加 `_internal` (不列入 Dashboard)。
+- **結構限制**：所有 Skill MD 必須存放在 `Skills/commands/{部門}/` 子資料夾內（`_skill_template.md` 除外）。
+- **兩套 Skills 系統**：
+    - **系統 A: MCP Prompts**：存放於 `Skills/*_agent.md`，需於 `skills/index.js` 登記。
+    - **系統 B: 斜線指令**：存放於 `Skills/commands/{dept}/*.md`，透過 `save_claude_skill` 部署。
+- **命名與輔助**：
+    - 私有技能：檔名加 `_internal` (不列入 Dashboard，.gitignore 排除)。
     - 輔助步驟：檔名加 `_steps` (由主 Skill 引用，不單獨部署)。
+    - YAML Frontmatter：可於頂部加入 `name` 與 `description` 以供主動建議。
 - **數量上限**：公開 Skill 總數**不超過 50 個**。新增前應執行 `/skill_audit` 審查是否可合併相似技能。
 
 ## 🛠️ 開發與驗證流程 (Lifecycle & Validation)
-1. **研究 (Research)**：使用 `grep_search` 理解現有邏輯，確保與 MCP 工具 (`tools/*.js`) 整合。
+1. **研究 (Research)**：使用 `grep_search` 理解現有邏輯，確保與 MCP 工具 (`tools/*.js`) 整合。參考 `CLAUDE.md` 的完整目錄結構。
 2. **策略 (Strategy)**：提出具體計畫，註明調用的 Skills 部門。
 3. **執行 (Act)**：
    - 遵循 `CLAUDE.md` 目錄結構。
-   - 部署技能應使用 `save_claude_skill` 工具。
+   - 部署技能應優先使用 `save_claude_skill` 工具（自動處理部署）。
 4. **驗證與 Dashboard (Validate)**：
    - 修改程式後必須執行 `run_php_script` 或相關測試。
    - **新增/修改技能後必做核查**：
@@ -38,6 +42,16 @@
      - [ ] `docs/dashboard.html` 的 tag 與 `dept-count` 已更新。
      - [ ] Dashboard 的 `section-total` 數字與頂部總數一致。
      - [ ] JS `SKILLS` 物件已新增 detail 資料。
+
+## 🧩 新增 MCP 工具模組規範
+當需要擴充 MCP Server 能力時，必須遵循以下流程：
+1. **建立模組**：於 `tools/` 目錄建立 `.js` 檔，匯出 `definitions` 與 `handle`。
+2. **註冊工具**：於 `index.js` import 並加入 `TOOL_MODULES`。
+3. **同步文件 (必做)**：
+   - **CLAUDE.md**：更新 `tools/` 目錄結構。
+   - **README.md**：更新工具總覽表格與數量。
+   - **dashboard.html**：更新 MCP Tools 區段、tag、數字及 JS `SKILLS` 物件中的 `tools` 陣列。
+4. **驗證**：重啟 MCP Server 並測試功能。
 
 ## 🌐 Playwright & Browser MCP 初始化標準 (SOP)
 根據使用的工具環境，參考對應的安裝指南：

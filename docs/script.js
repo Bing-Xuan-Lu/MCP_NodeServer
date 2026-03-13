@@ -96,7 +96,13 @@ const TOOLS = {
   'list_allowed_paths':     { dept:'系統、Excel 與 Python', title:'列出允許存取路徑', desc:'列出目前 MCP 可以存取的 basePath 與白名單。', usage:'list_allowed_paths {}', tools:[] },
   'revoke_path_access':     { dept:'系統、Excel、Python 與 Git', title:'撤銷目錄權限', desc:'從白名單移除指定路徑。', usage:'revoke_path_access {path:"..."}', tools:[] },
 
-  'run_python_script':      { dept:'系統、Excel、Python 與 Git', title:'執行 Python 腳本', desc:'在 Docker (python_runner) 中執行 Python 程式碼，支援 inline 與實體檔案。', usage:'run_python_script {code:"..."}', tools:[] },
+  'run_python_script':      { dept:'系統、Excel、Word、Python 與 Git', title:'執行 Python 腳本', desc:'在 Docker (python_runner) 中執行 Python 程式碼，支援 inline 與實體檔案。', usage:'run_python_script {code:"..."}', tools:[] },
+  'read_word_file':         { dept:'系統、Excel、文件、Python 與 Git', title:'讀取 Word 文件', desc:'讀取 .docx 檔案並轉換為 Markdown、HTML 或純文字格式輸出，自動提取圖片。', usage:'read_word_file {path:"...", format:"markdown"}', tools:[] },
+  'read_word_files_batch':  { dept:'系統、Excel、文件、Python 與 Git', title:'批次讀取 Word 文件', desc:'一次讀取多個 .docx 檔案，回傳 Markdown 摘要（截斷過長內容）。', usage:'read_word_files_batch {paths:["..."], format:"markdown"}', tools:[] },
+  'read_pptx_file':         { dept:'系統、Excel、文件、Python 與 Git', title:'讀取 PowerPoint 簡報', desc:'讀取 .pptx 檔案，逐頁提取文字與圖片，輸出 Markdown 或純文字。', usage:'read_pptx_file {path:"...", format:"markdown"}', tools:[] },
+  'read_pptx_files_batch':  { dept:'系統、Excel、文件、Python 與 Git', title:'批次讀取 PowerPoint 簡報', desc:'一次讀取多個 .pptx 檔案。', usage:'read_pptx_files_batch {paths:["..."]}', tools:[] },
+  'read_pdf_file':          { dept:'系統、Excel、文件、Python 與 Git', title:'讀取 PDF 文件', desc:'逐頁提取 PDF 文字內容，支援指定頁碼範圍（如 "1-5" 或 "3,7,10-12"）。', usage:'read_pdf_file {path:"...", pages:"1-5"}', tools:[] },
+  'read_pdf_files_batch':   { dept:'系統、Excel、文件、Python 與 Git', title:'批次讀取 PDF 文件', desc:'一次讀取多個 PDF 檔案，回傳文字摘要。', usage:'read_pdf_files_batch {paths:["..."]}', tools:[] },
   
   'git_status':             { dept:'系統、Excel、Python 與 Git', title:'Git 狀態檢查', desc:'查看目前 Git 工作目錄狀態 (git status)，包含未暫存與未追蹤檔案。', usage:'git_status {}', tools:[] },
   'git_diff':               { dept:'系統、Excel、Python 與 Git', title:'Git 改動比對', desc:'查看檔案改動內容 (git diff)，支援 staged 模式。', usage:'git_diff {file_path:"...", staged:true}', tools:[] },
@@ -164,6 +170,17 @@ if(panelOverlay) {
    ══════════════════════════════════════════════ */
 
 document.addEventListener('DOMContentLoaded', function() {
+  /* ── Auto-count Stats ── */
+  const skillCount = Object.keys(SKILLS).length;
+  const toolCount  = Object.keys(TOOLS).length;
+  const deptSet    = new Set(Object.values(SKILLS).map(s => s.dept));
+  Object.values(TOOLS).forEach(t => deptSet.add(t.dept));
+  const deptCount  = deptSet.size;
+
+  ['heroSkillCount','statSkills'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = skillCount; });
+  ['heroToolCount','statTools'].forEach(id =>  { const el = document.getElementById(id); if (el) el.textContent = toolCount; });
+  const deptEl = document.getElementById('statDepts'); if (deptEl) deptEl.textContent = deptCount;
+
   const tags = document.querySelectorAll('.tag:not(.plan-tag)');
   tags.forEach(function(tag) {
     tag.addEventListener('click', function() {
