@@ -21,6 +21,9 @@ MCP_NodeServer/
 │   ├── sftp.js          ← sftp_connect, sftp_upload, sftp_download, sftp_list, sftp_delete, sftp_list_batch
 │   ├── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
 │   ├── python.js        ← run_python_script (Docker)
+│   ├── word.js          ← read_word_file, read_word_files_batch (.docx → Markdown/HTML/Text)
+│   ├── pptx.js          ← read_pptx_file, read_pptx_files_batch (.pptx → Markdown/Text + 圖片)
+│   ├── pdf.js           ← read_pdf_file, read_pdf_files_batch (.pdf → Markdown/Text)
 │   └── git.js           ← git_status, git_diff, git_log, git_stash_ops
 ├── skills/index.js      ← MCP Prompts 路由（注意：小寫 skills，不是 Skills）
 └── Skills/              ← Skill MD 檔

@@ -11,6 +11,17 @@ const DB_CONFIG_FILE = path.join(__dirname, "..", ".mcp_db_config.json");
 // ============================================
 let currentDb = null;
 
+// 啟動時自動載入已儲存的連線設定（密碼為空，需免密或手動補足）
+try {
+  const saved = JSON.parse(await fs.readFile(DB_CONFIG_FILE, "utf-8"));
+  if (saved && saved.database) {
+    currentDb = { password: "", ...saved };
+    console.error(`[database] 自動載入連線: ${saved.database}@${saved.host || "127.0.0.1"}:${saved.port || 3306}`);
+  }
+} catch {
+  // 無設定檔或格式錯誤，略過
+}
+
 // ============================================
 // 工具定義
 // ============================================

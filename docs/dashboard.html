@@ -30,7 +30,7 @@
       <!-- ── Hero Section (Span 8) ── -->
       <section class="bento-item span-8 hero-item">
         <h1>私人 AI<br>助理員工</h1>
-        <p>您的專屬 Node.js MCP 助理，配備 47 個 Skill 與 38 個工具，隨時準備好處理檔案、操作資料庫與執行 PHP 任務。</p>
+        <p>您的專屬 Node.js MCP 助理，配備 <span id="heroSkillCount">-</span> 個 Skill 與 <span id="heroToolCount">-</span> 個工具，隨時準備好處理檔案、操作資料庫與執行 PHP 任務。</p>
         <div style="margin-top:32px; display:flex; gap:16px;">
           <a href="#skills" style="background:white; color:black; padding:12px 24px; border-radius:30px; font-weight:700; font-size:14px;">開始工作吧 →</a>
           <div style="font-family:var(--font-mono); font-size:12px; font-weight:700; opacity:0.8; display:flex; align-items:center; border-left:1px solid rgba(255,255,255,0.3); padding-left:16px;">V5.1.0 EST. 2026</div>
@@ -42,15 +42,15 @@
         <h2 style="font-size:16px; font-weight:700; text-transform:uppercase; color:var(--muted); margin-bottom:24px;">Quick Stats</h2>
         <div style="display:flex; flex-direction:column; gap:20px;">
           <div style="border-left:4px solid var(--purple); padding-left:16px;">
-            <div style="font-size:32px; font-weight:800; line-height:1;">47</div>
+            <div id="statSkills" style="font-size:32px; font-weight:800; line-height:1;">-</div>
             <div style="font-size:12px; font-weight:600; color:var(--muted); margin-top:4px;">SKILLS COMMANDS</div>
           </div>
           <div style="border-left:4px solid var(--cyan); padding-left:16px;">
-            <div style="font-size:32px; font-weight:800; line-height:1;">38</div>
+            <div id="statTools" style="font-size:32px; font-weight:800; line-height:1;">-</div>
             <div style="font-size:12px; font-weight:600; color:var(--muted); margin-top:4px;">MCP CORE TOOLS</div>
           </div>
           <div style="border-left:4px solid var(--green); padding-left:16px;">
-            <div style="font-size:32px; font-weight:800; line-height:1;">13</div>
+            <div id="statDepts" style="font-size:32px; font-weight:800; line-height:1;">-</div>
             <div style="font-size:12px; font-weight:600; color:var(--muted); margin-top:4px;">DEPARTMENTS</div>
           </div>
         </div>
@@ -316,13 +316,16 @@
       </section>
 
       <section class="bento-item span-12 dept-card" style="border-left: 4px solid var(--cyan);">
-        <div class="dept-name">系統、Excel、Python 與 Git</div>
-        <div class="dept-desc">權限管理、Excel 解析、Python 腳本與 Git 流程操作</div>
+        <div class="dept-name">系統、Excel、文件、Python 與 Git</div>
+        <div class="dept-desc">權限管理、Excel 解析、Word/PPT/PDF 文件讀取、Python 腳本與 Git 流程操作</div>
         <div class="tag-container">
           <a class="tag tool-tag" href="javascript:void(0)">get_excel_values_batch</a><a class="tag tool-tag" href="javascript:void(0)">trace_excel_logic</a><a class="tag tool-tag" href="javascript:void(0)">simulate_excel_change</a>
           <a class="tag tool-tag" href="javascript:void(0)">save_claude_skill</a><a class="tag tool-tag" href="javascript:void(0)">list_claude_skills</a><a class="tag tool-tag" href="javascript:void(0)">delete_claude_skill</a>
           <a class="tag tool-tag" href="javascript:void(0)">grant_path_access</a><a class="tag tool-tag" href="javascript:void(0)">list_allowed_paths</a><a class="tag tool-tag" href="javascript:void(0)">revoke_path_access</a>
           <a class="tag tool-tag" href="javascript:void(0)">run_python_script</a>
+          <a class="tag tool-tag" href="javascript:void(0)">read_word_file</a><a class="tag tool-tag" href="javascript:void(0)">read_word_files_batch</a>
+          <a class="tag tool-tag" href="javascript:void(0)">read_pptx_file</a><a class="tag tool-tag" href="javascript:void(0)">read_pptx_files_batch</a>
+          <a class="tag tool-tag" href="javascript:void(0)">read_pdf_file</a><a class="tag tool-tag" href="javascript:void(0)">read_pdf_files_batch</a>
           <a class="tag tool-tag" href="javascript:void(0)">git_status</a><a class="tag tool-tag" href="javascript:void(0)">git_diff</a><a class="tag tool-tag" href="javascript:void(0)">git_log</a><a class="tag tool-tag" href="javascript:void(0)">git_stash_ops</a>
         </div>
       </section>
