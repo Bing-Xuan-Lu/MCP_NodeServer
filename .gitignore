@@ -8,7 +8,7 @@ package-lock.json
 .vscode
 .claude
 .mcp.json
-Skills/commands/**/*_internal.md
+Skills/commands/_internal/
 deploy-commands-internal.bat
 .playwright-mcp
 
@@ -22,3 +22,4 @@ tests/
 
 # GitHub Skill 參考庫（學習用，不納入版控）
 Skills/references/
+.mcp_db_config.json

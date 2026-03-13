@@ -16,7 +16,7 @@ description: |
 $ARGUMENTS
 
 格式：`{GitHub Repo URL}` 或 `{owner}/{repo}`
-例：`https://github.com/affaan-m/everything-claude-code` 或 `affaan-m/everything-claude-code`
+例：`https://github.com/{owner}/{repo}` 或 `{owner}/{repo}`
 
 ---
 
@@ -223,6 +223,27 @@ URL：https://raw.githubusercontent.com/{owner}/{repo}/main/{file_path}
   - 執行 /learn_claude_skill 從參考檔中萃取可用模式
   - 或直接閱讀 Skills/references/{owner}--{repo}/ 中的檔案
 ```
+
+---
+
+### 步驟 7：研究報告（可選）
+
+下載與差異比對完成後，詢問使用者：
+
+> 是否要產出完整的**參考庫研究報告**（RESEARCH_REPORT.md）？
+> 報告會深入分析外部 Skill 的設計模式、與本地 Skill 的功能比對、以及可吸收的通用模式，存放於 `Skills/references/{owner}--{repo}/RESEARCH_REPORT.md` 供日後參考。
+
+若使用者同意，執行 `/learn_claude_skill` 的**參考庫研究模式**（步驟 R2–R4），將報告存為：
+
+```
+{MCP_ROOT}/Skills/references/{owner}--{repo}/RESEARCH_REPORT.md
+```
+
+報告結構：
+- 層 1 — 結構分析（外部 Skill 的設計模式與可借鑑點）
+- 層 2 — 功能比對（全新功能 / 有改進空間 / 已涵蓋 / 不適用）
+- 層 3 — 可吸收的跨 Skill 通用模式
+- 下載檔案統計
 
 ---
 

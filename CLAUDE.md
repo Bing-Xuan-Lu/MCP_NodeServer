@@ -38,7 +38,8 @@ MCP_NodeServer/
         ├── tooling/     ← 系統工具部
         ├── claude_ops/  ← Claude 維運部（Skill 管理、MCP 維護）
         ├── content/     ← 內容擷取部
-        └── life/        ← 生活自動化部（n8n, youtube）
+        ├── life/        ← 生活自動化部（n8n, youtube）
+        └── _internal/   ← 私有 Skill（.gitignore 排除，不進版控）
 ```
 
 ---
@@ -94,7 +95,7 @@ MCP_NodeServer/
 ☐ JS SKILLS 物件已新增條目？
 ```
 
-私有 Skill：檔名加 `_internal`（.gitignore 已排除），部署用 `deploy-commands-internal.bat`，**不列入 dashboard.html**
+私有 Skill：統一放在 `Skills/commands/_internal/` 資料夾（檔名仍保留 `_internal` 後綴，.gitignore 排除整個資料夾），部署用 `deploy-commands-internal.bat`，**不列入 dashboard.html**
 
 伴隨參考檔：檔名加 `_steps`（如 `playwright_ui_test_steps.md`），由主 Skill 引用，**不獨立部署**
 
