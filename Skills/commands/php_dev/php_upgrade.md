@@ -1,4 +1,4 @@
-# PHP 7.x → 8.4 升級 Agent
+# /php_upgrade — PHP 7.x → 8.4 升級
 
 ## 你的角色
 

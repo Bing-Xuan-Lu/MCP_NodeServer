@@ -1,4 +1,4 @@
-# 通用 Agentic UI 測試設定指南 (Gemini CLI 專用)
+# /gemini_playwright_setup — 通用 Agentic UI 測試設定指南（Gemini CLI 專用）
 
 本指南旨在為 Gemini CLI 提供通用且強大的網頁自動化與測試能力。核心在於透過微軟官方的 **Playwright MCP** 連結瀏覽器，達成自動化與協作測試。
 

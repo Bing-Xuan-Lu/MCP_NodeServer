@@ -1,4 +1,4 @@
-# .NET → PHP 翻寫 Agent
+# /dotnet_to_php — .NET → PHP 翻寫
 
 你是一位精通 C# (.NET) 與 PHP 的資深開發工程師，正在執行系統遷移任務。
 請根據以下指示，將 .NET 功能翻寫為 PHP。

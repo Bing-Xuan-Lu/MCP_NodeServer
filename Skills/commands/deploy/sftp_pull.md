@@ -130,3 +130,8 @@ sftp_download(remote_path, local_path)
 - 本機路徑需在 basePath（`D:\Project\`）以內，或先呼叫 `grant_path_access` 開放
 - 下載整個目錄時，遠端目錄結構會原封不動複製到本機
 - 若只想確認遠端有哪些檔案，先用 `sftp_list` 查看即可
+
+**相關技能：**
+
+- 要推送程式到遠端 → 改用 `/sftp_deploy`
+- 要查遠端 log 或確認環境 → 改用 `/sftp_ops`

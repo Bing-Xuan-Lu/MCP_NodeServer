@@ -8,7 +8,7 @@ package-lock.json
 .vscode
 .claude
 .mcp.json
-Skills/commands/_internal/
+*_internal.md
 deploy-commands-internal.bat
 .playwright-mcp
 
