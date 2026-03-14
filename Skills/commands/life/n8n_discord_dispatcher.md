@@ -1,4 +1,4 @@
-# n8n Discord 指令調度器 — 即時 Discord Bot 指令路由建立流程
+# /n8n_discord_dispatcher — n8n Discord 指令調度器
 
 ## 背景
 在 n8n 中使用 community node `n8n-nodes-discord-trigger` 建立即時（非輪詢）Discord 指令調度器。

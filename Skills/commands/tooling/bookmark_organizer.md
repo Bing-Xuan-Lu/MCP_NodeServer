@@ -1,4 +1,4 @@
-# Chrome 書籤整理 — 範例 Prompt 集
+# /bookmark_organizer — Chrome 書籤整理（範例 Prompt 集）
 
 搭配 **Project Migration Assistant Pro** MCP Server 使用，讓 AI 自動整理你的 Chrome 書籤。
 

@@ -138,3 +138,8 @@ sftp_list(remote_path)
 - `config.php` / `.env` / 資料庫設定檔通常測試機與正式機不同，上傳時需確認不會覆蓋
 - 本機路徑需在 basePath（`D:\Project\`）以內，或先呼叫 `grant_path_access` 開放
 - 每次操作後連線會關閉，不需手動斷線
+
+**相關技能：**
+
+- 上傳後想查 log 或確認環境 → 改用 `/sftp_ops`
+- 要從測試機下載檔案回本機 → 改用 `/sftp_pull`

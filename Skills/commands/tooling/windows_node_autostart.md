@@ -5,7 +5,7 @@ description: |
   當使用者說「node 開機自啟」「自動啟動服務」「背景執行 node」「task scheduler node」時使用。
 ---
 
-# Windows Node.js 開機自動啟動 — VBS 單例 + Task Scheduler XML
+# /windows_node_autostart — Windows Node.js 開機自動啟動（VBS 單例 + Task Scheduler）
 
 ## 背景
 當需要在 Windows 登入後自動啟動一個 Node.js 後台服務，且必須：

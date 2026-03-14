@@ -25,6 +25,90 @@ description: |
 - 若 `git_status` 顯示有 **Staged changes** → **只提交暫存內容**，不執行 `git add`
 - 若無暫存 → **將全部變更加入暫存**（步驟 6 執行 `git add -A`）
 
+### 步驟 1.5：安全掃描（敏感檔案與 Secret 偵測）
+
+**在讀取 diff 之前，先掃描即將被提交的檔案。**
+
+取得即將入 commit 的檔案清單：
+
+```bash
+# 已暫存的檔案
+git diff --cached --name-only
+
+# 若無暫存（準備 git add -A），則掃描所有變更中的檔案
+git status --porcelain | awk '{print $2}'
+```
+
+#### 檢查一：檔名黑名單
+
+若清單中出現以下任一模式，**立即停止並告警**：
+
+| 危險模式 | 說明 |
+| --- | --- |
+| `.env` / `.env.*` / `*.env` | 環境變數（含 DB 密碼、API Key） |
+| `*.key` / `*.pem` / `*.p12` / `*.pfx` | SSL/SSH 私鑰 |
+| `credentials.*` / `secrets.*` / `*.secret` | 憑證與金鑰檔 |
+| `id_rsa` / `id_ed25519` | SSH 私鑰（無副檔名） |
+| `*.crt` / `*.cer` | 憑證檔（視情況，自簽憑證風險高） |
+
+#### 檢查二：內容關鍵字掃描
+
+對即將提交的 diff 內容執行快速掃描，偵測高風險字串：
+
+```bash
+git diff --cached | grep -iE \
+  "(API_KEY|SECRET_KEY|ACCESS_TOKEN|PASSWORD|PASSWD|DB_PASSWORD|PRIVATE_KEY)\s*=\s*.{6,}" \
+  | head -10
+```
+
+若無暫存（全 add）則改掃 `git diff HEAD`。
+
+#### 判斷與行動
+
+#### 檢查三：套件目錄偵測
+
+檢查檔案清單中是否包含常見套件目錄的路徑（這類目錄不應進版控）：
+
+| 偵測模式 | 說明 |
+| --- | --- |
+| `node_modules/` | Node.js 依賴套件 |
+| `vendor/` | PHP Composer 套件 |
+| `.venv/` / `venv/` / `env/` | Python 虛擬環境 |
+| `dist/` / `build/` | 編譯產出物 |
+| `__pycache__/` | Python bytecode |
+
+若偵測到上述目錄，**不中止 commit**，但在報告中提示：
+
+```
+⚠️ 偵測到套件目錄：node_modules/（建議加入 .gitignore）
+   執行 /gitignore_setup 可自動補全規則
+```
+
+#### 判斷與行動
+
+| 情況 | 行動 |
+| --- | --- |
+| 偵測到危險檔名 | **立即停止**，列出檔案清單，建議先執行 `/gitignore_setup` |
+| 偵測到 Secret 關鍵字 | **立即停止**，顯示命中行，詢問是否繼續（需使用者明確確認） |
+| 偵測到套件目錄 | **警告但不停止**，提示執行 `/gitignore_setup` |
+| 掃描無異常 | 顯示「✅ 安全掃描通過」並繼續步驟 2 |
+
+#### 停止時顯示的警告範例
+
+```
+🚨 偵測到敏感內容，已中止 commit！
+
+⚠️  危險檔案：
+  - .env（含 DB 密碼/API Key，不應進版控）
+
+🔧 建議處理方式：
+  1. 執行 /gitignore_setup 將此類檔案加入 .gitignore
+  2. 若已追蹤：git rm --cached .env
+  3. 確認無誤後再重新執行 /git_commit
+```
+
+---
+
 ### 步驟 2：讀取變更內容
 
 依步驟 1 判斷的提交範圍，讀取對應的 diff 詳細內容。

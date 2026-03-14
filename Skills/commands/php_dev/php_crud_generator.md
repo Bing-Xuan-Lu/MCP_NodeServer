@@ -1,4 +1,4 @@
-# PHP後台CRUD模組產生器 Agent
+# /php_crud_generator — PHP 後台 CRUD 模組產生器
 
 ## 🎯 你的角色與能力
 

@@ -162,3 +162,8 @@ sftp_connect(host, username, password/privateKeyPath)
 - 下載到本機的暫存檔案在檢查完畢後提醒使用者清理
 - 若需要修改遠端檔案，請改用 `/sftp_deploy` 上傳修正後的版本
 - 連線 session 可重複使用，不需每次操作都重新連線
+
+**相關技能：**
+
+- 要推送新版程式到遠端 → 改用 `/sftp_deploy`
+- 要把遠端檔案下載到本機 → 改用 `/sftp_pull`

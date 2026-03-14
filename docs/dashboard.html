@@ -107,9 +107,9 @@
                 <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--green); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/db_schema_designer [業務描述]</code>
               </div>
               <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
-                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">產生 Migration 腳本</div>
-                <div style="font-size:14px; color:var(--muted); margin-bottom:12px;">比對現有 DB 產生 Alter Table 語法。</div>
-                <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--green); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/db_migration_generator [目標描述]</code>
+                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">Schema 遷移（產生 + 執行 + 追蹤）</div>
+                <div style="font-size:14px; color:var(--muted); margin-bottom:12px;">比對 Schema 差異產生腳本，或執行遷移並追蹤版本。</div>
+                <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--green); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/db_migration generate | run [SQL] | run rollback | run status</code>
               </div>
             </div>
           </div>
@@ -168,8 +168,7 @@
         <div class="dept-desc">Schema 設計、遷移腳本、索引優化</div>
         <div class="tag-container">
           <a class="tag" href="javascript:void(0)">/db_schema_designer</a>
-          <a class="tag" href="javascript:void(0)">/db_migration_generator</a>
-          <a class="tag" href="javascript:void(0)">/db_migration_run</a>
+          <a class="tag" href="javascript:void(0)">/db_migration</a>
           <a class="tag" href="javascript:void(0)">/db_index_analyzer</a>
         </div>
       </section>
