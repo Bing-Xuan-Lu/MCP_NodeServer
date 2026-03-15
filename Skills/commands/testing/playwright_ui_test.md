@@ -147,6 +147,24 @@ browser_snapshot → 確認登入成功（側邊選單出現）
 依參考檔「除錯模式步驟 3a-3e」：
 確認 Xdebug 環境 → 導航目標頁 → 互動循環（每次操作等使用者確認）→ 除錯總結
 
+#### 步驟 3.5：擷取 Browser 診斷日誌（除錯模式必做）
+
+在執行關鍵操作（送出表單、觸發 AJAX、跳轉頁面）前後主動擷取：
+
+```text
+browser_console_messages → 取得所有 JS 錯誤與 console.log 輸出
+browser_network_requests → 取得 AJAX/fetch 請求 URL、狀態碼、回應
+```
+
+**判斷方向：**
+
+| 症狀 | 來源 | 對應動作 |
+| --- | --- | --- |
+| JS Error / Uncaught Exception | 前端問題 | 檢查 HTML 輸出或 JS 邏輯 |
+| 4xx / 5xx 回應 | 後端 PHP 問題 | 搭配 Xdebug 追蹤對應 PHP 檔案 |
+| CORS / Network Error | 環境問題 | 確認 URL/Port 設定 |
+| 回應 200 但頁面異常 | 資料問題 | 檢查回應 body 內容 |
+
 ---
 
 ## 核心規則

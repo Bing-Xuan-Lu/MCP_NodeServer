@@ -1,10 +1,3 @@
----
-name: n8n_webhook_debug
-description: |
-  診斷並修復 n8n Webhook 節點不觸發的問題。涵蓋：httpMethod 不符、webhook path 未註冊、工作流未啟用、外部服務呼叫格式錯誤等根因排查。
-  當使用者說「webhook 沒有觸發」「n8n 收不到」「工作流不執行」時使用。
----
-
 # /n8n_webhook_debug — 診斷並修復 n8n Webhook 節點不觸發問題
 
 ## 背景

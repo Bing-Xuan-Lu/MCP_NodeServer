@@ -125,6 +125,8 @@ ls ~/.claude/commands/*.md
 - **祈使語氣**：步驟描述用動詞開頭（「讀取」、「連線」、「確認」），避免「你應該…」或「請去做…」。
 - **精簡原則**：Skill MD 只放核心執行步驟；複雜範例、對照表移到底部「參考」或「常見錯誤」章節，保持步驟主體簡潔。
 - **技能命名**：優先使用「動詞 + 領域」格式（`sftp_deploy`、`db_migration_generator`），避免泛用名稱（`tool`、`helper`、`dev_util`）。
+- **Description CSO 原則**：YAML frontmatter 的 `description` 欄位**只寫觸發條件**（何時、什麼症狀），**不要**概括執行流程。原因：若 description 包含流程摘要，Claude 可能只讀 description 就跳過 Skill 本體，導致流程執行不完整。建議以「適用時機：...」或「Use when...」開頭。
+- **Token 效率**：一般 Skill 目標 <500 字；高頻載入（每次對話都觸發）的 Skill 目標 <200 字。
 
 生成後，以 code block 展示完整 MD 內容，詢問使用者：
 
@@ -141,6 +143,8 @@ ls ~/.claude/commands/*.md
 - [ ] Grep `~/.claude/commands/` 中的 Skill 標題與描述，確認**內容**無重疊（Step 1b 做過結構比較；這裡做內容比較）
 - [ ] 確認此技能是「可重用模式」而非「一次性修復」（例：特定 bug 的修法不適合存成 Skill）
 - [ ] 確認技能名稱符合「動詞 + 領域」格式，一句話說明能回答「何時該用」
+
+- [ ] **觸發性自我測試**：想像一個新的 Claude session，只看到 description，會在什麼具體情況下選用這個 Skill？答案應具體（如「使用者說『部署』或『上傳』」）；若答案含糊，重寫 description 再繼續。
 
 **整合判定（給出一個結論）：**
 
