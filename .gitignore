@@ -23,3 +23,6 @@ tests/
 # GitHub Skill 參考庫（學習用，不納入版控）
 Skills/references/
 .mcp_db_config.json
+
+# Memory 機敏資料（只留本機，不進版控）
+memory/_private/

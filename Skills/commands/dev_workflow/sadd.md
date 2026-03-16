@@ -18,6 +18,57 @@ $ARGUMENTS
 
 ## 執行步驟
 
+### 步驟 0：確認 DDD 架構規範
+
+開始前輸出本模組的架構規範，確認與使用者對齊：
+
+#### 分層目錄結構（Clean Architecture 四層）
+
+```text
+{ModuleName}/
+├── Domain/              ← 業務規則（最內層，無外部依賴）
+│   ├── Entity/          ← 業務物件（Order.php）
+│   ├── ValueObject/     ← 值物件（Money.php）
+│   └── DomainService/   ← 純業務邏輯（無 DB 依賴）
+├── Application/         ← 用例協調層
+│   ├── UseCase/         ← 一個動作一個 UseCase（CreateOrder.php）
+│   └── DTO/             ← 輸入/輸出邊界
+├── Infrastructure/      ← 外部依賴實作
+│   ├── Repository/      ← DB 操作（實作 Domain Interface）
+│   └── ExternalApi/     ← 第三方 API
+└── Presentation/        ← 對外接口（最外層）
+    ├── Controller/      ← HTTP 請求處理（薄層）
+    └── Request/         ← 輸入驗證
+```
+
+依賴方向（單向）：Presentation → Application → Domain
+Infrastructure 反向依賴 Domain 定義的 Interface（依賴反轉原則）。
+
+#### 命名規範
+
+| 用途 | 好的命名 | 避免 |
+|------|----------|------|
+| 資料存取 | `OrderRepository` | `OrderDAO.php` |
+| 業務用例 | `CreateOrder`, `CancelOrder` | `OrderService.php`（太模糊） |
+| 計算邏輯 | `OrderCalculator` | `utils.php` |
+
+避免通用目錄：`utils/`、`helpers/`、`misc/`、`common/`
+
+#### 程式碼品質規則
+
+| 規則 | 門檻 |
+|------|------|
+| 函式過長 | ≤ 50 行 |
+| 類別過長 | ≤ 200 行 |
+| 巢狀深度 | ≤ 3 層 |
+| 邏輯重複 | 出現 2 次即提取 |
+
+使用 Early Return 減少巢狀；開發前先 `composer search` 確認是否有現成套件。
+
+> 確認規範後，詢問使用者：「架構規範確認，開始載入規格書？」
+
+---
+
 ### 步驟 1：載入規格書與建立任務清單
 
 讀取規格書或需求說明：
@@ -164,6 +215,6 @@ Agent (subagent_type=general-purpose):
 - 每個 SubAgent 都是「全新上下文」，Prompt 中必須附上完整背景（規格章節、相依檔案路徑）
 - DB 遷移任務必須在所有功能模組之前完成
 - 遇到規格不清晰時，停止並詢問使用者，不要讓 SubAgent 自行猜測
-- 搭配 `/ddd` 使用：開始前先確認架構分層與命名規範
+- DDD 架構規範已內建於步驟 0，無需另外執行 `/ddd`
 - 搭配 `/tdd` 使用：SADD 完成後補充單元測試
 - 搭配 `/clean_arch` 使用：最終整體架構審查
