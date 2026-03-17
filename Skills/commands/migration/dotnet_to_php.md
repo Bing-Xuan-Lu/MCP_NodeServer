@@ -19,6 +19,19 @@ $ARGUMENTS
 | 目標模組 | 翻寫後 PHP 要放的資料夾名稱 | `{module_name}` |
 | 資料表 | 對應的 MySQL 資料表名稱 | `{TableName}` |
 
+## 可用工具
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `read_files_batch` | 批次讀取 .NET Controller / Model / BLL / View 原始碼 |
+| `get_db_schema_batch` | 一次取得所有相關 MySQL 資料表結構 |
+| `execute_sql` | 確認 DB 連線與查詢結果 |
+| `create_file` | 建立翻寫後的 PHP 檔案（Controller / Model / View） |
+| `apply_diff` | 調整已存在的 PHP 程式碼 |
+| `run_php_script` | 語法驗證（每寫完一個檔案立即執行 `php -l`） |
+| `send_http_request` | 驗證翻寫後的 API / 頁面回應是否正常 |
+| `tail_log` | 查看翻寫後的 PHP error log |
+
 ## 執行步驟
 
 1. **讀取 Controller**：分析有哪些 Action Method，只翻寫存在的功能（不假設一定有完整 CRUD）

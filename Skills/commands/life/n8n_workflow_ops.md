@@ -24,6 +24,18 @@ n8n workflow 操作有固定的 API 規則，違反會導致 worker 崩潰或更
 - `<connections_json>` — connections 物件
 - `<backup_path>` — flows/ 備份目錄
 
+## 可用工具
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `send_http_request` | 呼叫 n8n REST API（GET / POST / PUT / PATCH / DELETE） |
+| `send_http_requests_batch` | 批次執行多個 API 呼叫（建立 + settings + activate） |
+| `read_file` | 讀取 workflow JSON 備份或 .env 設定 |
+| `create_file` | 儲存 workflow 備份至 `flows/` 目錄 |
+| `apply_diff` | 局部更新 workflow JSON（變更特定 node 參數） |
+
+---
+
 ## 模式判斷
 
 | 使用者說 | 模式 |

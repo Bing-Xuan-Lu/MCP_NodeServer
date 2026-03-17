@@ -12,6 +12,20 @@ $ARGUMENTS
 
 ---
 
+## 可用工具
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `list_files` / `list_files_batch` | 掃描目錄結構，了解整體分層 |
+| `get_folder_contents` | 取得完整目錄樹狀結構 |
+| `read_files_batch` | 批次讀取程式碼進行架構分析 |
+| `apply_diff` | 實施重構建議（移動方法、提取類別） |
+| `get_db_schema_batch` | 確認 DB 層的實作是否符合 Repository 模式 |
+| `run_php_script` | 驗證重構後語法正確性（`php -l`） |
+| `tail_log` | 查看重構後是否產生 runtime 錯誤 |
+
+---
+
 ## 執行步驟
 
 ### 步驟 1：掃描程式碼結構

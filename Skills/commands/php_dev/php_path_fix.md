@@ -15,6 +15,17 @@ $ARGUMENTS
 - 特定目錄：`adminControl/{module}/`
 - 特定常數：`DOCUMENT_ROOT`
 
+## 可用工具
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `list_files` / `list_files_batch` | 掃描目錄，找出含路徑操作的 PHP 檔案 |
+| `read_files_batch` | 批次讀取目標檔案，識別問題路徑 |
+| `apply_diff` | 局部修正路徑拼接邏輯 |
+| `run_php_script` | 執行 `php -l` 驗證修正後語法 |
+| `send_http_request` | 驗證修正後頁面是否正常回應 |
+| `tail_log` | 查看修正前後的 PHP error log |
+
 ## 步驟
 
 ### 1. 識別路徑常數定義

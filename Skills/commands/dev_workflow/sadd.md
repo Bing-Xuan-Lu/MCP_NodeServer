@@ -16,6 +16,43 @@ $ARGUMENTS
 
 ---
 
+## 可用工具
+
+### 專案結構與程式碼
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `list_files` / `list_files_batch` | 掃描專案目錄、確認模組結構 |
+| `get_folder_contents` | 取得完整目錄樹狀結構 |
+| `read_file` / `read_files_batch` | 讀取規格書、現有模組程式碼、設定檔 |
+| `create_file` | 建立新模組檔案（Controller / Model / View） |
+| `apply_diff` | 對既有檔案進行局部修改 |
+
+### 資料庫
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `get_db_schema` / `get_db_schema_batch` | 確認資料表欄位與外鍵關係 |
+| `execute_sql` / `execute_sql_batch` | 驗證資料寫入、查詢測試資料 |
+
+### 驗證
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `run_php_script` | 語法驗證（`php -l`）、執行測試腳本 |
+| `run_php_test` | 執行整合測試 |
+| `send_http_request` | 驗證 API 端點回應 |
+| `tail_log` | 查看 PHP error log |
+
+### 文件規格書（依格式選用）
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `read_word_file` / `read_word_files_batch` | 讀取 .docx 規格書 |
+| `read_pdf_file` / `read_pdf_files_batch` | 讀取 PDF 規格書 |
+
+---
+
 ## 執行步驟
 
 ### 步驟 0：確認 DDD 架構規範
