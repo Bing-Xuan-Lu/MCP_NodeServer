@@ -12,6 +12,19 @@ $ARGUMENTS
 
 ---
 
+## 可用工具
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `git_status` | 確認工作區是否乾淨（有無未提交變更） |
+| `git_diff` | 查看 staged / unstaged 變更內容 |
+| `git_log` | 確認最近 commit 記錄，取得 checkpoint hash |
+| `git_stash_ops` | 暫存或恢復未完成的工作 |
+| `read_file` | 讀取 checkpoint 清單或任務記錄 |
+| `create_file` | 建立 checkpoint 記錄檔 |
+
+---
+
 ## 執行步驟
 
 ### 步驟 1：解析操作指令

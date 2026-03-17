@@ -12,6 +12,19 @@ $ARGUMENTS
 
 ---
 
+## 可用工具
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `read_file` / `read_files_batch` | 讀取待測程式碼、現有測試檔案 |
+| `create_file` | 建立新測試檔案（`*Test.php`） |
+| `apply_diff` | 修改程式碼使測試通過（Green 階段） |
+| `run_php_script` | 執行 `php -l` 語法驗證、執行單元測試 |
+| `run_php_test` | 執行整合測試驗證行為 |
+| `tail_log` | 查看測試執行錯誤 log |
+
+---
+
 ## 背景
 
 TDD 核心原則：**先寫測試，看它失敗，再寫最少量的 code 讓它通過。**

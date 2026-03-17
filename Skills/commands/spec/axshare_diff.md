@@ -60,6 +60,9 @@ $ARGUMENTS
 | `browser_fill_form` | 填寫登入表單 |
 | `browser_evaluate` | 從頁面提取結構化資料（連結清單等） |
 | `list_files` | 掃描本地 Axure 匯出目錄（模式 B） |
+| `read_file` / `read_files_batch` | 讀取本地 spec 索引或匯出 HTML |
+| `send_http_request` | 直接 GET 測試網站頁面取得 HTML 內容 |
+| `create_file` | 儲存差異報告（`reports/axshare_diff_*.md`） |
 
 ---
 

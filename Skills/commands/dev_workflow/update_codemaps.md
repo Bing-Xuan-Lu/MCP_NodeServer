@@ -18,6 +18,18 @@ $ARGUMENTS
 
 ---
 
+## 可用工具
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `get_folder_contents` | 取得完整目錄樹狀結構（優先使用） |
+| `list_files` / `list_files_batch` | 掃描目錄，取得檔案清單 |
+| `read_file` / `read_files_batch` | 批次讀取關鍵入口檔（index.php、routes.php、config 等） |
+| `create_file` | 產生 codemap.md |
+| `apply_diff` | 更新既有 codemap.md（增量更新） |
+
+---
+
 ## 執行步驟
 
 ### 步驟 1：識別專案類型
