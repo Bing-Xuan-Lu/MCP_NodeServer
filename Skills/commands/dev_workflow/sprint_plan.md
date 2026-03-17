@@ -23,8 +23,21 @@ $ARGUMENTS
 |------|------|--------|
 | Sprint 天數 | 每個 Sprint 的工作天數 | 10 天（2 週）|
 | 開始日期 | 第一個 Sprint 的起始日 | 今天 |
-| 每日可用工時 | 開發人員每天實際可用小時 | 6 小時 |
-| 人員數量 | 參與開發的人數 | 1 人 |
+| 開發模式 | `human` / `ai-assisted` | human |
+| 每日可用工時 | 開發人員每天實際可用小時（僅 human 模式） | 6 小時 |
+| 人員數量 | 參與開發的人數（僅 human 模式） | 1 人 |
+| 每日對話輪數 | AI 每天可執行的有效對話輪數（僅 ai-assisted 模式） | 8 輪 |
+
+### 開發模式說明
+
+**`human` 模式**（傳統人工開發）：
+- 估時 = 開發者實際工時
+- Sprint 容量 = 天數 × 工時 × 人數 - 1 天 Review
+
+**`ai-assisted` 模式**（Claude Pro Max / Gemini Pro 輔助開發）：
+- 估時以「AI 對話輪數」為單位（1 輪 ≈ 一次完整的 prompt → 產出 → 驗證循環）
+- Sprint 容量 = 天數 × 每日對話輪數 - 1 天 Review
+- AI 擅長的（code gen / CRUD / 樣式）估時壓低，瓶頸在（除錯 / 規格確認 / 第三方串接）估時維持
 
 ---
 
@@ -66,6 +79,8 @@ $ARGUMENTS
 
 **Task 工時估算規則：**
 
+#### human 模式
+
 | Task 類型 | 估算基準 |
 |-----------|---------|
 | DB Table 設計 | 1–2 小時 |
@@ -74,13 +89,48 @@ $ARGUMENTS
 | 整合測試 | 1–3 小時 |
 | 部署 + 驗收 | 2–4 小時 |
 
-估算後加 20% buffer（非預期問題緩衝）。
+估算後加 20% buffer。
+
+#### ai-assisted 模式
+
+以「對話輪數」估算，1 輪 = 一次完整交互（prompt → AI 產出 → 人工/自動驗證）。
+
+| Task 類型 | 估算（輪） | 說明 |
+|-----------|-----------|------|
+| DB Migration（ALTER/CREATE） | 0.5 輪 | AI 一次產出，幾乎不需修正 |
+| CRUD 模組（後台） | 1–2 輪 | 用 generator 或樣板，快速產出 |
+| 前台頁面（簡單：blog/news/FAQ） | 1 輪 | 改樣式 + 微調邏輯 |
+| 前台頁面（中等：表單/列表/篩選） | 2–3 輪 | 需要 spec 確認 + UI 調整 |
+| 前台頁面（複雜：訂單/結帳/報價） | 4–6 輪 | 多條件邏輯 + 測試 + debug |
+| AJAX 端點（簡單 GET/POST） | 0.5–1 輪 | 模式固定 |
+| AJAX 端點（複雜：金額計算/狀態轉換） | 2–3 輪 | 需邏輯驗證 |
+| JS 互動（POPUP/Tab/HOVER） | 1–2 輪 | |
+| CSS/RWD | 1–2 輪 | 需反覆截圖比對 |
+| 第三方串接（金流/SMS/API） | 2–4 輪 | 文件研讀 + sandbox 測試 |
+| 整合測試（Playwright E2E） | 1–2 輪 | AI 寫測試腳本 + 執行 |
+| 規格確認 + 截圖比對 | 1 輪 | 每模組至少 1 輪 |
+
+估算後加 10% buffer（AI 模式不確定性較低，但規格歧義仍需緩衝）。
+
+**AI 模式的瓶頸提醒**（估時不可壓縮的項目）：
+- 規格書歧義 → 需人工確認
+- 第三方 API sandbox 測試 → 等待回應
+- CSS 像素級精修 → 需反覆截圖
+- Playwright 偵錯 → session 干擾、timing 問題
+- 跨模組副作用 → 需回歸測試
 
 ---
 
 ### 步驟 3：Sprint 分配
 
-依照每 Sprint 可用總工時（Sprint 天數 × 每日工時 × 人數），將 Task 塞入 Sprint：
+**human 模式**：
+- Sprint 容量 = Sprint 天數 × 每日工時 × 人數 - 1 天 Review
+- 單位：小時
+
+**ai-assisted 模式**：
+- Sprint 容量 = (Sprint 天數 - 1) × 每日對話輪數
+- 單位：對話輪數
+- 範例：10 天 Sprint × 8 輪/天 - 1 天 Review = 72 輪
 
 **優先順序規則：**
 1. 有依賴關係的先排（DB → Model → Controller → View）
@@ -93,24 +143,26 @@ $ARGUMENTS
 
 ### 步驟 4：輸出 sprint_plan.md
 
-儲存至 `{ProjectFolder}\sprint_plan.md`，格式如下：
+儲存至 `{ProjectFolder}\spec\sprint_plan.md`（若有 `spec/` 目錄）或 `{ProjectFolder}\sprint_plan.md`，格式如下：
 
 ```markdown
 # {ProjectFolder} Sprint 計畫
 
 **產出日期：** {date}
+**開發模式：** {human / ai-assisted}
 **Sprint 長度：** {N} 工作天
-**每日工時：** {N} 小時 × {N} 人
+**估算單位：** {小時 / 對話輪數}
+**Sprint 容量：** {N}{單位}（含 Review）
 **預計完成：** Sprint {總數} — {結束日期}
 
 ---
 
 ## 總覽
 
-| Sprint | 期間 | 目標 | 總工時 | 狀態 |
+| Sprint | 期間 | 目標 | 工作量 | 狀態 |
 |--------|------|------|--------|------|
-| Sprint 1 | MM/DD – MM/DD | {目標描述} | {N}h | 進行中 |
-| Sprint 2 | MM/DD – MM/DD | {目標描述} | {N}h | 待開始 |
+| Sprint 1 | MM/DD – MM/DD | {目標描述} | {N} 輪 | 進行中 |
+| Sprint 2 | MM/DD – MM/DD | {目標描述} | {N} 輪 | 待開始 |
 
 ---
 
@@ -121,20 +173,18 @@ $ARGUMENTS
 
 ### Backlog
 
-| # | User Story | Task | 模組 | 估時 | 負責 | 狀態 |
-|---|-----------|------|------|------|------|------|
-| 1 | 會員可以登入系統 | 建立 login API | member | 4h | — | 待開始 |
-| 2 | 會員可以登入系統 | 建立 Session 管理 | member | 2h | — | 待開始 |
-| 3 | 會員可以登入系統 | 前台登入頁面 | member | 3h | — | 待開始 |
-| 4 | 會員可以登入系統 | 整合測試 | member | 2h | — | 待開始 |
+| # | User Story | Task | 模組 | 估量 | 狀態 |
+|---|-----------|------|------|------|------|
+| 1 | 會員可以登入系統 | 建立 login API | member | 1 輪 | 待開始 |
+| 2 | 會員可以登入系統 | 前台登入頁面 | member | 1 輪 | 待開始 |
+| 3 | 會員可以登入系統 | 整合測試 | member | 1 輪 | 待開始 |
 
-**Sprint 工時：** 已排 {N}h / 可用 {N}h
+**Sprint 工作量：** 已排 {N} 輪 / 容量 {N} 輪
 
 ### 完成條件（Definition of Done）
 - [ ] 所有 Task 狀態為「完成」
-- [ ] `/php_crud_test` 整合測試通過
-- [ ] `/playwright_ui_test` UI 測試通過
-- [ ] `/git_commit` 已提交並推送
+- [ ] 整合測試通過
+- [ ] git commit 已提交
 
 ---
 
@@ -146,9 +196,9 @@ $ARGUMENTS
 
 ## Backlog（未排入 Sprint）
 
-| User Story | Task | 模組 | 估時 | 備註 |
+| User Story | Task | 模組 | 估量 | 備註 |
 |-----------|------|------|------|------|
-| {低優先功能} | {Task} | {模組} | {N}h | 第二期開發 |
+| {低優先功能} | {Task} | {模組} | {N} 輪 | 第二期開發 |
 
 ---
 
@@ -167,5 +217,6 @@ $ARGUMENTS
 - `sprint_plan.md` 存在時預設為**更新模式**：保留已完成（狀態=完成）的 Task，重新排列剩餘工作
 - 更新模式下若整體工時超出，自動延後後續 Sprint 日期並提示
 - Task 狀態只有四種：`待開始` / `進行中` / `封鎖中` / `完成`
-- 人員欄位留空（`—`）表示未指定，由使用者填入
 - 不估算「設計」工項（UI 設計由設計師負責，此 Skill 只排開發工項）
+- **ai-assisted 模式**中的「負責」欄位可省略（預設 = AI + 使用者 review）
+- **ai-assisted 模式**中，若使用 logic_trace 產出的邏輯文件，複雜模組可再壓縮 1-2 輪（因為 AI 有完整上下文）

@@ -55,6 +55,9 @@ const SKILLS = {
   'update_codemaps':       { dept:'開發流程部',     title:'掃描專案並產生架構文件',           desc:'掃描專案目錄結構並產生精簡的架構地圖 (Codemaps)，讓 AI 能在大型專案中快速定位關鍵檔案與流程。', usage:'/update_codemaps [目標路徑(可省略)]', tools:['list_files'] },
   'logic_trace':           { dept:'程式移植與規格分析部', title:'同步爬前台＋讀後台 Code，產出模組完整邏輯文件', desc:'三軌並進（Playwright 爬前台 + MCP 讀 PHP Code + DB Schema 查詢），合併產出每個模組的完整技術邏輯文件，涵蓋前台行為、後台流程、DB 操作、錯誤處理、跨模組依賴。支援單模組深挖與全站逐域掃描兩種模式，報告存為 Markdown 供後續規格比對或重構使用。', usage:'/logic_trace {ProjectFolder} [ModuleName]', tools:['list_files','list_files_batch','read_file','read_files_batch','get_db_schema','get_db_schema_batch','execute_sql','create_file','Playwright MCP'] },
   'sprint_plan':           { dept:'開發流程部',     title:'將專案模組拆解為 Agile Sprint 計畫', desc:'根據專案目錄結構或規格書，將工作拆解為 User Story / Task，依工時估算分配至 Sprint，設定里程碑與 Definition of Done，輸出 sprint_plan.md。支援初始規劃與進度更新兩種模式。', usage:'/sprint_plan {ProjectFolder} [規格來源]', tools:['list_files','read_file','create_file'] },
+  'design_diff':           { dept:'程式移植與規格分析部', title:'設計稿 vs 實際網站截圖比對', desc:'將設計師提供的設計稿圖片（PSD/Figma/XD 匯出 PNG/JPG 或 PDF）與 Playwright 截取的實際頁面截圖逐項比對，檢查版面結構、顏色、字體、間距、元件完整性，產出視覺差異報告。', usage:'/design_diff {設計稿路徑} [目標URL] [--breakpoint 1440]', tools:['Playwright MCP'] },
+  'spec_screenshot_diff':  { dept:'程式移植與規格分析部', title:'規格書截圖 vs 實際網站截圖並排比對', desc:'擷取 AxShare 規格書頁面截圖與實作頁面截圖，並排呈現供視覺比對，逐項列出 UI 差異（欄位缺失、排版不同、按鈕樣式、文字不一致）。', usage:'/spec_screenshot_diff {模組名稱或URL} [--backend|--frontend]', tools:['Playwright MCP'] },
+  'rwd_scan':              { dept:'測試品管部',     title:'RWD 三斷點截圖掃描', desc:'在 Mobile (375px)、Tablet (768px)、Desktop (1440px) 三個斷點自動截圖，偵測水平溢出、文字截斷、元素重疊，產出響應式問題報告。', usage:'/rwd_scan {URL} [--breakpoints 375,768,1440] [--full-page]', tools:['Playwright MCP'] },
 };
 
 const TOOLS = {

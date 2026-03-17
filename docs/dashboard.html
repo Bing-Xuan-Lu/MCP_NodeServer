@@ -177,6 +177,40 @@
         </div>
       </section>
 
+      <!-- ── Memory System (Span 12) ── -->
+      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border);">
+        <h2 style="font-size:20px; font-weight:700; text-transform:uppercase; color:var(--text); margin-bottom:16px; letter-spacing:0.05em;">🧠 Memory System — 跨對話記憶</h2>
+        <p style="font-size:14px; color:var(--muted); margin-bottom:24px; line-height:1.6;">
+          助理員工具備持久化記憶能力。重要的規則、feedback、專案資訊會存入 <code>memory/</code> 目錄，下次對話自動載入。
+        </p>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:16px;">
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+            <div style="font-size:14px; font-weight:700; color:var(--purple); margin-bottom:8px;">記憶類型</div>
+            <div style="font-size:13px; color:var(--muted); line-height:1.6;">
+              <b>feedback</b> — 使用者糾正的行為規則<br>
+              <b>project</b> — 專案背景與決策<br>
+              <b>user</b> — 使用者偏好與角色<br>
+              <b>reference</b> — 外部資源指標
+            </div>
+          </div>
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+            <div style="font-size:14px; font-weight:700; color:var(--cyan); margin-bottom:8px;">同步機制</div>
+            <div style="font-size:13px; color:var(--muted); line-height:1.6;">
+              <code>memory/</code> 透過 Directory Junction 與 <code>~/.claude/projects/</code> 雙向同步，記憶直接進版控。<br>
+              機敏資訊存入 <code>memory/_private/</code>（.gitignore 排除）。
+            </div>
+          </div>
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+            <div style="font-size:14px; font-weight:700; color:var(--green); margin-bottom:8px;">寫入規則</div>
+            <div style="font-size:13px; color:var(--muted); line-height:1.6;">
+              使用者同意後才寫入，不自動存檔。<br>
+              記結論不記過程，MEMORY.md 保持 &lt;200 行。<br>
+              已有相同主題則更新，避免重複。
+            </div>
+          </div>
+        </div>
+      </section>
+
       </div><!-- /tab-overview -->
 
       <!-- ═══════════════ Tab: Skills ═══════════════ -->
@@ -208,11 +242,12 @@
       <!-- 測試品管部 -->
       <section class="bento-item span-4 dept-card">
         <div class="dept-name">測試品管部</div>
-        <div class="dept-desc">UI 自動化、效能分析</div>
+        <div class="dept-desc">UI 自動化、效能分析、RWD 響應式掃描</div>
         <div class="tag-container">
           <a class="tag" href="javascript:void(0)">/php_crud_test</a>
           <a class="tag" href="javascript:void(0)">/playwright_ui_test</a>
           <a class="tag" href="javascript:void(0)">/web_performance</a>
+          <a class="tag" href="javascript:void(0)">/rwd_scan</a>
           <a class="tag" href="javascript:void(0)">/gemini_playwright_setup</a>
         </div>
       </section>
@@ -332,6 +367,8 @@
           <a class="tag" href="javascript:void(0)">/axshare_diff</a>
           <a class="tag" href="javascript:void(0)">/logic_trace</a>
           <a class="tag" href="javascript:void(0)">/verify</a>
+          <a class="tag" href="javascript:void(0)">/design_diff</a>
+          <a class="tag" href="javascript:void(0)">/spec_screenshot_diff</a>
         </div>
       </section>
 
@@ -404,6 +441,7 @@
             <div style="margin-top:auto; display:flex; flex-direction:column; gap:4px;">
               <a class="tag" href="javascript:void(0)" style="font-size:11px;">/php_crud_test</a>
               <a class="tag" href="javascript:void(0)" style="font-size:11px;">/playwright_ui_test</a>
+              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/rwd_scan</a>
               <a class="tag" href="javascript:void(0)" style="font-size:11px;">/verify</a>
             </div>
           </div>
@@ -415,6 +453,8 @@
             <div style="margin-top:auto; display:flex; flex-direction:column; gap:4px;">
               <a class="tag" href="javascript:void(0)" style="font-size:11px;">/logic_trace</a>
               <a class="tag" href="javascript:void(0)" style="font-size:11px;">/axshare_diff</a>
+              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/design_diff</a>
+              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/spec_screenshot_diff</a>
             </div>
           </div>
 
