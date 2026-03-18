@@ -1,13 +1,14 @@
 ---
 name: rwd_scan
 description: |
-  RWD 三斷點截圖掃描：在 Mobile (375px)、Tablet (768px)、Desktop (1440px) 三個斷點自動截圖，偵測水平溢出/文字截斷/元素重疊，產出響應式問題報告。
+  RWD 三斷點截圖掃描：在 Mobile / Tablet / Desktop 三個斷點自動截圖，偵測水平溢出/文字截斷/元素重疊，產出響應式問題報告。
+  斷點尺寸可由使用者自訂（每個專案規格書定義不同）。
   當使用者說「RWD 測試」「響應式檢查」「手機版截圖」「三斷點」「rwd scan」時使用。
 ---
 
-# /rwd_scan — RWD 三斷點截圖掃描（Mobile 375 / Tablet 768 / Desktop 1440）
+# /rwd_scan — RWD 三斷點截圖掃描
 
-你是前端 RWD 品質檢測工程師，使用 Playwright MCP 對指定頁面在三個標準斷點自動截圖，並分析截圖中的響應式問題（水平溢出、文字截斷、元素重疊、選單未收合等），產出掃描報告。
+你是前端 RWD 品質檢測工程師，使用 Playwright MCP 對指定頁面在三個斷點自動截圖，並分析截圖中的響應式問題（水平溢出、文字截斷、元素重疊、選單未收合等），產出掃描報告。
 
 ---
 
@@ -15,11 +16,11 @@ description: |
 
 $ARGUMENTS
 
-格式：`{URL 或頁面清單} [--breakpoints 375,768,1440] [--full-page] [--project ProjectFolder]`
+格式：`{URL 或頁面清單} [--breakpoints mobile:WxH,tablet:WxH,desktop:WxH] [--full-page] [--project ProjectFolder]`
 
 - `{URL}`：單一 URL 或逗號分隔的多個 URL
 - `全頁面`：自動從首頁爬取所有內部連結進行掃描
-- `--breakpoints`（可選）：自訂斷點寬度，預設 `375,768,1440`
+- `--breakpoints`（可選）：自訂三斷點，格式 `mobile:WxH,tablet:WxH,desktop:WxH`
 - `--full-page`（可選）：截取完整頁面長截圖（預設僅首屏）
 - `--project`（可選）：指定專案以使用對應截圖目錄
 
@@ -27,24 +28,33 @@ $ARGUMENTS
 
 ## 需要的資訊
 
-若使用者未提供，請主動詢問：
+若使用者未提供斷點尺寸，**必須先確認**：
+
+1. 查看專案的 CLAUDE.md 或規格書是否有定義螢幕尺寸
+2. 若無，詢問使用者：「這個專案的 RWD 斷點是什麼？（手機/平板/電腦 各幾 px？）」
+3. 若使用者不確定，使用 Chrome DevTools 常用裝置作為預設：
 
 | 參數 | 說明 | 範例 |
 |------|------|------|
 | URL | 要掃描的頁面網址 | `http://localhost/` |
-| 斷點寬度 | RWD 斷點列表 | `375,768,1440`（預設） |
+| 斷點尺寸 | 手機/平板/電腦 | 由專案規格書定義（見下方預設值） |
 | 截圖目錄 | 截圖儲存位置 | `{project}/screenshots/rwd/`（預設） |
 | 登入需求 | 是否需要先登入才能存取頁面 | 不需要 / 帳號密碼 |
 
 ---
 
-## 標準斷點定義
+## 斷點定義（參數化）
 
-| 斷點名稱 | 寬度 | 高度 | 說明 |
-|---------|------|------|------|
-| Mobile | 375px | 812px | iPhone SE/12/13/14 標準寬度 |
-| Tablet | 768px | 1024px | iPad 直向標準寬度 |
-| Desktop | 1440px | 900px | 標準桌面/筆電寬度 |
+**預設值**（未指定時使用，對應 Chrome DevTools 常用裝置）：
+
+| 斷點名稱 | 寬度 | 高度 | 對應裝置 |
+|---------|------|------|---------|
+| Mobile | 390px | 844px | iPhone 14 |
+| Tablet | 820px | 1180px | iPad Air |
+| Desktop | 1920px | 1080px | Full HD |
+
+> **重要：** 每個專案的規格書可能定義不同尺寸。優先使用規格書定義的值，預設值僅在無規格書時使用。
+> 範例：`--breakpoints mobile:390x844,tablet:820x1180,desktop:1920x1080`
 
 ---
 
@@ -120,7 +130,7 @@ browser_evaluate → 取得所有內部連結：
 
 ```
 for each URL:
-  for each breakpoint in [{375, 812}, {768, 1024}, {1440, 900}]:
+  for each breakpoint in [mobile, tablet, desktop]:  // 尺寸由參數決定
 
     2a. browser_resize(width={breakpoint.width}, height={breakpoint.height})
     2b. browser_navigate(url={URL})
@@ -138,12 +148,12 @@ for each URL:
 
 例：
 ```
-index_375.png
-index_768.png
-index_1440.png
-product_list_375.png
+index_{mobile_width}.png
+index_{tablet_width}.png
+index_{desktop_width}.png
+product_list_{mobile_width}.png
 product_list_768.png
-product_list_1440.png
+product_list_1920.png
 ```
 
 ---
@@ -231,7 +241,7 @@ browser_evaluate:
 
 掃描時間：{date}
 掃描頁面：{N} 個
-斷點寬度：375px (Mobile) / 768px (Tablet) / 1440px (Desktop)
+斷點寬度：390px (Mobile) / 820px (Tablet) / 1920px (Desktop)
 
 ---
 
@@ -247,7 +257,7 @@ browser_evaluate:
 
 ## 截圖總覽
 
-| 頁面 | Mobile (375) | Tablet (768) | Desktop (1440) |
+| 頁面 | Mobile (390) | Tablet (820) | Desktop (1920) |
 |------|:---:|:---:|:---:|
 | 首頁 | PASS/FAIL | PASS/FAIL | PASS/FAIL |
 | 商品列表 | PASS/FAIL | PASS/FAIL | PASS/FAIL |
@@ -261,15 +271,15 @@ browser_evaluate:
 
 | 斷點 | 截圖 | 溢出 | 截斷 | 重疊 | 狀態 |
 |------|------|:----:|:----:|:----:|:----:|
-| 375 | {page}_375.png | 0 | 0 | 0 | PASS |
+| 390 | {page}_375.png | 0 | 0 | 0 | PASS |
 | 768 | {page}_768.png | 2 | 1 | 0 | FAIL |
-| 1440 | {page}_1440.png | 0 | 0 | 0 | PASS |
+| 1920 | {page}_1440.png | 0 | 0 | 0 | PASS |
 
-**375px 問題：**
+**390px 問題：**
 - [HIGH] 水平溢出：`.product-table` 右側超出 120px
 - [MED] 文字截斷：商品名稱被 ellipsis 截斷
 
-**768px 問題：**
+**820px 問題：**
 - [HIGH] 元素重疊：按鈕 A 與按鈕 B 重疊
 - ...
 
@@ -277,7 +287,7 @@ browser_evaluate:
 
 ## 建議修正優先順序
 
-1. [HIGH] {page} @ 375px：{問題描述} → 建議用 `@media (max-width: 480px)` 調整
+1. [HIGH] {page} @ 390px：{問題描述} → 建議用 `@media (max-width: 480px)` 調整
 2. [HIGH] {page} @ 768px：{問題描述} → 建議加 `overflow-x: auto` 到表格容器
 3. [MED] ...
 ```

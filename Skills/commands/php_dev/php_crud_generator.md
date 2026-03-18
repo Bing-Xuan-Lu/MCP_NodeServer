@@ -7,28 +7,17 @@
 
 ---
 
-## 🗂️ 專案目錄結構（固定約定）
+## 🗂️ 專案目錄結構
+
+Step 0 會自動偵測以下路徑（因專案而異）：
 
 ```
-D:\Project\
-├── skills\
-│   ├── generate_crud.md          ← 本檔案
-│   └── templates\                ← PHP 範本檔目錄
-│       ├── class.tpl.php         ← Model 類別範本
-│       ├── add.tpl.php           ← 新增表單範本
-│       ├── add_.tpl.php          ← 新增儲存範本
-│       ├── update.tpl.php        ← 編輯表單範本
-│       ├── update_.tpl.php       ← 編輯儲存範本
-│       ├── del.tpl.php           ← 刪除處理範本
-│       └── list.tpl.php          ← 列表頁範本
-│
-├── {專案名稱}\
-│   ├── cls\model\                ← Model 存放位置
-│   ├── {module}\                 ← CRUD 頁面存放位置
-│   ├── config\db.php             ← 資料庫連線
-│   └── layout\
-│       ├── header.php
-│       └── footer.php
+{ProjectFolder}/
+├── {templateDir}/           ← Model + HTML 範本檔（Step 0d 偵測）
+├── {modelDir}/              ← Model 類別存放位置
+├── {adminDir}/{module}/     ← CRUD 頁面存放位置
+├── config/                  ← 資料庫連線設定
+└── layout/ or include/      ← header/footer
 ```
 
 ---
@@ -113,10 +102,47 @@ CREATE TABLE tbl_product (
 
 收到 Schema 後，依序執行以下步驟：
 
+### Step 0：確認專案環境（自動偵測）
+
+**Step 0a — 專案路徑**
+
+若使用者未指定路徑，依序探測：
+1. 當前工作目錄是否為 PHP 專案（含 `config/` 或 `adminControl/`）
+2. 掃描 basePath 下的子目錄
+3. 若有多個符合，列出清單請使用者選擇
+
+**Step 0b — AdminLTE 版本**
+
+若使用者未指定版本，讀取後台 header 或現有模組頁面自動偵測：
+
+| 特徵 | 版本 |
+|------|------|
+| `skin-blue` 或 `AdminLTE/2` | LTE2 |
+| `AdminLTE/3` 或 v3 路徑 | LTE3 |
+| `app-wrapper` 或 `AdminLTE/4` | LTE4 |
+| 無法判斷 | 詢問使用者 |
+
+**Step 0c — DB 連線方式**
+
+讀取專案的 DB 連線類別（如 `db.class.php` 或 `config/database.php`）判斷驅動：
+
+| 模式 | 偵測方式 | SQL 參數風格 |
+|------|---------|-------------|
+| ADOdb | 含 `adodb.inc.php` / `NewADOConnection` | 位置參數 `?` |
+| PDO 包裝 | 含 `new PDO(` + 自訂 wrapper | 依 wrapper API 決定 |
+| 原生 PDO | 直接 `$pdo->prepare()` | 命名 `:col` 或 `?` |
+| MySQLi | 含 `mysqli_` | `?` + `bind_param()` |
+
+**Step 0d — 範本目錄確認**
+
+探測專案中是否有 Model 範本和 HTML 範本檔（目錄名因專案而異，如 `templates/`、`sample/`、`sample_html/` 等）。
+若找到 PHP 8 版本範本目錄，優先使用。
+
+偵測完成後告知：`✅ 專案：{PROJECT_ROOT}，LTE 版本：{LTE_VERSION}，DB 驅動：{DRIVER}`
+
 ### Step 1：確認目錄結構
 ```
-list_files("skills/templates")
-→ 確認所有 .tpl.php 範本檔存在
+list_files → 確認 Model 範本 + HTML 範本檔存在
 → 若缺少，告知使用者需要先建立哪些範本
 ```
 
@@ -149,8 +175,8 @@ read_files_batch([
 ### Step 4：產生程式碼
 根據範本 + Schema 進行替換與動態區塊生成：
 - `{{TABLE_NAME}}` → 實際資料表名稱
-- `{{CLASS_NAME}}` → 轉為 PascalCase 類別名（tbl_product → Product）
-- `{{MODULE_DIR}}` → 目錄名（去掉 tbl_ 前綴）
+- `{{CLASS_NAME}}` → 轉為 PascalCase 類別名（依表名規則轉換，如去掉前綴）
+- `{{MODULE_DIR}}` → 目錄名（依專案命名規則轉換）
 - `{{MENU_NAME}}` → 中文說明
 - `{{FIELDS_INSERT}}` → 依 html_show_in_edit=1 的欄位產生 INSERT 欄位列表
 - `{{FORM_FIELDS}}` → 依欄位設定產生表單 HTML
@@ -158,31 +184,31 @@ read_files_batch([
 
 ### Step 5：寫入專案目錄
 ```
-create_file("{projectPath}/cls/model/{tableName}.class.php", ...)
-create_file("{projectPath}/{module}/add.php", ...)
-create_file("{projectPath}/{module}/add_.php", ...)
-create_file("{projectPath}/{module}/update.php", ...)
-create_file("{projectPath}/{module}/update_.php", ...)
-create_file("{projectPath}/{module}/del.php", ...)
-create_file("{projectPath}/{module}/list.php", ...)
+create_file("{projectPath}/{modelDir}/{className}.class.php", ...)
+create_file("{projectPath}/{adminDir}/{module}/add.php", ...)
+create_file("{projectPath}/{adminDir}/{module}/add_.php", ...)
+create_file("{projectPath}/{adminDir}/{module}/update.php", ...)
+create_file("{projectPath}/{adminDir}/{module}/update_.php", ...)
+create_file("{projectPath}/{adminDir}/{module}/del.php", ...)
+create_file("{projectPath}/{adminDir}/{module}/list.php", ...)
 ```
 
 ### Step 6：語法驗證
 ```
-run_php_script("{projectPath}/cls/model/{tableName}.class.php")
+run_php_script("{projectPath}/{modelDir}/{className}.class.php")
 → 確認無 PHP 語法錯誤（CLI 模式解析）
 ```
 
 ### Step 7：回報結果
 ```
 ✅ 完成！已產生以下檔案：
-├── cls/model/tbl_product.class.php
-├── product/add.php
-├── product/add_.php
-├── product/update.php
-├── product/update_.php
-├── product/del.php
-└── product/list.php
+├── {modelDir}/{className}.class.php
+├── {adminDir}/{module}/add.php
+├── {adminDir}/{module}/add_.php
+├── {adminDir}/{module}/update.php
+├── {adminDir}/{module}/update_.php
+├── {adminDir}/{module}/del.php
+└── {adminDir}/{module}/list.php
 
 ⚡ 語法驗證：全部通過
 🔗 測試列表頁：http://localhost/project/product/list.php
@@ -273,9 +299,9 @@ send_http_request("http://localhost/{project}/{module}/list.php", "GET")
 
 | Placeholder | 說明 | 範例 |
 |-------------|------|------|
-| `{{TABLE_NAME}}` | 完整資料表名稱 | `tbl_product` |
+| `{{TABLE_NAME}}` | 完整資料表名稱 | `product` |
 | `{{CLASS_NAME}}` | PascalCase 類別名 | `Product` |
-| `{{MODULE_DIR}}` | 目錄名（去 tbl_） | `product` |
+| `{{MODULE_DIR}}` | 目錄名 | `product` |
 | `{{MENU_NAME}}` | 中文模組說明 | `商品管理` |
 | `{{DB_NOT_NULL_FIELDS}}` | INSERT 欄位 | `name, price, status` |
 | `{{PDO_PLACEHOLDERS}}` | PDO ? 佔位 | `?, ?, ?` |
@@ -308,18 +334,57 @@ send_http_request("http://localhost/{project}/{module}/list.php", "GET")
 
 ## 📁 範本檔準備清單（使用前確認）
 
-第一次使用前，確認 `D:\Project\skills\templates\` 有以下檔案：
+第一次使用前，確認專案中有以下範本：
 
-```
-□ class.tpl.php    ← Model 類別（含 getOne/getList/getCount/insert/update/delete）
-□ add.tpl.php      ← 新增表單（AdminLTE card 結構）
-□ add_.tpl.php     ← 新增儲存（PDO insert + redirect）
-□ update.tpl.php   ← 編輯表單（帶入現有值）
-□ update_.tpl.php  ← 編輯儲存（PDO update + redirect）
-□ del.tpl.php      ← 刪除（PDO delete + redirect）
-□ list.tpl.php     ← 列表（搜尋 + 分頁 + 表格）
-```
+- **Model 範本**：一個 `.class.php` 或 `.tpl.php`（含 getOne/getList/insert/update/delete）
+- **HTML 範本**：add / add_ / update / update_ / del / list（至少 6 個，部分專案有 change_order）
 
-若範本檔不存在，你（Claude）會先詢問使用者：
-「找不到範本檔，是否要我幫你建立預設範本？請確認你的 AdminLTE 版本和 layout include 方式。」
-然後用 `create_file` 建立範本。
+範本目錄位置因專案而異（如 `templates/`、`sample/`、`sample_html/`），Step 0d 會自動偵測。
+
+若範本檔不存在，先詢問使用者 AdminLTE 版本和 layout include 方式，再用 `create_file` 建立預設範本。
+
+---
+
+## 🏗️ AdminLTE 版本差異
+
+產生 HTML 時，依 Step 0b 偵測到的版本使用不同的 CSS class 和結構：
+
+### 卡片 / Box 元件
+
+| 元素 | LTE2 | LTE3 / LTE4 |
+|------|------|-------------|
+| 卡片容器 | `<div class="box">` | `<div class="card">` |
+| 有色卡片 | `box box-primary` | `card card-primary` |
+| 標題區 | `box-header with-border` | `card-header` |
+| 標題 | `<h3 class="box-title">` | `<h3 class="card-title">` |
+| 內容區 | `box-body` | `card-body` |
+| 底部 | `box-footer` | `card-footer` |
+
+### Grid / 表單
+
+| 元素 | LTE2 | LTE3 / LTE4 |
+|------|------|-------------|
+| 12 欄 | `col-xs-12` | `col-12` |
+| 表單群組 | `form-group` | `form-group` (LTE3) / `mb-3` (LTE4) |
+| 取消按鈕 | `btn btn-default` | `btn btn-default` (LTE3) / `btn btn-secondary` (LTE4) |
+
+### 資料迭代方式
+
+| 元素 | LTE2（cursor） | LTE3 / LTE4（array） |
+|------|---------------|---------------------|
+| 迭代 | `while ($rs = $db->getNext())` | `foreach ($datas as $value):` |
+| 欄位存取 | `$rs->field`（stdClass） | `$value['field']`（array） |
+| 編輯頁 | `$data->field` | `$data['field']` |
+
+---
+
+## ⚙️ PHP 8.4 注意事項
+
+產生的程式碼必須符合 PHP 8.4：
+
+- `public function __construct(&$db)` 非 PHP4 風格
+- `catch (\Throwable $e)` 非 `catch (Exception $e)`
+- `$_GET['key'] ?? ''` 防 undefined key
+- `implode(",", $array)` 非 `implode($array, ",")`
+- `count($var ?? [])` 非 `count($var)`
+- `is_string($value) ? addslashes($value) : $value`
