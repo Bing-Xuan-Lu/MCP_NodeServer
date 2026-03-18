@@ -1,13 +1,13 @@
 ---
 name: design_diff
 description: |
-  設計稿比對：將設計圖檔（PNG/JPG/PDF）與實際網站截圖進行視覺比對，檢查排版、顏色、字體、間距、元件完整性。
-  當使用者說「設計稿比對」「UI 比對」「design diff」「PSD 比對」「Figma 比對」「和設計稿一樣嗎」時使用。
+  設計稿比對：將設計圖檔（PNG/JPG/PDF）或線上 XD/Figma 連結與實際網站截圖進行視覺比對，檢查排版、顏色、字體、間距、元件完整性。
+  當使用者說「設計稿比對」「UI 比對」「design diff」「PSD 比對」「Figma 比對」「XD 比對」「和設計稿一樣嗎」時使用。
 ---
 
-# /design_diff — 設計稿（PSD/Figma/圖片）vs 實際網站截圖比對
+# /design_diff — 設計稿 vs 實際網站截圖比對
 
-你是 UI 像素級驗收工程師，將設計師提供的設計稿圖片（XD/Figma/PSD 匯出的 PNG/JPG，或 PDF 設計文件）與 Playwright 截取的實際頁面截圖進行逐項比對，產出視覺差異報告。檢查項目涵蓋版面結構、顏色、字體、間距、元件完整性、缺失元素。
+你是 UI 像素級驗收工程師，將設計師提供的設計稿（本地圖片 或 線上 XD/Figma 連結）與 Playwright 截取的實際頁面截圖進行逐項比對，產出視覺差異報告。檢查項目涵蓋版面結構、顏色、字體、間距、元件完整性、缺失元素。
 
 ---
 
@@ -15,13 +15,16 @@ description: |
 
 $ARGUMENTS
 
-格式：`{設計稿路徑} [目標URL] [--breakpoint 1440]`
+格式：`{設計稿來源} [目標URL] [--breakpoint 1920]`
 
-- `{設計稿路徑}`：設計稿圖片/PDF 的檔案路徑或資料夾路徑
-- `[目標URL]`（可選）：實作頁面 URL；省略時從設計稿檔名自動推斷
-- `--breakpoint`（可選）：指定截圖寬度，預設 `1440`
+- `{設計稿來源}`：以下三種之一：
+  - **本地路徑**：設計稿圖片/PDF 的檔案或資料夾路徑（`D:\Design\homepage.png`）
+  - **線上 XD 連結**：Adobe XD 分享連結（`https://xd.adobe.com/view/...`）
+  - **線上 Figma 連結**：Figma 分享連結（`https://www.figma.com/...`）
+- `[目標URL]`（可選）：實作頁面 URL；省略時從設計稿檔名或頁面名稱推斷
+- `--breakpoint`（可選）：指定截圖寬度（預設由專案規格書決定，無則用 `1920`）
 
-支援的設計稿格式：PNG、JPG、JPEG、PDF。若為 Figma，使用者需先匯出為圖片。
+支援的設計稿格式：PNG、JPG、JPEG、PDF、線上 XD/Figma。
 
 ---
 
@@ -31,10 +34,35 @@ $ARGUMENTS
 
 | 參數 | 說明 | 範例 |
 |------|------|------|
-| 設計稿路徑 | 設計圖片的絕對路徑（檔案或資料夾） | `D:\Design\homepage.png` 或 `D:\Design\` |
+| 設計稿來源 | 本地路徑或線上連結 | `D:\Design\` 或 `https://xd.adobe.com/view/...` |
 | 實作 URL | 前台頁面 URL | `http://localhost/` |
-| 斷點寬度 | 截圖視窗寬度 | `1440`（預設） |
+| 斷點寬度 | 截圖視窗寬度（由專案規格書決定） | `1920`（預設） |
 | 登入需求 | 是否需要先登入 | 不需要 / 帳號密碼 |
+
+**若使用者未提供本地資料夾也未提供線上連結，詢問：**
+```
+設計稿來源？
+1. 本地圖片資料夾路徑（如 D:\Design\XDimg\）
+2. 線上 XD 連結（如 https://xd.adobe.com/view/...）
+3. 線上 Figma 連結
+```
+
+---
+
+## 線上 XD 設計稿處理流程
+
+若設計稿來源為 XD 線上連結：
+
+```
+1. browser_navigate → XD grid 頁面（連結尾端加 /grid）
+2. browser_take_screenshot → 總覽截圖
+3. 從 grid 頁面識別所有畫面名稱
+4. 逐一點擊畫面 → 進入單頁檢視 → 截圖
+5. 每張截圖存為 xd_{page_name}.png
+6. 與前台實際截圖比對
+```
+
+> **注意**：XD 線上版是 SPA，需等待載入完成。若頁面切換後畫面空白，用 `browser_wait_for` 等待 2-3 秒。
 
 ---
 

@@ -2,15 +2,16 @@
 
 你是前端 UI 自動化測試工程師，使用 Playwright MCP 對 PHP AdminLTE 後台進行完整 UI 測試或互動式除錯。
 
-支援兩種模式：
+支援三種模式：
 - **測試模式**：自動跑 CRUD 測試，每步截圖，產出測試報告
+- **Smoke Test 模式**：批次 GET 所有頁面，偵測 PHP 錯誤與 500，快速全站健檢
 - **除錯模式**：搭配 Xdebug，逐步操作頁面觸發斷點，互動式重現 Bug
 
 > **開始前請先確保環境已初始化：**
 > 若為新專案，請先執行 `/playwright_setup` 進行標準化設定。
 >
 > **開始前請先讀取詳細步驟參考檔：**
-> `d:\Develop\MCP_NodeServer\Skills\commands\testing\playwright_ui_test_steps.md`
+> 搜尋 `playwright_ui_test_steps.md`（位於本 Skill 同目錄或 `~/.claude/commands/`）
 
 ---
 
@@ -26,7 +27,7 @@ $ARGUMENTS
 
 | 參數 | 說明 | 範例 |
 |------|------|------|
-| 模式 | 測試 or 除錯 | `測試` / `除錯` |
+| 模式 | 測試 / Smoke / 除錯 | `測試` / `smoke` / `除錯` |
 | Docker 容器 | 對應的 PHP 版本容器 | `dev-php84` (port 8084) |
 | 後台網址 | adminControl 根目錄 URL | `http://localhost:{port}/{ProjectFolder}/{PhpFolder}/adminControl/` |
 | 登入帳號 | 後台帳號 | `admin` |
@@ -80,11 +81,12 @@ $ARGUMENTS
 詢問並確認所有「需要的資訊」後，讀取詳細步驟參考檔：
 
 ```
-Read: d:\Develop\MCP_NodeServer\Skills\commands\testing\playwright_ui_test_steps.md
+Glob: **/playwright_ui_test_steps.md → Read 找到的檔案
 ```
 
 根據使用者選擇的模式決定路徑：
 - **測試模式** → 步驟 0.5 → 步驟 1 → 步驟 2（詳細步驟見參考檔）
+- **Smoke Test** → 步驟 0.5 → 步驟 S（不需登入，批次 GET）
 - **除錯模式** → 步驟 0.5 → 步驟 1 → 步驟 3（詳細步驟見參考檔）
 
 ---
@@ -109,6 +111,65 @@ browser_snapshot → 確認登入成功（側邊選單出現）
 ```
 
 驗證碼：截圖辨識，失敗時請使用者手動輸入或直接導向 welcome.php。
+
+---
+
+### 步驟 S：Smoke Test 模式（全站快速健檢）
+
+不需登入，用 `send_http_requests_batch` 批次 GET 所有後台頁面的 list.php。
+
+**S1 — 蒐集頁面清單**
+
+```
+list_files("{ProjectFolder}/{PhpFolder}/adminControl/")
+→ 找出所有含 list.php 的模組目錄
+→ 組成 URL 清單：http://localhost:{port}/{ProjectFolder}/{PhpFolder}/adminControl/{module}/list.php
+```
+
+**S2 — 批次 GET 測試**
+
+```
+send_http_requests_batch(urls, method: "GET")
+→ 分批送出（每批 10-20 個），收集 HTTP 狀態碼與回應
+```
+
+**S3 — 偵測問題**
+
+| 狀態 | 判定 | 行動 |
+|------|------|------|
+| HTTP 200 + 正常 HTML | ✅ PASS | 無需處理 |
+| HTTP 200 + 含 Fatal/Warning/Notice | ⚠️ PHP Error | 記錄錯誤訊息 |
+| HTTP 500 | ❌ FAIL | 用 `tail_log` 查原因 |
+| HTTP 302/404 | ⚠️ REDIRECT/NOT FOUND | 可能缺 config 或權限問題 |
+
+**S4 — PHP 錯誤模式掃描（預防性）**
+
+對回報 PHP Error 的模組，讀取原始碼掃描常見 PHP 8.x 相容問題：
+
+```
+Grep 掃描模式：
+- count($var)      → 應改 count($var ?? [])（$var 可能為 null）
+- implode($arr,    → 參數順序錯誤（PHP 8 已棄用）
+- ->field          → 若用 array 迭代需改 ['field']
+- FILTER_SANITIZE_STRING → PHP 8.1 已移除
+```
+
+**S5 — 產出 Smoke Test 報告**
+
+```
+📊 Smoke Test 報告 — {ProjectFolder}
+測試日期：{date}
+測試頁面：{total} 個
+
+✅ PASS：{n} 個
+⚠️ PHP Error：{n} 個
+❌ FAIL：{n} 個
+
+問題清單：
+| # | 模組 | 狀態 | 錯誤摘要 |
+|---|------|------|---------|
+| 1 | {module} | ⚠️ | count(null) on line 45 |
+```
 
 ---
 
@@ -180,16 +241,18 @@ browser_network_requests → 取得 AJAX/fetch 請求 URL、狀態碼、回應
 
 ## 與其他 Skill 的分工
 
-| 功能 | php_crud_test | playwright_ui_test (測試) | playwright_ui_test (除錯) |
-|------|:---:|:---:|:---:|
-| DB 資料驗證 | ✅ | ❌ | ❌ |
-| PHP 邏輯測試 | ✅ | ❌ | ❌ |
-| 瀏覽器真實渲染 | ❌ | ✅ | ✅ |
-| 自動截圖留存 | ❌ | ✅ | 按需 |
-| Xdebug 斷點 | ❌ | ❌ | ✅ |
-| Console/Network | ❌ | ❌ | ✅ |
+| 功能 | php_crud_test | 測試模式 | Smoke Test | 除錯模式 |
+|------|:---:|:---:|:---:|:---:|
+| DB 資料驗證 | ✅ | ❌ | ❌ | ❌ |
+| PHP 邏輯測試 | ✅ | ❌ | ❌ | ❌ |
+| 全站頁面掃描 | ❌ | ❌ | ✅ | ❌ |
+| PHP 錯誤偵測 | ❌ | ❌ | ✅ | ❌ |
+| 瀏覽器真實渲染 | ❌ | ✅ | ❌ | ✅ |
+| 自動截圖留存 | ❌ | ✅ | ❌ | 按需 |
+| Xdebug 斷點 | ❌ | ❌ | ❌ | ✅ |
+| Console/Network | ❌ | ❌ | ❌ | ✅ |
 
-建議順序：`/php_crud_test` 確認後端邏輯 → 測試模式確認 UI → 除錯模式追蹤 Bug。
+建議順序：**Smoke Test** 全站快篩 → `/php_crud_test` 確認後端邏輯 → **測試模式** 確認 UI → **除錯模式** 追蹤 Bug。
 
 ---
 
