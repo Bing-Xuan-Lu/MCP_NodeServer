@@ -39,6 +39,7 @@
       <div style="display:flex; align-items:center; gap:4px;">
         <button class="tab-btn active" data-tab="overview">Overview</button>
         <button class="tab-btn" data-tab="skills">Skills</button>
+        <button class="tab-btn" data-tab="workflows">Workflows</button>
         <button class="tab-btn" data-tab="tools">Tools</button>
       </div>
     </div>
@@ -59,8 +60,7 @@
         <h1>私人 AI<br>助理員工</h1>
         <p>您的專屬 Node.js MCP 助理，配備 <span id="heroSkillCount">-</span> 個 Skill 與 <span id="heroToolCount">-</span> 個工具，隨時準備好處理檔案、操作資料庫與執行 PHP 任務。</p>
         <div style="margin-top:32px; display:flex; gap:16px;">
-          <a href="#skills" style="background:white; color:black; padding:12px 24px; border-radius:30px; font-weight:700; font-size:14px;">開始工作吧 →</a>
-          <div style="font-family:var(--font-mono); font-size:12px; font-weight:700; opacity:0.8; display:flex; align-items:center; border-left:1px solid rgba(255,255,255,0.3); padding-left:16px;">V5.1.0 EST. 2026</div>
+          <a href="#skills" onclick="document.querySelector('.tab-btn[data-tab=\'skills\']').click();" style="background:white; color:black; padding:12px 24px; border-radius:30px; font-weight:700; font-size:14px;">開始工作吧 →</a>          <div style="font-family:var(--font-mono); font-size:12px; font-weight:700; opacity:0.8; display:flex; align-items:center; border-left:1px solid rgba(255,255,255,0.3); padding-left:16px;">V5.1.0 EST. 2026</div>
         </div>
       </section>
 
@@ -242,12 +242,13 @@
       <!-- 測試品管部 -->
       <section class="bento-item span-4 dept-card">
         <div class="dept-name">測試品管部</div>
-        <div class="dept-desc">UI 自動化、效能分析、RWD 響應式掃描</div>
+        <div class="dept-desc">UI 自動化、效能分析、RWD 響應式掃描、全站 QC 校稿</div>
         <div class="tag-container">
           <a class="tag" href="javascript:void(0)">/php_crud_test</a>
           <a class="tag" href="javascript:void(0)">/playwright_ui_test</a>
           <a class="tag" href="javascript:void(0)">/web_performance</a>
           <a class="tag" href="javascript:void(0)">/rwd_scan</a>
+          <a class="tag" href="javascript:void(0)">/project_qc</a>
           <a class="tag" href="javascript:void(0)">/gemini_playwright_setup</a>
         </div>
       </section>
@@ -372,94 +373,6 @@
         </div>
       </section>
 
-      <!-- ══════════════════════════════════════════════════════════ -->
-      <!-- 專案開發流程 Pipeline                                       -->
-      <!-- ══════════════════════════════════════════════════════════ -->
-      <section class="bento-item span-12 notes-item" style="border-color: var(--purple); margin-top: 24px;">
-        <h2 class="notes-title" style="color: var(--purple);">專案開發流程 — 從空底板到上線</h2>
-        <p style="color:var(--muted); font-size:14px; margin-top:8px;">每個階段點擊 Skill tag 可查用法。標示 <span style="color:#f59e0b; font-weight:700;">待補</span> 的階段尚無對應 Skill。</p>
-      </section>
-
-      <!-- Pipeline Row -->
-      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:0; overflow:hidden;">
-        <div style="display:grid; grid-template-columns: repeat(7, 1fr); min-height:180px;">
-
-          <!-- 1. 規格分析 -->
-          <div style="padding:20px 16px; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:8px;">
-            <div style="font-size:11px; font-weight:700; color:var(--purple); text-transform:uppercase; letter-spacing:.08em;">① 規格分析</div>
-            <div style="font-size:12px; color:var(--muted); line-height:1.5;">爬取規格書建立快照，比對功能清單</div>
-            <div style="margin-top:auto; display:flex; flex-direction:column; gap:4px;">
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/axshare_spec_index</a>
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/axshare_diff</a>
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/logic_trace</a>
-            </div>
-          </div>
-
-          <!-- 2. 時程規劃 -->
-          <div style="padding:20px 16px; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:8px;">
-            <div style="font-size:11px; font-weight:700; color:var(--cyan); text-transform:uppercase; letter-spacing:.08em;">② 時程規劃</div>
-            <div style="font-size:12px; color:var(--muted); line-height:1.5;">模組拆解、工時估算、Sprint 分配、進度追蹤</div>
-            <div style="margin-top:auto; display:flex; flex-direction:column; gap:4px;">
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/sprint_plan</a>
-            </div>
-          </div>
-
-          <!-- 3. DB 設計 -->
-          <div style="padding:20px 16px; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:8px;">
-            <div style="font-size:11px; font-weight:700; color:var(--green); text-transform:uppercase; letter-spacing:.08em;">③ DB 設計</div>
-            <div style="font-size:12px; color:var(--muted); line-height:1.5;">規劃 Table 結構，產生並執行遷移腳本</div>
-            <div style="margin-top:auto; display:flex; flex-direction:column; gap:4px;">
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/db_schema_designer</a>
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/db_migration</a>
-            </div>
-          </div>
-
-          <!-- 4. 後台開發 -->
-          <div style="padding:20px 16px; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:8px;">
-            <div style="font-size:11px; font-weight:700; color:var(--cyan); text-transform:uppercase; letter-spacing:.08em;">④ 後台開發</div>
-            <div style="font-size:12px; color:var(--muted); line-height:1.5;">逐模組派 Agent 開發，每完成一個建安全點</div>
-            <div style="margin-top:auto; display:flex; flex-direction:column; gap:4px;">
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/sadd</a>
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/php_crud_generator</a>
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/checkpoint</a>
-            </div>
-          </div>
-
-          <!-- 5. 前台開發 -->
-          <div style="padding:20px 16px; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:8px; background:color-mix(in srgb, var(--surface) 90%, #f59e0b 10%);">
-            <div style="font-size:11px; font-weight:700; color:#f59e0b; text-transform:uppercase; letter-spacing:.08em;">⑤ 前台開發</div>
-            <div style="font-size:12px; color:var(--muted); line-height:1.5;">前台 PHP Views 與互動邏輯開發</div>
-            <div style="margin-top:auto;">
-              <span style="font-size:11px; font-weight:700; color:#f59e0b; background:color-mix(in srgb, var(--bg) 80%, #f59e0b 20%); padding:3px 8px; border-radius:4px;">待補 Skill</span>
-            </div>
-          </div>
-
-          <!-- 6. 測試 -->
-          <div style="padding:20px 16px; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:8px;">
-            <div style="font-size:11px; font-weight:700; color:var(--purple); text-transform:uppercase; letter-spacing:.08em;">⑥ 測試</div>
-            <div style="font-size:12px; color:var(--muted); line-height:1.5;">後台整合、前台 UI、提交前六合一驗證</div>
-            <div style="margin-top:auto; display:flex; flex-direction:column; gap:4px;">
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/php_crud_test</a>
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/playwright_ui_test</a>
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/rwd_scan</a>
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/verify</a>
-            </div>
-          </div>
-
-          <!-- 7. 驗收 -->
-          <div style="padding:20px 16px; display:flex; flex-direction:column; gap:8px;">
-            <div style="font-size:11px; font-weight:700; color:var(--green); text-transform:uppercase; letter-spacing:.08em;">⑦ 驗收</div>
-            <div style="font-size:12px; color:var(--muted); line-height:1.5;">規格 vs 實作最終比對，產出驗收報告</div>
-            <div style="margin-top:auto; display:flex; flex-direction:column; gap:4px;">
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/logic_trace</a>
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/axshare_diff</a>
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/design_diff</a>
-              <a class="tag" href="javascript:void(0)" style="font-size:11px;">/spec_screenshot_diff</a>
-            </div>
-          </div>
-
-        </div>
-      </section>
 
       <!-- ══════════════════════════════════════════════════════════ -->
       <!-- 待建部門（尚無 Skill，規劃中）                               -->
@@ -497,6 +410,203 @@
       </section>
 
       </div><!-- /tab-skills -->
+
+      <!-- ═══════════════ Tab: Workflows ═══════════════ -->
+      <div id="tab-workflows" class="tab-panel" style="display:none;">
+
+      <!-- Title -->
+      <section class="bento-item span-12 notes-item" style="border-color: var(--purple); margin-top: 24px;">
+        <h2 class="notes-title" style="color: var(--purple);">專案開發流程 · PHP Project Dev Pipeline</h2>
+        <p style="color:var(--muted); font-size:14px; margin-top:8px;">從空底板到上線的標準 7 步驟流程，依序執行各 Skill。點擊 Skill tag 可查用法。標示 <span style="color:#f59e0b; font-weight:700;">待補</span> 的階段尚無對應 Skill。</p>
+      </section>
+
+      <!-- Vertical Timeline -->
+      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
+        <ul class="timeline">
+          
+          <!-- 1. 規格分析 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① 規格分析</div>
+                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SPEC ANALYSIS</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">深入解析業務邏輯與介面需求。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 建立規格書快照</span>
+                  <a class="tag" href="javascript:void(0)">/axshare_spec_index</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">2. 規格差異比對</span>
+                  <a class="tag" href="javascript:void(0)">/axshare_diff</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">3. 邏輯追蹤與分析</span>
+                  <a class="tag" href="javascript:void(0)">/logic_trace</a>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- 2. 時程規劃 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 時程規劃</div>
+                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SPRINT PLANNING</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">拆解任務清單並建立開發時程。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 制定開發時程</span>
+                  <a class="tag" href="javascript:void(0)">/sprint_plan</a>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- 3. DB 設計 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">③ DB 設計</div>
+                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">DB DESIGN</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">規劃關聯架構與數據索引優化。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 設計資料庫結構</span>
+                  <a class="tag" href="javascript:void(0)">/db_schema_designer</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">2. Schema 遷移</span>
+                  <a class="tag" href="javascript:void(0)">/db_migration</a>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- 4. 後台開發 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">④ 後台開發</div>
+                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">BACKEND DEV</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">生成 CRUD 模組與實作核心 API。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 新增 CRUD 模組</span>
+                  <a class="tag" href="javascript:void(0)">/php_crud_generator</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">2. 逐任務派遣開發</span>
+                  <a class="tag" href="javascript:void(0)">/sadd</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">3. 建立工作流程安全點</span>
+                  <a class="tag" href="javascript:void(0)">/checkpoint</a>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- 5. 前台開發 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content" style="border-left: 4px solid #f59e0b;">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:#f59e0b; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⑤ 前台開發</div>
+                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">FRONTEND DEV</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">刻劃互動介面與資料串接 (待補)。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step" style="justify-content:center; align-items:center; background:color-mix(in srgb, var(--bg) 80%, #f59e0b 20%); border-color:#f59e0b; border-style:dashed;">
+                  <span style="font-size:14px; font-weight:700; color:#f59e0b;">待補 Skill</span>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- 6. 測試 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⑥ 測試</div>
+                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">TESTING</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">執行自動化測試與邏輯驗證。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">A. 後台邏輯</span>
+                  <a class="tag" href="javascript:void(0)">/php_crud_test</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">B. UI 行為</span>
+                  <a class="tag" href="javascript:void(0)">/playwright_ui_test</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">C. RWD</span>
+                  <a class="tag" href="javascript:void(0)">/rwd_scan</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--purple);">全站 QC 彙整</span>
+                  <a class="tag" href="javascript:void(0)" style="border-color:var(--purple);">/project_qc</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">提交前驗證</span>
+                  <a class="tag" href="javascript:void(0)">/verify</a>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- 7. 驗收 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⑦ 驗收</div>
+                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">ACCEPTANCE</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">最終規格比對與設計複驗。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 複驗校稿單</span>
+                  <a class="tag" href="javascript:void(0)" style="border-color:var(--green);">/project_qc re-check</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">2. 規格最終比對</span>
+                  <a class="tag" href="javascript:void(0)">/axshare_diff</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">3. 設計稿比對</span>
+                  <a class="tag" href="javascript:void(0)">/design_diff</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">4. 截圖對照</span>
+                  <a class="tag" href="javascript:void(0)">/spec_screenshot_diff</a>
+                </div>
+              </div>
+            </div>
+          </li>
+
+        </ul>
+      </section>
+
+      <!-- Future Workflow Placeholder -->
+      <section class="bento-item span-12 notes-item" style="border-color: #f59e0b; margin-top: 24px;">
+        <h2 class="notes-title" style="color: #f59e0b;">規劃中工作流程 · Planned Workflows</h2>
+        <p style="color:var(--muted); font-size:14px; margin-top:8px;">日後可在此新增更多垂直領域的標準流程（如：API 整合、資料遷移、安全稽核、維護上線等）。</p>
+      </section>
+
+      </div><!-- /tab-workflows -->
 
       <!-- ═══════════════ Tab: Tools ═══════════════ -->
       <div id="tab-tools" class="tab-panel" style="display:none;">

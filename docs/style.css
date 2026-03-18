@@ -112,6 +112,7 @@ a { color: inherit; text-decoration: none; }
   font-family: var(--font-mono); font-size: 14px; font-weight: 600;
   background: var(--bg); color: var(--text); border: 1px solid var(--border);
   padding: 6px 12px; border-radius: 20px; transition: all 200ms;
+  display: inline-block; white-space: nowrap;
 }
 .tag:hover { background: var(--accent); color: white; border-color: var(--accent); }
 
@@ -148,4 +149,75 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 900px) {
   .span-8, .span-4, .span-6 { grid-column: span 12; }
   .hero-item h1 { font-size: 32px; }
+}
+
+/* ── Vertical Timeline ── */
+.timeline {
+  position: relative;
+  padding: 24px 0 24px 32px;
+  list-style: none;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; left: 11px;
+  width: 2px;
+  background: var(--border);
+}
+.timeline-item {
+  position: relative;
+  margin-bottom: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.timeline-item:last-child { margin-bottom: 0; }
+.timeline-marker {
+  position: absolute;
+  left: -32px; top: 50%;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 4px solid var(--accent);
+  z-index: 1;
+  transform: translateY(-50%);
+  box-shadow: 0 0 0 4px var(--bg);
+}
+.timeline-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px 40px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px;
+  align-items: center; /* 讓標題與按鈕垂直置中 */
+  box-shadow: var(--shadow);
+  transition: all 0.3s ease;
+}
+.timeline-content:hover {
+  border-color: var(--accent);
+  transform: translateX(8px);
+}
+.timeline-header {
+  flex: 1 1 320px;
+}
+.timeline-actions {
+  flex: 2 1 400px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: stretch;
+}
+.timeline-step {
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* 指令內容置中 */
+  gap: 8px;
+  background: var(--bg);
+  padding: 16px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  min-width: 220px;
+  flex: 1;
 }
