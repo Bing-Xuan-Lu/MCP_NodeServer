@@ -7,6 +7,11 @@ description: |
 
 # /version_conflict_debug — 自動診斷並修復服務元件版本相容性衝突
 
+## 可用工具
+
+- **HTTP 連線測試**：`send_http_request`
+- **遠端 Log 讀取**：`tail_log`, `sftp_connect`, `sftp_list`, `sftp_download`
+
 ## 背景
 
 當兩個服務整合後出現神秘錯誤（連線失敗、協議不符、API 拒絕），

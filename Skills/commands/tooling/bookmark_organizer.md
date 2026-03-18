@@ -6,6 +6,13 @@
 
 ---
 
+## 可用工具
+
+- **書籤讀取**：`get_bookmark_structure`, `get_folder_contents`
+- **整理操作**：`scan_and_clean_bookmarks`, `move_bookmarks`, `move_specific_bookmarks`, `sort_bookmarks`
+- **資料夾管理**：`rename_bookmark_folder`, `create_bookmark_folder`, `delete_bookmark_folder`
+- **清理與匯出**：`remove_duplicates`, `remove_chrome_bookmarks`, `export_bookmarks_to_html`
+
 ## 一、完整三階段整理 SOP (推薦)
 
 適合第一次大整理，從探索到分類到收尾一次完成。

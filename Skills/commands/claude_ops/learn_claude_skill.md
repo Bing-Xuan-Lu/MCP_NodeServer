@@ -10,6 +10,12 @@
 
 ---
 
+## 可用工具
+
+- **Skill 管理**：`save_claude_skill`, `list_claude_skills`, `delete_claude_skill`
+- **檔案讀取**：`read_file`, `read_files_batch`, `list_files_batch`
+- **修改寫入**：`apply_diff`, `create_file`
+
 ## 判斷模式
 
 根據使用者輸入自動判斷：

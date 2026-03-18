@@ -1,5 +1,10 @@
 # /n8n_webhook_debug — 診斷並修復 n8n Webhook 節點不觸發問題
 
+## 可用工具
+
+- **HTTP 測試**：`send_http_request`
+- **Log 讀取**：`tail_log`
+
 ## 背景
 當外部服務呼叫 n8n Webhook 但工作流沒有執行時，使用此技能逐步診斷根因。
 常見原因：httpMethod 不符、webhook path 未註冊、工作流未啟用。

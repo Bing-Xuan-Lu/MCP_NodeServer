@@ -14,6 +14,13 @@ description: |
 
 $ARGUMENTS
 
+## 可用工具
+
+- **資料庫**：`load_db_connection`, `set_database`, `get_db_schema_batch`, `execute_sql`, `execute_sql_batch`
+- **HTTP 測試**：`send_http_request`, `send_http_requests_batch`
+- **PHP 執行**：`run_php_test`, `run_php_script`, `tail_log`
+- **程式碼讀取**：`list_files_batch`, `read_files_batch`, `read_file`
+
 ## 需要的資訊
 
 若使用者未提供以下資訊，請主動詢問：

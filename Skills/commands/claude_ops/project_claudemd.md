@@ -1,5 +1,11 @@
 # /project_claudemd — 為專案自動產生 CLAUDE.md 專案文件
 
+## 可用工具
+
+- **專案探索**：`list_files_batch`, `get_folder_contents`
+- **程式碼讀取**：`read_files_batch`, `read_file`
+- **輸出寫入**：`create_file`, `apply_diff`
+
 ## 背景
 當接手新專案或需要讓 Claude 快速理解既有專案時，透過系統性探索產生一份結構化的 CLAUDE.md，涵蓋目錄結構、架構模式、業務模組與開發注意事項。
 

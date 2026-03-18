@@ -5,6 +5,12 @@
 
 ---
 
+## 可用工具
+
+- **目錄掃描**：`list_files_batch`, `get_folder_contents`
+- **檔案讀取**：`read_file`, `read_files_batch`
+- **修改更新**：`apply_diff`
+
 ## 需要的資訊
 
 若使用者未提供以下資訊，請主動詢問：
