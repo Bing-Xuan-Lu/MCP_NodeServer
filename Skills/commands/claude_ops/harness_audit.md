@@ -12,6 +12,12 @@ $ARGUMENTS
 
 ---
 
+## 可用工具
+
+- **Skill 清單**：`list_claude_skills`
+- **設定檔讀取**：`read_file`, `read_files_batch`
+- **Git 歷史**：`git_log`, `git_status`
+
 ## 執行步驟
 
 ### 步驟 1：收集審計資料

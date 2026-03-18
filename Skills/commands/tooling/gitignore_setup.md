@@ -24,6 +24,12 @@ $ARGUMENTS
 
 ---
 
+## 可用工具
+
+- **目錄掃描**：`list_files_batch`, `get_folder_contents`
+- **檔案讀取**：`read_file`, `read_files_batch`
+- **修改寫入**：`apply_diff`, `create_file`
+
 ## 執行步驟
 
 ### 步驟 1：讀取現況

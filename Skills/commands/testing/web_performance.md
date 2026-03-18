@@ -24,6 +24,11 @@ $ARGUMENTS
 
 若未指定策略，預設同時測試 desktop 和 mobile。
 
+## 可用工具
+
+- **瀏覽器自動化**：`Playwright MCP`（截圖、PerformanceObserver 指標收集）
+- **外部 API 呼叫**：`send_http_request`（PageSpeed Insights API、CrUX API）
+
 ---
 
 ## 步驟

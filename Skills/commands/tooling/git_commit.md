@@ -11,6 +11,10 @@ description: |
 
 ---
 
+## 可用工具
+
+- **Git 操作**：`git_status`, `git_diff`, `git_log`
+
 ## 流程
 
 ### 步驟 1：取得變更概況

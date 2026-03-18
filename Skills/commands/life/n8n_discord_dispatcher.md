@@ -1,5 +1,9 @@
 # /n8n_discord_dispatcher — n8n Discord 指令調度器
 
+## 可用工具
+
+- **HTTP API 呼叫**：`send_http_request`, `send_http_requests_batch`
+
 ## 背景
 在 n8n 中使用 community node `n8n-nodes-discord-trigger` 建立即時（非輪詢）Discord 指令調度器。
 適用於 n8n 版本缺少內建 discordTrigger 實作，但已安裝 community 套件的環境。

@@ -58,6 +58,7 @@ const SKILLS = {
   'design_diff':           { dept:'程式移植與規格分析部', title:'設計稿 vs 實際網站截圖比對', desc:'將設計師提供的設計稿圖片（PSD/Figma/XD 匯出 PNG/JPG 或 PDF）與 Playwright 截取的實際頁面截圖逐項比對，檢查版面結構、顏色、字體、間距、元件完整性，產出視覺差異報告。', usage:'/design_diff {設計稿路徑} [目標URL] [--breakpoint 1440]', tools:['Playwright MCP'] },
   'spec_screenshot_diff':  { dept:'程式移植與規格分析部', title:'規格書截圖 vs 實際網站截圖並排比對', desc:'擷取 AxShare 規格書頁面截圖與實作頁面截圖，並排呈現供視覺比對，逐項列出 UI 差異（欄位缺失、排版不同、按鈕樣式、文字不一致）。', usage:'/spec_screenshot_diff {模組名稱或URL} [--backend|--frontend]', tools:['Playwright MCP'] },
   'rwd_scan':              { dept:'測試品管部',     title:'RWD 三斷點截圖掃描', desc:'在 Mobile (375px)、Tablet (768px)、Desktop (1440px) 三個斷點自動截圖，偵測水平溢出、文字截斷、元素重疊，產出響應式問題報告。', usage:'/rwd_scan {URL} [--breakpoints 375,768,1440] [--full-page]', tools:['Playwright MCP'] },
+  'project_qc':            { dept:'測試品管部',     title:'全站品質稽核與網站校稿單', desc:'模擬專案管理師執行全站 QC：後台邏輯（Phase A）→ UI 行為（B）→ 設計稿比對（C，零容忍色差）→ 規格書比對（D）→ 業務流程端對端（E，電商/審核流程等）→ RWD（F），彙整產出可追蹤的網站校稿單，支援迭代複驗（re-check）循環。', usage:'/project_qc [測試網址] [專案目錄] [re-check]', tools:['send_http_request','send_http_requests_batch','execute_sql','execute_sql_batch','run_php_test','read_files_batch','get_db_schema_batch','create_file','Playwright MCP'] },
 };
 
 const TOOLS = {
