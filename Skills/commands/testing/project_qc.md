@@ -70,17 +70,20 @@ $ARGUMENTS
 設計比對：{有/無}　規格比對：{有/無}
 輸出格式：{md/html}
 
-── 並行階段（前後台同時出發，Playwright 歸前台獨用）──
-UI/UX 稽核員  Phase B  UI 行為測試（Smoke + CRUD + 截圖）
+── Phase A0（邏輯稽核員先行）────────────────────────
+邏輯稽核員  Phase A0  Schema-Driven 欄位映射 → 產出 field_map.md
+
+── 並行階段（A0 完成後，前後台同時出發）──────────────
+UI/UX 稽核員  Phase B  全站互動探索(B0) + 全欄位驗證(B1-B3)
            Phase C  設計稿視覺比對 + 規格書截圖比對
            Phase F  RWD 三斷點掃描
 
-邏輯稽核員  Phase A  PHP CRUD 邏輯整合測試（無 Playwright）
+邏輯稽核員  Phase A  全欄位 CRUD 邏輯測試（依 field_map 逐欄位）
            Phase D  規格書功能文字比對（讀 spec_index.md）
 
 ── 順序階段（遞棒協作）────────────────────────────
 Phase E-0  UI/UX 稽核員爬站建測試矩陣 → 使用者確認
-Phase E    業務流程端對端遞棒測試
+Phase E    業務流程端對端遞棒測試（含商品組合/圖片/影片/支付/會員/訂單）
 
 ── 最終彙整 ──────────────────────────────────────
 Phase G    產出 reports/{project}_校稿單_{日期}.md
@@ -92,9 +95,12 @@ Phase G    產出 reports/{project}_校稿單_{日期}.md
 
 ---
 
-### 步驟 1：並行派遣兩位測試員
+### 步驟 1：先跑 Phase A0，再並行派遣
 
-確認後，**同時啟動**兩個 Agent（`run_in_background: true`）。
+**Phase A0 必須先完成**（後續所有測試依賴 field_map.md）：
+1. 派邏輯稽核員執行 Phase A0（Schema 映射）
+2. 等 `reports/field_map.md` 產出
+3. 再同時啟動兩個 Agent 並行（`run_in_background: true`）
 
 ---
 
@@ -109,14 +115,110 @@ Phase G    產出 reports/{project}_校稿單_{日期}.md
 - 設計稿路徑：{設計稿路徑 或 "無"}
 - 規格書快照：{規格書來源 或 "無"}
 
-[Phase B] UI 行為測試
-1. browser_navigate 各模組頁面，截圖初始狀態
-2. 偵測 PHP 錯誤（500/Notice/Warning）、JS 錯誤
-3. 執行 CRUD 表單操作，截圖每個步驟
-4. 功能無法執行、報錯 → 標記 NG
+[Phase B] 全站互動探索 + 全欄位前台驗證
+等邏輯稽核員產出 reports/field_map.md 後再開始（確保有欄位映射依據）。
+
+B0. 全站互動元素探索（每個頁面都做）
+  對前台和後台的每一個頁面，執行完整互動掃描：
+
+  a. 頁面進入後截圖初始狀態
+  b. browser_evaluate 蒐集頁面所有互動元素：
+     ```js
+     // 可點擊元素
+     document.querySelectorAll('a, button, [onclick], [role="button"], input[type="submit"], .btn, [data-toggle], [data-bs-toggle]')
+     // 表單元素
+     document.querySelectorAll('input, select, textarea, [contenteditable]')
+     // 滑動/展開元素
+     document.querySelectorAll('[data-toggle="collapse"], .accordion, .carousel, .slider, .swiper, .tab-pane, .nav-tabs a, .owl-carousel')
+     // Hover 效果元素
+     document.querySelectorAll('[class*="hover"], [class*="dropdown"], .mega-menu, nav li')
+     // POPUP / Modal 觸發器
+     document.querySelectorAll('[data-toggle="modal"], [data-bs-toggle="modal"], [class*="popup"], [class*="lightbox"], .fancybox')
+     ```
+  c. 產出互動元素清單並逐一測試：
+
+  **點擊測試**：
+  - 每個連結 <a> → 點擊 → 驗目標頁面載入（非 404/500）→ 返回
+  - 每個按鈕 → 點擊 → 截圖結果（是否有反應、是否報錯）
+  - 下拉選單 → 點擊 → 驗展開 → 點每個選項
+  - Modal 觸發 → 點擊 → 驗 Modal 開啟 → 截圖 → 關閉
+
+  **⚠️ 動態渲染連結驗證（踩坑規則）**：
+  - `a[href]` 選擇器會漏掉 Vue (`v-bind:href`) / React 等框架動態渲染的連結
+  - 必須先**觸發展開** dropdown / mega menu / POPUP，等 DOM 更新後再蒐集連結
+  - 展開後掃描 `a:not([href])` → 若存在 = **NG**（連結缺 href，點擊無反應）
+  - 展開後逐一點擊內部連結 → 驗是否成功導航到目標頁面
+  - Mega Menu 的每個 Tab/Panel 都要切換並測試（不只測 active panel）
+
+  **表單互動測試**：
+  - 每個 input → 輸入測試值 → 驗是否有即時驗證/格式提示
+  - 每個 select → 展開 → 驗選項數量 → 選擇每個選項
+  - 每個 textarea → 輸入 → 驗字數限制提示
+  - 搜尋框 → 輸入關鍵字 → 驗搜尋結果/自動完成
+
+  **滑動/輪播測試**：
+  - Carousel/Slider → 點左右箭頭 → 驗切換 → 截圖每張
+  - Tab → 點每個 Tab → 驗內容切換
+  - Accordion → 逐一展開 → 驗內容顯示
+
+  **Hover 測試**：
+  - 導覽選單 hover → 驗子選單展開
+  - 商品卡片 hover → 驗快速預覽/按鈕出現
+  - 圖片 hover → 驗放大/overlay 效果
+
+  **POPUP/Lightbox 測試**：
+  - 圖片點擊 → 驗 Lightbox 開啟 → 可左右切換 → 關閉
+  - 影片縮圖點擊 → 驗影片播放器開啟
+  - 通知/Cookie 同意 → 驗出現時機 → 點關閉
+
+  **捲動測試**：
+  - 頁面捲到底 → 驗 lazy-load 圖片載入
+  - 固定導覽列 → 捲動後是否 sticky
+  - 回到頂部按鈕 → 捲動後出現 → 點擊 → 回頂
+
+  記錄格式：
+  | 頁面 | 元素 | 互動類型 | 預期行為 | 實際結果 | 截圖 |
+
+  無反應、報錯、404、JS error → 標記 NG
+
+B1. 後台全欄位表單測試
+  依 field_map 逐模組操作後台 add.php：
+  - 每個表單欄位填入測試值（含邊界：空值/超長/特殊字元）
+  - file input：用 browser_evaluate 注入 File 物件或用 browser_fill_form
+  - 截圖已填好的完整表單 → 送出
+  - 截圖結果頁（成功/錯誤提示）
+  - list.php 確認新資料出現在列表中，截圖
+
+B2. 前台資料對應驗證（核心：後台新增 → 前台看得到）
+  後台新增一筆完整測試資料後，到前台驗證每個欄位：
+  - text 欄位：browser_snapshot 比對文字值是否與後台輸入一致
+  - param 欄位：
+    * 價格 → 前台顯示金額一致（含千分位/幣值符號格式）
+    * 狀態=上架 → 前台可見；狀態=下架 → 前台不可見
+    * 排序 → 前台列表順序符合
+    * 庫存=0 → 前台顯示「缺貨」或禁止加購
+  - file 欄位：browser_evaluate 檢查 <img> src 有值且圖片載入成功
+    （檢查 naturalWidth > 0，若為 0 = 圖片 broken → NG）
+  - media 欄位：browser_evaluate 檢查 <video>/<iframe> 元素存在且 src 有效
+  - relation 欄位：前台分類/標籤是否正確顯示
+
+B3. 參數變更傳播測試（後台改 → 前台即時反映）
+  依 reports/param_test_plan.md（邏輯稽核員產出）逐一測試：
+  1. 在後台 update.php 修改參數值（如改價格 100→200）
+  2. 到前台同一頁面重新載入
+  3. 驗證前台顯示已更新（截圖標記差異）
+  4. 若未更新 → NG（可能有快取問題）
+
+  必測參數（若模組有的話）：
+  - 價格/金額 → 前台售價
+  - 上架狀態 → 前台顯隱
+  - 排序值 → 前台列表順序
+  - 庫存數量 → 前台庫存顯示/可購買狀態
+  - 縮圖/主圖 → 前台圖片更新
+  - 標題/描述 → 前台文字更新
 
 [Phase C] 視覺比對（若無設計稿且無規格書則跳過）
-設計稿比對：對每頁截圖（Desktop 1440px），逐項比對：
+設計稿比對：對每頁截圖（Desktop），逐項比對：
   - 主色/輔色（偏差 > ±5% = NG）
   - 排版結構、Column 位置、間距
   - 按鈕/標籤/Badge 樣式
@@ -125,7 +227,7 @@ Phase G    產出 reports/{project}_校稿單_{日期}.md
 規格書截圖比對：截取規格書頁面 vs 實作頁面並排
 
 [Phase F] RWD 三斷點掃描
-375px、768px、1440px 各截圖，偵測溢出/截斷/重疊 → 標記 NG
+依專案規格書定義的斷點截圖，偵測溢出/截斷/重疊 → 標記 NG
 
 完成後將結果寫入 reports/uiux_qc.md。
 ```
@@ -143,18 +245,73 @@ Phase G    產出 reports/{project}_校稿單_{日期}.md
 - 規格書快照：{規格書來源 或 "無"}
 - 測試模組：{模組清單}
 
-[Phase A] PHP CRUD 邏輯整合測試
-針對每個模組：
-1. run_php_test → 新增、讀取、更新、刪除
-2. execute_sql → 驗 DB 狀態（SELECT only，禁止修改 DB）
-3. send_http_request → 驗 API 回傳值與 HTTP 狀態碼
-記錄 PASS/FAIL 與錯誤訊息
+[Phase A0] Schema-Driven 欄位映射（最優先）
+為每個模組建立完整欄位映射表，後續所有測試以此為依據：
+
+1. get_db_schema_batch → 讀取所有相關資料表的欄位定義
+2. read_files_batch → 讀取後台 add.php / update.php / list.php 原始碼
+3. 產出 reports/field_map.md，格式如下：
+
+  ## {模組名稱}（{table_name}）
+
+  | # | DB 欄位 | 類型 | 後台表單 | 後台列表 | 前台顯示 | 欄位分類 |
+  |---|--------|------|---------|---------|---------|---------|
+  | 1 | title  | VARCHAR(200) | ✅ add/update input | ✅ list 第2欄 | ✅ 商品標題 | text |
+  | 2 | price  | DECIMAL(10,2) | ✅ add/update input | ✅ list 第3欄 | ✅ 售價 | param |
+  | 3 | image  | VARCHAR(500) | ✅ file input | ❌ | ✅ 商品圖 | file |
+  | 4 | video_url | VARCHAR(500) | ✅ input | ❌ | ✅ 影片 | media |
+  | 5 | status | TINYINT | ✅ select | ✅ 狀態欄 | ⚠️ 影響顯隱 | param |
+  | 6 | sort_order | INT | ✅ input | ❌ | ⚠️ 影響排序 | param |
+
+  欄位分類規則：
+  - text：純文字/數值，後台輸入→前台顯示
+  - param：影響前台行為的參數（價格/狀態/排序/庫存/上架開關）
+  - file：圖片/文件上傳（VARCHAR 存路徑）
+  - media：影片/音訊（URL 或嵌入碼）
+  - relation：外鍵/關聯（如 category_id）
+  - system：系統欄位（add_time/edit_time/add_ip），不需測試
+
+  覆蓋率統計：
+  - DB 欄位總數（排除 system）：N
+  - 後台可操作欄位數：N
+  - 前台可見欄位數：N
+  - 未覆蓋欄位：列出
+
+[Phase A] 全欄位 CRUD 邏輯測試（依 field_map 逐欄位）
+針對 field_map 中每個非 system 欄位：
+
+1. 文字欄位（text）：
+   - send_http_request POST → 新增（含邊界值：空字串/最大長度/特殊字元）
+   - execute_sql → 驗 DB 值完全一致
+   - send_http_request POST → 更新為不同值
+   - execute_sql → 驗 DB 已更新
+
+2. 檔案欄位（file）：
+   - send_http_request POST multipart/form-data → 上傳測試圖片
+   - execute_sql → 驗 DB 存的路徑非空
+   - send_http_request GET → 驗該路徑可存取（HTTP 200）
+   - 重複上傳 → 驗舊檔是否被覆蓋或保留
+
+3. 媒體欄位（media）：
+   - send_http_request POST → 填入測試 URL
+   - execute_sql → 驗 DB 值
+   - （前台驗證交給 UI/UX 稽核員）
+
+4. 參數欄位（param）：
+   - 記錄到 reports/param_test_plan.md，Phase E-param 再驗前台效果
+
+5. 關聯欄位（relation）：
+   - execute_sql → 驗外鍵指向的目標存在
+   - 測試指向不存在 ID 時的行為
+
+記錄格式（逐欄位）：
+  | 模組 | 欄位 | 操作 | 輸入值 | DB 值 | 結果 |
 
 [Phase D] 規格書功能文字比對（若無規格書則跳過）
 直接讀取 spec_index.md（不開瀏覽器）：
 1. read_files_batch 讀取規格書快照
-2. 逐模組比對功能清單：欄位、按鈕、流程說明
-3. 找出規格有但網站無、行為不符、文字不一致
+2. 比對 field_map 中每個欄位：規格書有定義但 DB/後台缺少 → NG
+3. 找出行為不符、文字不一致
 所有偏差 = NG
 
 完成後將結果寫入 reports/logic_qc.md。
@@ -324,7 +481,7 @@ UI/UX 稽核員：
 
 ### 步驟 5（Phase G）：彙整產出網站校稿單
 
-讀取 `uiux_qc.md`、`logic_qc.md`、`test_matrix.md`、`e2e_results.md`，
+讀取 `field_map.md`、`uiux_qc.md`、`logic_qc.md`、`test_matrix.md`、`e2e_results.md`，
 合併輸出至 `reports/{project}_校稿單_{YYYY-MM-DD}.md`：
 
 ```markdown
@@ -338,11 +495,15 @@ UI/UX 稽核員：
 
 | 項目 | 負責人 | 結果 | NG 數量 |
 |------|--------|------|---------|
-| A 後台邏輯 | 邏輯稽核員 | PASS/FAIL | N |
-| B UI 行為 | UI/UX 稽核員 | PASS/FAIL | N |
+| A0 欄位映射覆蓋率 | 邏輯稽核員 | {N}% | — |
+| A 全欄位 CRUD | 邏輯稽核員 | PASS/FAIL | N |
+| B0 全站互動探索 | UI/UX 稽核員 | PASS/FAIL | N |
+| B1 後台表單 | UI/UX 稽核員 | PASS/FAIL | N |
+| B2 後台→前台對應 | UI/UX 稽核員 | PASS/FAIL | N |
+| B3 參數傳播 | UI/UX 稽核員 | PASS/FAIL | N |
 | C 視覺比對 | UI/UX 稽核員 | PASS/FAIL | N |
 | D 規格書比對 | 邏輯稽核員 | PASS/FAIL | N |
-| E 業務流程（N 個案例） | 雙操作員 | PASS/FAIL | N |
+| E 業務流程（N 案例） | 雙操作員 | PASS/FAIL | N |
 | F RWD | UI/UX 稽核員 | PASS/FAIL | N |
 | **總計** | — | **PASS/FAIL** | **N** |
 
@@ -350,15 +511,35 @@ UI/UX 稽核員：
 
 ---
 
-## Phase A — 後台邏輯
+## Phase A0 — 欄位映射覆蓋率
 
-| 模組 | 操作 | 結果 | 問題描述 |
-|------|------|------|---------|
+| 模組 | DB 欄位 | 後台可操作 | 前台可見 | 未覆蓋 | 覆蓋率 |
+|------|--------|-----------|---------|-------|--------|
 
-## Phase B — UI 行為
+## Phase A — 全欄位 CRUD
 
-| 模組 | 頁面 | 結果 | 問題描述 | 截圖路徑 |
-|------|------|------|---------|---------|
+| 模組 | 欄位 | 類型 | 新增 | 讀取 | 更新 | 刪除 | 結果 |
+|------|------|------|:----:|:----:|:----:|:----:|------|
+
+## Phase B0 — 全站互動探索
+
+| 頁面 | 互動元素數 | 點擊 | 表單 | 滑動 | Hover | POPUP | NG 數 |
+|------|----------|:----:|:----:|:----:|:-----:|:-----:|------:|
+
+## Phase B1 — 後台表單操作
+
+| 模組 | 欄位 | 輸入值 | 送出結果 | 截圖 |
+|------|------|-------|---------|------|
+
+## Phase B2 — 後台新增→前台對應
+
+| 模組 | DB 欄位 | 後台輸入值 | 前台顯示值 | 一致 | 截圖 |
+|------|--------|----------|----------|:----:|------|
+
+## Phase B3 — 參數傳播（後台改→前台驗）
+
+| 模組 | 參數 | 原值 | 新值 | 前台結果 | 結果 | 截圖 |
+|------|------|------|------|---------|------|------|
 
 ## Phase C — 視覺比對
 
@@ -384,8 +565,9 @@ UI/UX 稽核員：
 
 ## NG 修正清單
 
-- [ ] [A-01] 後台：（說明 + 檔案:行號）
-- [ ] [C-01] 前台：（說明 + 截圖路徑）
+- [ ] [A-01] 後台 CRUD：（模組/欄位 + 問題）
+- [ ] [B2-01] 前台對應：（模組/欄位 + 後台值 vs 前台值）
+- [ ] [B3-01] 參數傳播：（模組/參數 + 截圖路徑）
 - [ ] [E-T03] 遞棒：（流程 + DB 查詢結果）
 ```
 
@@ -409,9 +591,11 @@ UI/UX 稽核員：
 
 ## 輸出
 
+- `reports/field_map.md` — Schema-Driven 欄位映射表（Phase A0 產出，後續所有測試依據）
+- `reports/param_test_plan.md` — 參數傳播測試計畫（Phase A 產出，Phase B3 執行）
 - `reports/test_matrix.md` — 業務流程測試矩陣（使用者確認後執行）
-- `reports/uiux_qc.md` — UI/UX 稽核員原始報告
-- `reports/logic_qc.md` — 邏輯稽核員原始報告
+- `reports/uiux_qc.md` — UI/UX 稽核員原始報告（含全欄位前台驗證）
+- `reports/logic_qc.md` — 邏輯稽核員原始報告（含全欄位 CRUD 結果）
 - `reports/e2e_results.md` — 遞棒業務流程測試結果
 - `reports/{project}_校稿單_{YYYY-MM-DD}.md` — 最終彙整校稿單
 - `reports/screenshots/` — 所有 NG 截圖（UI/UX 稽核員產出）

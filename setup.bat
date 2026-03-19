@@ -60,12 +60,8 @@ echo.
 echo [5/5] 設定全域 Claude 行為規則...
 set GLOBAL_CLAUDE=%USERPROFILE%\.claude\CLAUDE.md
 if not exist "%USERPROFILE%\.claude" mkdir "%USERPROFILE%\.claude"
-if not exist "%GLOBAL_CLAUDE%" (
-  copy "%~dp0docs\global-claude.md" "%GLOBAL_CLAUDE%" > nul
-  echo OK: 已建立 %GLOBAL_CLAUDE%
-) else (
-  echo SKIP: %GLOBAL_CLAUDE% 已存在，請手動確認內容是否最新
-)
+copy "%~dp0docs\global-claude.md" "%GLOBAL_CLAUDE%" > nul
+echo OK: 已同步 %GLOBAL_CLAUDE%
 
 echo.
 echo 初始化完成！請重啟 Claude Code 讓設定生效。
