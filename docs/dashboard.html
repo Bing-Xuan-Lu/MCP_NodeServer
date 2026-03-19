@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW" data-theme="light">
 <head>
   <meta charset="UTF-8">
@@ -61,7 +61,7 @@
     </div>
     <div style="display:flex; align-items:center; gap:20px;">
       <button id="themeToggle" class="theme-toggle" title="切換主題">🌙</button>
-      <a href="https://github.com/Bing-Xuan-Lu/MCP_NodeServer" target="_blank" style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted); border-bottom:1px solid var(--border); padding-bottom:2px;">GITHUB</a>
+      <a href="https://github.com/Bing-Xuan-Lu/MCP_NodeServer" target="_blank" style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; border-bottom:1px solid var(--border); padding-bottom:2px;">GITHUB</a>
     </div>
   </nav>
 
@@ -430,19 +430,19 @@
       <!-- ═══════════════ Tab: Workflows ═══════════════ -->
       <div id="tab-workflows" class="tab-panel" style="display:none;">
 
-      <!-- Workflow Sub-tab Bar -->
-      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:14px 24px; display:flex; flex-direction:row; gap:8px; align-items:center; margin-top:24px;">
-        <button class="wf-tab-btn active" data-wf="php">PHP 開發流程</button>
-        <button class="wf-tab-btn" data-wf="mcp">MCP Server 自檢</button>
+      <!-- Workflow Sub-tab Bar (Segmented Control Style) -->
+      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:8px; display:flex; flex-direction:row; gap:4px; align-items:center; margin-top:24px; border-radius:16px; width:fit-content;">
+        <button class="wf-tab-btn active" data-wf="php" style="padding:10px 24px; border-radius:12px; font-size:14px;">PHP 開發流程</button>
+        <button class="wf-tab-btn" data-wf="mcp" style="padding:10px 24px; border-radius:12px; font-size:14px;">MCP Server 自檢</button>
       </section>
 
       <!-- ─── Workflow: PHP 開發流程 ─── -->
       <div id="wf-php" class="wf-panel" style="display:contents;">
 
       <!-- Title -->
-      <section class="bento-item span-12 notes-item" style="border-color: var(--purple);">
-        <h2 class="notes-title" style="color: var(--purple);">專案開發流程 · PHP Project Dev Pipeline</h2>
-        <p style="color:var(--muted); font-size:14px; margin-top:8px;">從空底板到上線的標準 7 步驟流程，依序執行各 Skill。點擊 Skill tag 可查用法。標示 <span style="color:#f59e0b; font-weight:700;">待補</span> 的階段尚無對應 Skill。</p>
+      <section class="bento-item span-12 notes-item" style="border-color: var(--purple); padding: 40px;">
+        <h2 class="notes-title" style="color: var(--purple); font-size: 32px; letter-spacing: -0.04em;">專案開發流程 · PHP Pipeline</h2>
+        <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">從規格分析到交付驗收的標準 7 步驟，依序執行以達成高品質交付。</p>
       </section>
 
       <!-- Vertical Timeline -->
@@ -455,20 +455,20 @@
             <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① 規格分析</div>
-                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SPEC ANALYSIS</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">SPEC ANALYSIS</div>
                 <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">深入解析業務邏輯與介面需求。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 建立規格書快照</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">1. 建立規格書快照</span>
                   <a class="tag" href="javascript:void(0)">/axshare_spec_index</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">2. 規格差異比對</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">2. 規格差異比對</span>
                   <a class="tag" href="javascript:void(0)">/axshare_diff</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">3. 邏輯追蹤與分析</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">3. 邏輯追蹤與分析</span>
                   <a class="tag" href="javascript:void(0)">/logic_trace</a>
                 </div>
               </div>
@@ -481,12 +481,12 @@
             <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 時程規劃</div>
-                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SPRINT PLANNING</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">SPRINT PLANNING</div>
                 <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">拆解任務清單並建立開發時程。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 制定開發時程</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">1. 制定開發時程</span>
                   <a class="tag" href="javascript:void(0)">/sprint_plan</a>
                 </div>
               </div>
@@ -499,16 +499,16 @@
             <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">③ DB 設計</div>
-                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">DB DESIGN</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">DB DESIGN</div>
                 <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">規劃關聯架構與數據索引優化。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 設計資料庫結構</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">1. 設計資料庫結構</span>
                   <a class="tag" href="javascript:void(0)">/db_schema_designer</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">2. Schema 遷移</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">2. Schema 遷移</span>
                   <a class="tag" href="javascript:void(0)">/db_migration</a>
                 </div>
               </div>
@@ -521,20 +521,20 @@
             <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">④ 後台開發</div>
-                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">BACKEND DEV</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">BACKEND DEV</div>
                 <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">生成 CRUD 模組與實作核心 API。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 新增 CRUD 模組</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">1. 新增 CRUD 模組</span>
                   <a class="tag" href="javascript:void(0)">/php_crud_generator</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">2. 逐任務派遣開發</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">2. 逐任務派遣開發</span>
                   <a class="tag" href="javascript:void(0)">/sadd</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">3. 建立工作流程安全點</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">3. 建立工作流程安全點</span>
                   <a class="tag" href="javascript:void(0)">/checkpoint</a>
                 </div>
               </div>
@@ -547,7 +547,7 @@
             <div class="timeline-content" style="border-left: 4px solid #f59e0b;">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:#f59e0b; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⑤ 前台開發</div>
-                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">FRONTEND DEV</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">FRONTEND DEV</div>
                 <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">刻劃互動介面與資料串接 (待補)。</p>
               </div>
               <div class="timeline-actions">
@@ -564,20 +564,20 @@
             <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⑥ 測試</div>
-                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">TESTING</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">TESTING</div>
                 <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">執行自動化測試與邏輯驗證。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">A. 後台邏輯</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">A. 後台邏輯</span>
                   <a class="tag" href="javascript:void(0)">/php_crud_test</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">B. UI 行為</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">B. UI 行為</span>
                   <a class="tag" href="javascript:void(0)">/playwright_ui_test</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">C. RWD</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">C. RWD</span>
                   <a class="tag" href="javascript:void(0)">/rwd_scan</a>
                 </div>
                 <div class="timeline-step">
@@ -585,7 +585,7 @@
                   <a class="tag" href="javascript:void(0)" style="border-color:var(--purple);">/project_qc</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">提交前驗證</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">提交前驗證</span>
                   <a class="tag" href="javascript:void(0)">/verify</a>
                 </div>
               </div>
@@ -598,24 +598,24 @@
             <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⑦ 驗收</div>
-                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">ACCEPTANCE</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">ACCEPTANCE</div>
                 <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">最終規格比對與設計複驗。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 複驗校稿單</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">1. 複驗校稿單</span>
                   <a class="tag" href="javascript:void(0)" style="border-color:var(--green);">/project_qc re-check</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">2. 規格最終比對</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">2. 規格最終比對</span>
                   <a class="tag" href="javascript:void(0)">/axshare_diff</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">3. 設計稿比對</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">3. 設計稿比對</span>
                   <a class="tag" href="javascript:void(0)">/design_diff</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">4. 截圖對照</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">4. 截圖對照</span>
                   <a class="tag" href="javascript:void(0)">/spec_screenshot_diff</a>
                 </div>
               </div>
@@ -646,15 +646,15 @@
             <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① 伺服器啟動</div>
-                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SERVER STARTUP</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">SERVER STARTUP</div>
                 <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">確認 index.js 正常啟動，無 module not found 錯誤。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">node index.js → 無錯誤輸出</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">node index.js → 無錯誤輸出</span>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">Claude Code 重啟後 MCP 連線恢復</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">Claude Code 重啟後 MCP 連線恢復</span>
                 </div>
               </div>
             </div>
@@ -666,15 +666,15 @@
             <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 工具完整性</div>
-                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">TOOLS INTEGRITY</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">TOOLS INTEGRITY</div>
                 <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">確認所有 tools/*.js 模組均已載入，工具數量與 CLAUDE.md 一致。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">12 個模組全部無報錯</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">12 個模組全部無報錯</span>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">工具清單核對 CLAUDE.md tools/ 目錄</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">工具清單核對 CLAUDE.md tools/ 目錄</span>
                 </div>
               </div>
             </div>
@@ -686,18 +686,18 @@
             <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">③ 路徑與連線</div>
-                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">PATH & CONNECTIONS</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">PATH & CONNECTIONS</div>
                 <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">確認 basePath 可存取，按需開放額外路徑並驗證 DB 連線。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">basePath D:\Project\ 可讀寫</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">basePath D:\Project\ 可讀寫</span>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">DB：load_db_connection → set_database 測試</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">DB：load_db_connection → set_database 測試</span>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">額外路徑：grant_path_access（需時再開）</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">額外路徑：grant_path_access（需時再開）</span>
                 </div>
               </div>
             </div>
@@ -709,16 +709,16 @@
             <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">④ Skills 同步</div>
-                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SKILLS SYNC</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">SKILLS SYNC</div>
                 <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">確認 ~/.claude/commands/ 與 Skills/commands/ 同步，數量未超出 60 個上限。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 審查超載或重疊</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">1. 審查超載或重疊</span>
                   <a class="tag" href="javascript:void(0)">/skill_audit</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">2. SKILL_INDEX.md 與 commands/ 比對一致</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">2. SKILL_INDEX.md 與 commands/ 比對一致</span>
                 </div>
               </div>
             </div>
@@ -730,16 +730,16 @@
             <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⑤ Dashboard 核對</div>
-                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">DASHBOARD AUDIT</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">DASHBOARD AUDIT</div>
                 <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">確認 tag 數、dept-count、section-total、JS SKILLS 物件均與實際 Skill 數量吻合。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 工具設置評分報告</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">1. 工具設置評分報告</span>
                   <a class="tag" href="javascript:void(0)">/harness_audit</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">2. dashboard.html tag/count/JS 人工核對清單</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">2. dashboard.html tag/count/JS 人工核對清單</span>
                 </div>
               </div>
             </div>

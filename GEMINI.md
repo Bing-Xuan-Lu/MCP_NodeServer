@@ -6,6 +6,8 @@
 - **憑證保護**：絕對禁止將 API Key、資料庫密碼、SFTP 私鑰或任何敏感資訊記錄於 Log、Commit 或輸出到對話中。
 - **環境隔離**：區分 `D:\MCP_Server` (本專案路徑) 與 `D:\Project\` (受控專案路徑)。
 - **操作確認**：修改現有功能或執行 DDL 前，必須先說明影響範圍。
+- **UI 優化規範**：執行 `ui-ux-pro-max` 優化時，**嚴禁刪除或簡化 HTML 中的資料內容與流程邏輯**。優化應僅限於修改 `style.css` 變數、字體與視覺裝飾。若需重構 HTML 結構，必須先取得使用者明確同意。
+- **配色偏好**：優化時應優先詢問使用者配色意圖，不可強制套用 AI 預設配色。
 - **隱私脫敏**：**禁止在 Skill MD 檔中寫入客戶實際資訊**。範例一律使用 `{ProjectFolder}`, `{TableName}`, `module_a`, `example.com`, `localhost` 等通用佔位符。（`reports/` 目錄與 `Skills/commands/_internal/` 下的檔案不受此限）
 
 ## 📂 專案架構與目錄結構 (Directory Structure)
@@ -30,6 +32,10 @@ MCP_NodeServer/
 - **PHP 開發**：`php_dev/` (CRUD 生成、路徑修正)；**程式移植**：`migration/`。
 - **資料庫**：`db_planning/` (Schema 設計、Migration)。
 - **自動化測試**：`testing/` (Playwright UI 測試、邏輯測試)；**規格分析**：`spec/`。
+- **UI/UX 設計**：`ui-ux-pro-max` (位於 `.claude/skills/ui-ux-pro-max/`)。
+    - **用途**：包含 67 種風格、96 種配色與 57 種字體組合的專業設計決策庫。
+    - **核心指令**：`python MCP_NodeServer/.claude/skills/ui-ux-pro-max/scripts/search.py "關鍵字" --design-system`。
+    - **必做規範**：進行任何 Dashboard、Landing Page 或 UI 組件開發前，**必須**先以此工具產生設計規範。
 - **運維部**：`deploy/` (SFTP)、`docker/` (Compose/Relocate)。
 - **流程管理**：`dev_workflow/` (DDD/TDD)、`claude_ops/` (Skill 審計與管理)。
 - **工具與內容**：`tooling/` (系統工具)、`content/` (內容擷取)、`life/` (自動化)。
@@ -123,6 +129,7 @@ MCP_NodeServer/
 - **Git 操作流程**：
     - 任何修改前，應先執行 `git_status` 確認當前分支狀態。
     - 修改後、Commit 前，必須執行 `git_diff` 核對改動內容。
+    - **重大更動前**：涉及大規模檔案替換或 UI 重構前，必須先確認 git commit 狀態，確保隨時可還原。
     - 頻繁改動或切換任務時，善用 `git_stash_ops` 保存臨時狀態。
 - **語言偏好**：產出的註解、Commit 訊息、報告應優先使用 **繁體中文**。
 
