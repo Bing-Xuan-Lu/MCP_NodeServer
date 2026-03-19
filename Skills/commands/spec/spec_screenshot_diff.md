@@ -2,6 +2,7 @@
 name: spec_screenshot_diff
 description: |
   規格書截圖比對：擷取 AxShare 規格書頁面與實際網站的截圖，並排呈現供人工比對，列出觀察到的差異。
+  人工目視截圖比對用此；自動功能差異分析改用 /axshare_diff。
   當使用者說「截圖比對」「規格書比對」「spec diff」「畫面對照」「和規格書一樣嗎」時使用。
 ---
 

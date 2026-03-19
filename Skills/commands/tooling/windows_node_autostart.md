@@ -22,6 +22,13 @@ description: |
 - `<XML_PATH>` — Task Scheduler XML 路徑（例：`D:\Develop\project\scripts\service-task.xml`）
 - `<PS1_PATH>` — PS1 註冊腳本路徑（例：`D:\Develop\project\scripts\register-service-task.ps1`）
 
+## 可用工具
+
+| 工具 | 用途 |
+|------|------|
+| `Write` / `create_file` | 建立 VBS、XML、PS1 腳本檔案 |
+| `read_file` | 讀取現有腳本確認內容 |
+
 ## 步驟
 
 ### 1. 建立 VBS 單例包裝腳本（`<VBS_PATH>`）
