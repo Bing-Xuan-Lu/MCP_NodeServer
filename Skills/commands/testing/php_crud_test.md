@@ -2,6 +2,7 @@
 name: php_crud_test
 description: |
   對 PHP 模組進行完整整合測試。涵蓋：CRUD 操作驗證、資料寫入驗證、檔案上傳/下載測試、測試報告產出。
+  資料層 CRUD 驗證用此；UI 操作與 Xdebug 除錯改用 /playwright_ui_test。
   當使用者說「測試」「跑測試」「test」，或完成 PHP 模組開發後需要驗證功能時使用。
 ---
 
@@ -26,7 +27,7 @@ $ARGUMENTS
 若使用者未提供以下資訊，請主動詢問：
 
 | 參數 | 說明 | 範例 |
-|------|------|------|
+| --- | --- | --- |
 | 專案資料夾 | 專案根目錄資料夾名稱 | `{ProjectFolder}` |
 | PHP 資料夾 | PHP 專案資料夾名稱 | `{PhpFolder}` |
 | 測試模組 | 要測試的模組名稱 (可多個，逗號分隔) | `module_a, module_b` |
@@ -39,6 +40,24 @@ $ARGUMENTS
 - 錯誤：`list_files("{PHP資料夾}/adminControl/{模組}")`
 
 ## 執行步驟
+
+### 步驟 0：定義測試契約（Schema-Driven）
+
+**開始測試前先定義「正確輸出是什麼」，讓後續所有驗證有明確基準，而非憑「看起來有回傳就算」。**
+
+用 `read_files_batch` 讀取模組的 add.php / list.php / update.php / del.php，輸出各端點的預期輸出定義：
+
+| 端點 | 操作 | 成功 HTTP | 成功 Response 結構 | DB 驗證欄位 |
+| --- | --- | --- | --- | --- |
+| add.php | POST | 200/302 | success:true + 新 id，或 redirect | 指定欄位非空 |
+| list.php | GET | 200 | 陣列含 id/title 等欄位，或 HTML 含列表行 | — |
+| update.php | POST | 200/302 | success:true，或 redirect | 欄位值已更新 |
+| del.php | POST | 200/302 | success:true，或 redirect | 該筆記錄不存在 |
+
+> 後續每個測試結論必須對照此契約判斷。
+> 確認契約後繼續步驟 1。
+
+---
 
 1. **環境確認**：`set_database` 設定連線，用 `list_files_batch` 一次確認所有模組目錄存在，用 `get_db_schema_batch` 一次取回所有相關表結構
    - ⛔ 若有模組目錄不存在：**立即停止**，列出缺失模組後請使用者確認路徑，不繼續後續步驟

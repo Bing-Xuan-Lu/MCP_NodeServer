@@ -23,6 +23,18 @@ $ARGUMENTS
 
 ---
 
+## 可用工具
+
+此 Skill 主要透過 Bash 執行 `docker compose` 指令，以下 MCP 工具在特定情境輔助使用：
+
+| 工具 | 用途 |
+|------|------|
+| `tail_log` | 查看容器 PHP error log |
+| `read_file` | 讀取 docker-compose.yml 確認設定內容 |
+| `ssh_exec` | 在遠端主機執行 docker 指令 |
+
+---
+
 ## 操作選單
 
 根據使用者描述，對應到以下操作類型：

@@ -6,6 +6,18 @@
 
 ---
 
+## 可用工具
+
+| 工具 | 用途 |
+|------|------|
+| `Bash` | 執行 grep/find/ls 掃描 Skills 目錄與 commands/ |
+| `Read` | 讀取 Skill MD 原始內容 |
+| `Edit` / `apply_diff` | 修正標題格式或插入工具章節 |
+| `run_python_script` | 批次修正格式異常（4 個以上時） |
+| `create_file` | 建立合併後的新 Skill 檔案 |
+
+---
+
 ## 執行步驟
 
 ### 步驟 1：掃描所有已部署技能

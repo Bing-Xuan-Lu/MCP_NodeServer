@@ -24,6 +24,22 @@
     }
     .tab-btn:hover { color: var(--text); }
     .tab-btn.active { color: var(--text); border-bottom-color: var(--purple); }
+    .wf-tab-btn {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color .15s, background .15s, border-color .15s;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .wf-tab-btn:hover { color: var(--text); border-color: var(--text); }
+    .wf-tab-btn.active { background: var(--purple); color: white; border-color: var(--purple); }
   </style>
   <script>
     const savedTheme = localStorage.getItem('theme') || 'light';
@@ -220,11 +236,10 @@
       <!-- PHP 開發部 -->
       <section class="bento-item span-6 dept-card" id="skills">
         <div class="dept-name">PHP 開發部</div>
-        <div class="dept-desc">CRUD 產生、語法升級、路徑修正</div>
+        <div class="dept-desc">CRUD 產生、語法升級</div>
         <div class="tag-container">
           <a class="tag" href="javascript:void(0)">/php_crud_generator</a>
           <a class="tag" href="javascript:void(0)">/php_upgrade</a>
-          <a class="tag" href="javascript:void(0)">/php_path_fix</a>
         </div>
       </section>
 
@@ -249,6 +264,7 @@
           <a class="tag" href="javascript:void(0)">/web_performance</a>
           <a class="tag" href="javascript:void(0)">/rwd_scan</a>
           <a class="tag" href="javascript:void(0)">/project_qc</a>
+          <a class="tag" href="javascript:void(0)">/frontend_qc</a>
           <a class="tag" href="javascript:void(0)">/gemini_playwright_setup</a>
         </div>
       </section>
@@ -295,6 +311,7 @@
           <a class="tag" href="javascript:void(0)">/clean_arch</a>
           <a class="tag" href="javascript:void(0)">/directory_reorganize</a>
           <a class="tag" href="javascript:void(0)">/checkpoint</a>
+          <a class="tag" href="javascript:void(0)">/debug_session</a>
         </div>
       </section>
 
@@ -363,7 +380,6 @@
         <div class="dept-name">程式移植與規格分析部</div>
         <div class="dept-desc">.NET 轉 PHP、AxShare 規格書比對、全邏輯分析</div>
         <div class="tag-container">
-          <a class="tag" href="javascript:void(0)">/dotnet_to_php</a>
           <a class="tag" href="javascript:void(0)">/axshare_spec_index</a>
           <a class="tag" href="javascript:void(0)">/axshare_diff</a>
           <a class="tag" href="javascript:void(0)">/logic_trace</a>
@@ -414,8 +430,17 @@
       <!-- ═══════════════ Tab: Workflows ═══════════════ -->
       <div id="tab-workflows" class="tab-panel" style="display:none;">
 
+      <!-- Workflow Sub-tab Bar -->
+      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:14px 24px; display:flex; flex-direction:row; gap:8px; align-items:center; margin-top:24px;">
+        <button class="wf-tab-btn active" data-wf="php">PHP 開發流程</button>
+        <button class="wf-tab-btn" data-wf="mcp">MCP Server 自檢</button>
+      </section>
+
+      <!-- ─── Workflow: PHP 開發流程 ─── -->
+      <div id="wf-php" class="wf-panel" style="display:contents;">
+
       <!-- Title -->
-      <section class="bento-item span-12 notes-item" style="border-color: var(--purple); margin-top: 24px;">
+      <section class="bento-item span-12 notes-item" style="border-color: var(--purple);">
         <h2 class="notes-title" style="color: var(--purple);">專案開發流程 · PHP Project Dev Pipeline</h2>
         <p style="color:var(--muted); font-size:14px; margin-top:8px;">從空底板到上線的標準 7 步驟流程，依序執行各 Skill。點擊 Skill tag 可查用法。標示 <span style="color:#f59e0b; font-weight:700;">待補</span> 的階段尚無對應 Skill。</p>
       </section>
@@ -600,11 +625,130 @@
         </ul>
       </section>
 
-      <!-- Future Workflow Placeholder -->
-      <section class="bento-item span-12 notes-item" style="border-color: #f59e0b; margin-top: 24px;">
-        <h2 class="notes-title" style="color: #f59e0b;">規劃中工作流程 · Planned Workflows</h2>
-        <p style="color:var(--muted); font-size:14px; margin-top:8px;">日後可在此新增更多垂直領域的標準流程（如：API 整合、資料遷移、安全稽核、維護上線等）。</p>
+      </div><!-- /wf-php -->
+
+      <!-- ─── Workflow: MCP Server 自檢流程 ─── -->
+      <div id="wf-mcp" class="wf-panel" style="display:none;">
+
+      <!-- Title -->
+      <section class="bento-item span-12 notes-item" style="border-color: var(--cyan);">
+        <h2 class="notes-title" style="color: var(--cyan);">MCP Server 自檢流程 · MCP Health Check Pipeline</h2>
+        <p style="color:var(--muted); font-size:14px; margin-top:8px;">每次重啟或更新 MCP Server 後執行，確保工具完整、路徑可達、Skills 已同步、Dashboard 一致。</p>
       </section>
+
+      <!-- Vertical Timeline -->
+      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
+        <ul class="timeline">
+
+          <!-- ① 伺服器啟動確認 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① 伺服器啟動</div>
+                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SERVER STARTUP</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">確認 index.js 正常啟動，無 module not found 錯誤。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">node index.js → 無錯誤輸出</span>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">Claude Code 重啟後 MCP 連線恢復</span>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- ② 工具模組完整性 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 工具完整性</div>
+                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">TOOLS INTEGRITY</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">確認所有 tools/*.js 模組均已載入，工具數量與 CLAUDE.md 一致。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">12 個模組全部無報錯</span>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">工具清單核對 CLAUDE.md tools/ 目錄</span>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- ③ 路徑與連線 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">③ 路徑與連線</div>
+                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">PATH & CONNECTIONS</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">確認 basePath 可存取，按需開放額外路徑並驗證 DB 連線。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">basePath D:\Project\ 可讀寫</span>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">DB：load_db_connection → set_database 測試</span>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">額外路徑：grant_path_access（需時再開）</span>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- ④ Skills 同步確認 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">④ Skills 同步</div>
+                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SKILLS SYNC</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">確認 ~/.claude/commands/ 與 Skills/commands/ 同步，數量未超出 60 個上限。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 審查超載或重疊</span>
+                  <a class="tag" href="javascript:void(0)">/skill_audit</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">2. SKILL_INDEX.md 與 commands/ 比對一致</span>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- ⑤ Dashboard 一致性 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⑤ Dashboard 核對</div>
+                <div style="font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em;">DASHBOARD AUDIT</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">確認 tag 數、dept-count、section-total、JS SKILLS 物件均與實際 Skill 數量吻合。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">1. 工具設置評分報告</span>
+                  <a class="tag" href="javascript:void(0)">/harness_audit</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--muted);">2. dashboard.html tag/count/JS 人工核對清單</span>
+                </div>
+              </div>
+            </div>
+          </li>
+
+        </ul>
+      </section>
+
+      </div><!-- /wf-mcp -->
 
       </div><!-- /tab-workflows -->
 
@@ -692,6 +836,16 @@
         btn.classList.add('active');
         const panel = document.getElementById('tab-' + btn.dataset.tab);
         panel.style.display = 'contents';
+      });
+    });
+
+    // Workflow sub-tab switching
+    document.querySelectorAll('.wf-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.wf-tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.wf-panel').forEach(p => p.style.display = 'none');
+        btn.classList.add('active');
+        document.getElementById('wf-' + btn.dataset.wf).style.display = 'contents';
       });
     });
 

@@ -1,6 +1,6 @@
-# /verify — 提交前六合一驗證並產出 PASS/FAIL 報告
+# /verify — 提交前七合一驗證並產出 PASS/FAIL 報告
 
-你是提交前守門員，依序執行語法檢查、測試、Lint、git 狀態六項驗證，產出一份可閱讀的 PASS/FAIL 報告。
+你是提交前守門員，依序執行語法檢查、測試、Lint、git 狀態、AI 品質稽核七項驗證，產出一份可閱讀的 PASS/FAIL 報告。
 
 ---
 
@@ -9,9 +9,21 @@
 $ARGUMENTS
 
 - `quick` — 只跑語法 + git status
-- `full`（預設）— 全部六項
-- `pre-commit` — 語法 + 測試 + console.log 稽核 + git status
+- `full`（預設）— 全部七項（含 AI 品質稽核）
+- `pre-commit` — 語法 + 測試 + console.log 稽核 + AI 品質稽核 + git status
 - `pre-pr` — 全部 + 確認無 `*_internal*` 被 stage
+
+---
+
+## 可用工具
+
+| 工具 | 用途 |
+|------|------|
+| `run_php_script` | 執行 `php -l` 語法檢查（或透過 Docker `docker exec ... php -l`） |
+| `run_php_test` | 執行 PHPUnit 測試套件 |
+| `list_files_batch` | 掃描根目錄偵測專案類型（PHP/Node/混合） |
+| `read_files_batch` | 批次讀取 `package.json`、`composer.json` 確認測試設定 |
+| `tail_log` | 讀取 PHP error log 輔助診斷失敗原因 |
 
 ---
 
@@ -86,6 +98,38 @@ git_diff → 確認最終變更摘要
 確認 node_modules / vendor 未被 stage
 ```
 
+**⑦ AI 品質稽核**（`full` / `pre-commit` 模式）
+
+掃描變更檔案中 AI 生成程式碼的三類隱性問題：
+
+#### A. 幻覺偵測（呼叫不存在的定義）
+
+```
+Grep pattern="function \w+\(" 在變更的 PHP/JS 檔案中，收集所有被呼叫的函數名稱
+→ 確認每個呼叫在專案中有對應定義（同檔 or require/import）
+→ 只在 git diff 呼叫端出現、但整個專案中找不到定義 → 標記 [HALLUCINATION?]
+
+同理掃描 new ClassName() → 確認 class 在 use/require 中有引入
+```
+
+#### B. 硬編碼佔位符偵測
+
+```
+Grep pattern="password.*=.*['\"](?!.*\$)|TODO|FIXME|placeholder|example@|test123|admin123"
+→ 排除 .env、config 範本、test 目錄
+→ 在業務邏輯檔案中出現 → 標記 [HARDCODE?]
+```
+
+#### C. 語意漂移偵測（同名函數定義不一致）
+
+```
+Grep pattern="function {changed_function_name}" 全域搜尋
+→ 若同名函數在多個檔案出現，比對參數數量是否一致
+→ 不一致 → 標記 [DRIFT?]
+```
+
+> 注意：以上結果需人工確認，AI 無法保證判斷正確——標記 [?] 表示「值得人工看一眼」，不等同 FAIL。
+
 ---
 
 ### 步驟 3：產出報告
@@ -102,6 +146,7 @@ VERIFICATION: [PASS / FAIL]
 ④ 偵錯輸出： [OK / N 個 console.log/var_dump]
 ⑤ Git：      [staged: N / unstaged: N / untracked: N]
 ⑥ 敏感檔：  [OK / ⚠️ {filename} 不應被 stage]
+⑦ AI 品質： [OK / ⚠️ HALLUCINATION? N 處 / HARDCODE? N 處 / DRIFT? N 處]
 
 ============================
 可提交：[YES / NO]
