@@ -9,9 +9,15 @@ Node.js MCP Server，提供 Claude Code 工具能力與 Agent Skills。
 
 ```text
 MCP_NodeServer/
-├── index.js             ← MCP Server 主程式（工具路由 + Skills 路由）
+├── index.js             ← MCP Server 主程式 v5.1.0（工具路由 + Skills 路由）
 ├── config.js            ← resolveSecurePath()，basePath = D:\Project\
+├── setup.ps1            ← 環境初始化與 PowerShell 工具鏈配置
 ├── .mcp.json            ← MCP Server 設定（Claude Code 自動讀取）
+├── memory/              ← 長期記憶與知識庫 (MEMORY.md)
+│   ├── feedback/        ← 操作回饋與最佳實踐 (playwright, qc, tooling...)
+│   ├── project/         ← 專案特定知識與部署細節
+│   ├── reference/       ← 靜態參考資料與外部文件連結
+│   └── user/            ← 使用者偏好與設定
 ├── tools/               ← MCP 工具模組（各自匯出 definitions + handle）
 │   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, read_files_batch, list_files_batch
 │   ├── php.js           ← run_php_script, run_php_test, send_http_request, tail_log, send_http_requests_batch
