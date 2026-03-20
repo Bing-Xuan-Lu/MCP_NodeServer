@@ -186,7 +186,7 @@
             <li>書籤工具預設路徑：<code>C:\Users\YourName\AppData\Local\Google\Chrome\User Data\Default</code></li>
           </ul>
           <ul style="list-style:none;">
-            <li>Windows 執行 <code>setup.bat</code> 若被攔截請用管理員權限</li>
+            <li>Windows 執行 <code>.\setup.ps1</code>，若被攔截請先執行 <code>Set-ExecutionPolicy RemoteSigned -Scope CurrentUser</code></li>
             <li>工作目錄預設 <code>D:\Project</code>，若無 D 槽請修改 <code>config.js</code></li>
             <li>建議安裝 MCP Inspector 擴充功能除錯</li>
           </ul>
@@ -199,7 +199,7 @@
         <p style="font-size:14px; color:var(--muted); margin-bottom:24px; line-height:1.6;">
           以下元件皆為選用，不啟用時其他工具完全不受影響。需先確認 Docker Desktop 執行中。
         </p>
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap:16px;">
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap:16px;">
 
           <!-- Python Docker -->
           <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:20px;">
@@ -521,7 +521,7 @@
       <div id="tab-workflows" class="tab-panel" style="display:none;">
 
       <!-- Workflow Sub-tab Bar (Segmented Control Style) -->
-      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:8px; display:flex; flex-direction:row; gap:4px; align-items:center; margin-top:24px; border-radius:16px; width:fit-content;">
+      <section class="bento-item span-12 wf-tab-bar" style="background:var(--surface); border:1px solid var(--border); padding:8px; display:flex; flex-direction:row; gap:4px; align-items:center; margin-top:24px; border-radius:16px;">
         <button class="wf-tab-btn active" data-wf="php" style="padding:10px 24px; border-radius:12px; font-size:14px;">PHP 開發流程</button>
         <button class="wf-tab-btn" data-wf="deploy" style="padding:10px 24px; border-radius:12px; font-size:14px;">部署流程</button>
         <button class="wf-tab-btn" data-wf="mcp" style="padding:10px 24px; border-radius:12px; font-size:14px;">MCP Server 自檢</button>

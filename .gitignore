@@ -26,3 +26,6 @@ Skills/references/
 
 # Memory 機敏資料（只留本機，不進版控）
 memory/_private/
+
+# Playwright 截圖（本機測試用，不進版控）
+/screenshot/

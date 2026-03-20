@@ -33,7 +33,7 @@ RAG 索引過程會在 CPU 執行 Embedding 模型（paraphrase-multilingual-Min
 ```bash
 git clone https://github.com/Bing-Xuan-Lu/MCP_NodeServer.git
 cd MCP_NodeServer
-setup.bat          # 一鍵初始化（npm install + Python 容器 + 部署 Skills）
+.\setup.ps1        # 一鍵初始化（npm install + Python 容器 + 部署 Skills）
 ```
 
 設定 `~/.claude/mcp_settings.json` 或專案根目錄的 `.mcp.json`：
@@ -102,7 +102,7 @@ MCP_NodeServer/
 ├── python/              ← Python Docker 環境（python_runner 容器）
 ├── chromadb/            ← ChromaDB Docker 環境（RAG 選用）
 ├── docs/                ← 技能儀表板 (dashboard.html / style.css / script.js)
-├── setup.bat            ← 一鍵環境初始化
+├── setup.ps1            ← 一鍵環境初始化
 └── deploy-commands.bat  ← 部署所有 Skills 到 ~/.claude/commands/
 ```
 

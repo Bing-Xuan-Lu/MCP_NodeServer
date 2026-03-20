@@ -312,3 +312,81 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
   min-width: 260px;
   flex: 1;
 }
+
+/* ── Responsive ── */
+
+/* Tablet ≤ 900px */
+@media (max-width: 900px) {
+  .span-8, .span-6, .span-4 { grid-column: span 12; }
+  .bento-grid { gap: 12px; }
+}
+
+/* Mobile ≤ 600px */
+@media (max-width: 600px) {
+  .container { padding: 96px 12px 24px; }
+
+  /* code 區塊：長指令可橫滑，不截斷 */
+  code {
+    white-space: pre;
+    overflow-x: auto;
+    max-width: 100%;
+    display: block;
+  }
+  /* inline code 維持 inline */
+  li code, p code { display: inline; white-space: normal; }
+
+  /* Navbar: Row1 = brand + moon，Row2 = tabs 橫滑 */
+  .navbar {
+    top: 8px; left: 8px; right: 8px;
+    height: auto;
+    padding: 10px 14px 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 0;
+    border-radius: 20px;
+  }
+  /* brand+tabs wrapper: wrap 讓 tabs 換到下一行 */
+  .navbar > div:first-child {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+  }
+  /* tabs 佔滿第二行 + 可橫滑 */
+  .navbar > div:first-child > div:last-child {
+    flex: 0 0 100%;
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 2px;
+  }
+  .navbar > div:first-child > div:last-child::-webkit-scrollbar { display: none; }
+  /* moon+github: 壓縮到上排右側 */
+  .navbar > div:last-child { flex: 0 0 auto; gap: 10px; }
+  /* 隱藏 GITHUB 文字，只保留 moon icon */
+  .navbar a { display: none; }
+  .navbar-brand { font-size: 14px; }
+  .tab-btn { font-size: 11px; padding: 5px 10px; white-space: nowrap; flex-shrink: 0; }
+
+  /* Bento — !important 覆蓋 inline style */
+  .bento-item { padding: 20px !important; border-radius: 16px; }
+
+  /* Workflow sub-tab bar：橫滑不溢出 */
+  .wf-tab-bar { overflow-x: auto !important; overflow-y: visible; scrollbar-width: none; flex-wrap: nowrap; width: 100% !important; }
+  .wf-tab-bar::-webkit-scrollbar { display: none; }
+  .wf-tab-btn { flex-shrink: 0; }
+
+  /* Hero */
+  .hero-item h1 { font-size: 36px; }
+  .hero-item p  { font-size: 15px; }
+
+  /* Skill side panel: full width on mobile */
+  .skill-panel { width: 100%; padding: 24px; }
+
+  /* Timeline */
+  .timeline { padding: 16px 0 16px 24px; }
+  .timeline-content { padding: 16px !important; flex-direction: column; gap: 12px; }
+  .timeline-header  { flex: 0 0 100% !important; }
+  .timeline-actions { flex: 0 0 100% !important; gap: 10px; }
+  .timeline-step { min-width: unset; padding: 14px 16px; }
+}
