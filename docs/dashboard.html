@@ -193,6 +193,91 @@
         </div>
       </section>
 
+      <!-- ── Docker 選用元件 (Span 12) ── -->
+      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border);">
+        <h2 style="font-size:20px; font-weight:700; text-transform:uppercase; color:var(--text); margin-bottom:8px; letter-spacing:0.05em;">🐳 Docker 選用元件</h2>
+        <p style="font-size:14px; color:var(--muted); margin-bottom:24px; line-height:1.6;">
+          以下元件皆為選用，不啟用時其他工具完全不受影響。需先確認 Docker Desktop 執行中。
+        </p>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap:16px;">
+
+          <!-- Python Docker -->
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:20px;">
+            <div style="font-size:16px; font-weight:700; color:var(--cyan); margin-bottom:12px;">🐍 Python 執行環境</div>
+            <div style="font-size:13px; color:var(--muted); line-height:1.8; margin-bottom:12px;">
+              提供 <code>run_python_script</code> 工具，在 Docker 容器中執行 Python 腳本。
+            </div>
+            <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:6px;">啟動（一次性）：</div>
+            <code style="display:block; font-family:var(--font-mono); font-size:13px; color:var(--cyan); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">cd python && docker compose up -d</code>
+            <div style="font-size:12px; color:var(--muted); margin-top:10px;">
+              容器名稱：<code>python_runner</code>（Python 3.12-slim）<br>
+              設為 <code>restart: unless-stopped</code>，Docker 執行中即自動常駐。<br>
+              安裝額外套件：<code style="cursor:pointer;" onclick="navigator.clipboard.writeText('docker exec python_runner pip install 套件名稱')">docker exec python_runner pip install 套件名稱</code>
+            </div>
+          </div>
+
+          <!-- ChromaDB RAG -->
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:20px;">
+            <div style="font-size:16px; font-weight:700; color:var(--purple); margin-bottom:12px;">🔍 RAG 向量檢索（ChromaDB）</div>
+            <div style="font-size:13px; color:var(--muted); line-height:1.8; margin-bottom:12px;">
+              提供 <code>rag_index</code> / <code>rag_query</code> / <code>rag_status</code> 工具，從大量檔案中語意搜尋最相關的程式碼片段。
+            </div>
+            <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:6px;">啟動（一次性）：</div>
+            <code style="display:block; font-family:var(--font-mono); font-size:13px; color:var(--purple); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">cd chromadb && docker compose up -d</code>
+            <div style="font-size:12px; color:var(--muted); margin-top:10px;">
+              容器名稱：<code>dev-chromadb</code>（port 8010）<br>
+              設為 <code>restart: unless-stopped</code>，Docker 執行中即自動常駐。<br>
+              使用內建 Embedding 模型（all-MiniLM-L6-v2，免費、本地執行）。
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ── RAG 使用流程 (Span 12) ── -->
+      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border);">
+        <h2 style="font-size:20px; font-weight:700; text-transform:uppercase; color:var(--text); margin-bottom:8px; letter-spacing:0.05em;">🔍 RAG 使用流程</h2>
+        <p style="font-size:14px; color:var(--muted); margin-bottom:24px; line-height:1.6;">
+          啟動 ChromaDB 後，只需兩步即可開始使用語意搜尋。
+        </p>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
+
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+            <div style="font-size:14px; font-weight:700; color:var(--cyan); margin-bottom:8px;">① 為專案建立索引</div>
+            <div style="font-size:13px; color:var(--muted); line-height:1.8;">
+              在 Claude 對話中告訴助理「索引 {ProjectFolder} 專案」，或直接呼叫：
+            </div>
+            <code style="display:block; font-family:var(--font-mono); font-size:13px; color:var(--cyan); background:var(--surface); padding:10px 14px; border-radius:8px; margin-top:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">rag_index { project: "{ProjectFolder}", paths: ["{ProjectFolder}/"] }</code>
+            <div style="font-size:12px; color:var(--muted); margin-top:8px;">
+              首次完整掃描，之後自動增量（僅處理變更檔案）。加 <code>force: true</code> 強制全部重建。
+            </div>
+          </div>
+
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+            <div style="font-size:14px; font-weight:700; color:var(--green); margin-bottom:8px;">② 之後完全自動</div>
+            <div style="font-size:13px; color:var(--muted); line-height:1.8;">
+              你只需用自然語言提問，Claude 會自動判斷是否呼叫 <code>rag_query</code> 搜尋相關程式碼。
+            </div>
+            <code style="display:block; font-family:var(--font-mono); font-size:13px; color:var(--green); background:var(--surface); padding:10px 14px; border-radius:8px; margin-top:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">rag_query { project: "{ProjectFolder}", query: "訂單折扣邏輯" }</code>
+            <div style="font-size:12px; color:var(--muted); margin-top:8px;">
+              查看索引狀態：<code style="cursor:pointer;" onclick="navigator.clipboard.writeText('rag_status {}')">rag_status {}</code> 列出所有 collections。
+            </div>
+          </div>
+
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
+            <div style="font-size:14px; font-weight:700; color:var(--purple); margin-bottom:8px;">Collection 策略</div>
+            <div style="font-size:13px; color:var(--muted); line-height:1.8;">
+              每個專案獨立 collection（<code>rag_{ProjectFolder}</code>），另有共用 <code>rag_shared</code> 供跨專案知識。
+            </div>
+            <div style="font-size:12px; color:var(--muted); margin-top:8px;">
+              索引到共用：加 <code>shared: true</code><br>
+              查詢含共用：加 <code>include_shared: true</code>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
       <!-- ── Memory System (Span 12) ── -->
       <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border);">
         <h2 style="font-size:20px; font-weight:700; text-transform:uppercase; color:var(--text); margin-bottom:16px; letter-spacing:0.05em;">🧠 Memory System — 跨對話記憶</h2>
@@ -790,6 +875,8 @@
           <a class="tag tool-tag" href="javascript:void(0)">read_pptx_file</a><a class="tag tool-tag" href="javascript:void(0)">read_pptx_files_batch</a>
           <a class="tag tool-tag" href="javascript:void(0)">read_pdf_file</a><a class="tag tool-tag" href="javascript:void(0)">read_pdf_files_batch</a>
           <a class="tag tool-tag" href="javascript:void(0)">git_status</a><a class="tag tool-tag" href="javascript:void(0)">git_diff</a><a class="tag tool-tag" href="javascript:void(0)">git_log</a><a class="tag tool-tag" href="javascript:void(0)">git_stash_ops</a>
+          <a class="tag tool-tag" href="javascript:void(0)">file_to_prompt</a><a class="tag tool-tag" href="javascript:void(0)">file_to_prompt_preview</a>
+          <a class="tag tool-tag" href="javascript:void(0)">rag_index</a><a class="tag tool-tag" href="javascript:void(0)">rag_query</a><a class="tag tool-tag" href="javascript:void(0)">rag_status</a>
         </div>
       </section>
 

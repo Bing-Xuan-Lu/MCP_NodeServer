@@ -1,0 +1,20 @@
+services:
+  # ============================================
+  # ChromaDB — RAG 向量資料庫（選用）
+  # API: localhost:8000
+  # 用途：為 rag_index / rag_query 工具提供向量檢索
+  # ============================================
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: dev-chromadb
+    ports:
+      - "8010:8000"
+    volumes:
+      - chromadb_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped
+
+volumes:
+  chromadb_data:
