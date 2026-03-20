@@ -80,6 +80,10 @@ docker exec python_runner pip install 套件名稱
 ChromaDB 提供語意搜尋能力，讓 `rag_query` 從大量檔案中找出最相關的程式碼片段。
 **不啟用時其他工具完全不受影響。**
 
+- **ChromaDB 版本**：`1.5.5`（docker-compose.yml 已鎖定，禁止用 `:latest`）
+- **Embedding**：由 ChromaDB 伺服器端處理（per-collection 指定 `paraphrase-multilingual-MiniLM-L12-v2` 多語言模型），Node.js 不載入 ONNX 模型
+- **持久化路徑**：`D:/Project/ChromaDB` → 容器 `/data`（1.0.0 版路徑）
+
 ### 首次設定（一次性）
 
 ```bash
@@ -92,6 +96,19 @@ curl http://localhost:8010/api/v2/heartbeat
 
 容器設為 `restart: unless-stopped`，Docker Desktop 執行中即自動啟動。
 
+### Admin UI（瀏覽 collections 內容）
+
+開啟 http://localhost:3100/setup ，填入以下設定後按 Connect：
+
+| 欄位 | 值 |
+|------|------|
+| Chroma connection string | `http://chromadb:8000` |
+| Tenant | `default_tenant`（預設） |
+| Database | `default_database`（預設） |
+| Authentication Type | No Auth（預設） |
+
+連線後可瀏覽所有 collections、查看切片內容與 metadata。
+
 ### 為專案建立索引
 
 ```
@@ -102,6 +119,52 @@ rag_index { project: "{ProjectFolder}", paths: ["{ProjectFolder}/"] }
 - 之後再跑同一指令為**增量索引**，僅處理有變更的檔案
 - 強制全部重建：加 `force: true`
 - 每個專案一個 collection（`rag_{ProjectFolder}`），另有 `rag_shared` 供跨專案共用
+
+### 索引內容與搭配工具
+
+程式碼與規格書應**一起索引到同一個 collection**，RAG 會透過 `file_path` metadata 自動區分來源：
+
+| 內容類型 | 索引方式 | 說明 |
+|----------|----------|------|
+| PHP/JS/CSS 等程式碼 | `rag_index` 直接掃描專案目錄 | 自動依副檔名過濾 |
+| 規格書（`.md` 快照） | `rag_index` 索引 spec `.md` 檔 | 先用 `/axshare_spec_index` 爬取產生 `.md`，再索引 |
+| XD/Figma 設計稿 | **不索引**（視覺內容，無文字可切片） | 用 `/design_diff` 截圖比對 |
+| Word/PDF 文件 | 目前不支援直接索引 | 用 `read_word_file` / `read_pdf_file` 即時讀取 |
+
+**典型工作流程（以含規格書的專案為例）：**
+
+1. **首次**：`/axshare_spec_index` 爬規格書 → 產出 `spec_reference.md`
+2. **索引**：`rag_index` 一次索引程式碼 + 規格 `.md`
+3. **開發中**：Claude 用 `rag_query` 同時搜尋程式碼和規格，直接比對是否一致
+4. **規格更新時**：重跑 `/axshare_spec_index` → 再跑 `rag_index`（增量，只處理變更）
+
+### 索引時機
+
+**開發或功能調整結束後、執行測試 Skill 之前**，應先執行增量索引以確保 RAG 資料與程式碼同步。
+Claude 在進入測試階段前（如 `/php_crud_test`、`/project_qc`、`/playwright_ui_test` 等）應主動呼叫 `rag_index`。
+**若 ChromaDB 未安裝或未啟動，直接跳過索引步驟，不報錯、不阻斷流程。**
+
+### 索引範圍評估（重要）
+
+`rag_index` 前**必須先評估索引範圍**，不可整個專案根目錄一把抓：
+
+1. **paths 精確指定子目錄**：`paths: ["{ProjectFolder}/cls/", "{ProjectFolder}/ajax/"]`，不可省略專案名前綴
+2. **先跑 `rag_status`** 確認 collection 是否乾淨（無其他專案檔案混入）
+3. **高價值目錄優先索引**：Model（商業邏輯）、AJAX（API 端點）、JS（前台互動）、spec（規格文件）
+4. **低價值目錄不索引**：CRUD 模板目錄（後台管理頁面結構可預測，用 Grep 定位更快）、CSS（Grep 找 selector 更有效）、上傳目錄、第三方套件
+5. **大型專案分批索引**：`rag.js` 內建自動分批（`AUTO_BATCH_LIMIT = 80`），超過 80 檔自動拆批並在批次間暫停 GC
+6. **chunk 參數調整**：PHP legacy 專案函式較長，建議 `chunk_lines: 120`（預設 60 太碎）
+
+### 搜尋策略（RAG vs Grep）
+
+| 場景 | 工具 | 範例 |
+|------|------|------|
+| 不確定功能在哪個檔案 | `rag_query` | `query: "購物車加入商品邏輯"` |
+| 知道具體函式名/變數名 | `Grep` | `pattern: "addReadyCart"` |
+| 後台 CRUD 頁面 | 直接 `Read` | `adminControl/{module}/list.php` |
+| RAG 結果不相關 | 改用 `Grep` | RAG distance > 0.5 = 不相關 |
+
+**RAG 有用的參數**：`filter_path`（限縮目錄）、`filter_language`（限縮語言）、`n_results`（回傳數量）
 
 ### 查詢與狀態
 
