@@ -14,6 +14,18 @@ Node.js MCP Server，為 Claude Code 提供 **41 個 Skill 指令** 與 **49 個
 | [Docker Desktop](https://www.docker.com/products/docker-desktop/) | 最新版 | Python 容器（`run_python_script`）+ ChromaDB（RAG，選用） |
 | [Git](https://git-scm.com/) | 任意版 | Clone 專案 |
 
+### RAG 選用元件的硬體需求
+
+RAG 索引過程會在 CPU 執行 Embedding 模型（paraphrase-multilingual-MiniLM-L12-v2，470MB），對系統資源有額外需求：
+
+| 項目 | 最低需求 | 建議 |
+|------|----------|------|
+| RAM | 8GB | 16GB+（索引大型專案時 Node.js + ChromaDB 合計約 2-4GB） |
+| 磁碟空間 | 1GB | 2GB+（Docker image + 索引資料） |
+| CPU | 任意 | 多核心可加速索引（Embedding 為 CPU 密集運算） |
+
+若電腦資源有限，可不安裝 RAG，其他 46 個工具完全不受影響。
+
 ---
 
 ## 快速開始
@@ -95,3 +107,39 @@ MCP_NodeServer/
 ```
 
 詳細開發規範見 [CLAUDE.md](CLAUDE.md)。
+
+---
+
+## 第三方依賴與授權
+
+### npm 套件
+
+| 套件 | 授權 | 用途 |
+|------|------|------|
+| `@modelcontextprotocol/sdk` | MIT | MCP 協議 SDK |
+| `mysql2` | MIT | MySQL/MariaDB 連線 |
+| `turndown` | MIT | HTML → Markdown 轉換 |
+| `mammoth` | BSD-2-Clause | .docx 讀取 |
+| `dotenv` | BSD-2-Clause | 環境變數載入 |
+| `glob` | BlueOak-1.0.0 | 檔案 pattern 匹配 |
+| `chromadb` | Apache-2.0 | ChromaDB 客戶端（RAG） |
+| `@chroma-core/default-embed` | Apache-2.0 | ChromaDB Embedding Function |
+| `pdfjs-dist` | Apache-2.0 | PDF 讀取 |
+| `ssh2-sftp-client` | Apache-2.0 | SFTP 連線 |
+| `xlsx` | Apache-2.0 | Excel 讀取 |
+| `jszip` | MIT / GPL-3.0 | ZIP 解壓（.pptx 讀取用） |
+| `hyperformula` | GPL-3.0 | Excel 公式計算引擎 |
+
+### Docker 映像檔
+
+| 映像檔 | 授權 | 用途 |
+|--------|------|------|
+| `python:3.12-slim` | PSF License | Python 執行環境 |
+| `chromadb/chroma` | Apache-2.0 | RAG 向量資料庫 |
+| `fengzhichao/chromadb-admin` | MIT | ChromaDB Admin UI（選用） |
+
+### Embedding 模型
+
+| 模型 | 授權 | 用途 |
+|------|------|------|
+| `paraphrase-multilingual-MiniLM-L12-v2` | Apache-2.0 | RAG 多語言向量化（免費、本地執行） |

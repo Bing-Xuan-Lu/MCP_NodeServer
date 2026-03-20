@@ -117,6 +117,58 @@ print(full_text)
 
 ---
 
+## 圖片型 PDF 逐頁截圖（Playwright）
+
+適用：掃描版 PDF、手寫標注截圖 PDF（`read_pdf_file` 回傳「此頁無文字內容」時使用）
+
+### 流程
+
+1. **用 Playwright 開啟 PDF**
+   ```
+   browser_navigate → file:///absolute/path/to/file.pdf
+   ```
+   > 瀏覽器內建 PDF viewer 會自動渲染
+
+2. **取得總頁數**（透過 PDF viewer API）
+   ```js
+   browser_evaluate → () => {
+     // Chrome PDF viewer exposes page count
+     const pages = document.querySelectorAll('.page');
+     return pages.length || document.querySelector('[data-page-count]')?.dataset?.pageCount || 'unknown';
+   }
+   ```
+   > 如果無法取得頁數，用滾動到底部的方式逐頁截圖直到沒有新內容
+
+3. **逐頁截圖**
+   ```js
+   // 方法 A：滾動 + viewport 截圖
+   browser_evaluate → (pageNum) => {
+     const page = document.querySelector(`[data-page-number="${pageNum}"]`);
+     if (page) { page.scrollIntoView(); return true; }
+     return false;
+   }
+   browser_take_screenshot → { filename: "screenshots/pdf/{name}_p{N}.png" }
+
+   // 方法 B：用 Node.js pdf-lib + canvas（如果 Playwright 方式不穩定）
+   // 需要 npm install pdfjs-dist canvas
+   ```
+
+4. **截圖存檔命名**
+   - 目標目錄：`screenshots/pdf/`
+   - 格式：`{pdf_filename}_p{01}.png`, `{pdf_filename}_p{02}.png`, ...
+
+5. **逐頁閱讀截圖**（用 Read tool 讀取 PNG）
+   ```
+   Read → screenshots/pdf/{name}_p01.png  （Claude 是 multimodal，可直接讀圖）
+   ```
+
+### 注意事項
+- Chrome PDF viewer 的 DOM 結構可能因版本不同而變化
+- 大型 PDF（>50頁）建議分批截圖，每批 10 頁
+- 截圖完成後可刪除暫存檔或保留供後續參考
+
+---
+
 ### 步驟 4：產出報告
 
 ```

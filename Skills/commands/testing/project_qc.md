@@ -323,6 +323,12 @@ Step C-3【逐項比對 — 必須引用上方兩段數值，不得憑印象】
 
 1. get_db_schema_batch → 讀取所有相關資料表的欄位定義
 2. read_files_batch → 讀取後台 add.php / update.php / list.php 原始碼
+> **RAG 輔助（搜尋策略）**：
+> - **模糊定位**（不確定功能在哪個檔案）→ `rag_query(project="{ProjectFolder}", query="模組名+功能描述")` 語意搜尋
+> - **精確定位**（知道函式名/變數名/SQL 關鍵字）→ `Grep` 正則搜尋
+> - **後台 CRUD**（結構可預測）→ 直接 Read `adminControl/{module}/list.php`，不走 RAG
+> - **RAG 有用的參數**：`filter_path` 限縮目錄（如 `cls/model/`）、`filter_language` 限縮語言（如 `php`）
+> - **Fallback**：RAG 結果不相關時（distance > 0.5），改用 Grep 重新搜尋
 3. 產出 reports/field_map.md，格式如下：
 
   ## {模組名稱}（{table_name}）

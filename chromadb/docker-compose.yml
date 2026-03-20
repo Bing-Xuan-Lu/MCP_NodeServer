@@ -5,16 +5,28 @@ services:
   # 用途：為 rag_index / rag_query 工具提供向量檢索
   # ============================================
   chromadb:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:1.5.5
     container_name: dev-chromadb
     ports:
       - "8010:8000"
     volumes:
-      - chromadb_data:/chroma/chroma
+      - D:/Project/ChromaDB:/data
     environment:
-      - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=FALSE
+    mem_limit: 4g
     restart: unless-stopped
 
-volumes:
-  chromadb_data:
+  # ============================================
+  # ChromaDB Admin UI（選用）
+  # 瀏覽器：http://localhost:3100
+  # ============================================
+  chromadb-admin:
+    image: fengzhichao/chromadb-admin:latest
+    container_name: dev-chromadb-admin
+    ports:
+      - "3100:3001"
+    environment:
+      - CHROMADB_URL=http://chromadb:8000
+    depends_on:
+      - chromadb
+    restart: unless-stopped

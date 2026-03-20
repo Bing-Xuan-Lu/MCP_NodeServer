@@ -46,6 +46,9 @@
 - `/sftp_deploy` — SFTP 將本機 PHP 專案部署到遠端測試機
 - `/sftp_ops` — SFTP 連線遠端即時除錯與環境檢查
 - `/sftp_pull` — SFTP 將遠端檔案拉取到本機
+- `/remote_diff` — 比對本機 vs 遠端 SFTP 檔案差異，找出同事改過的檔案
+- `/remote_db_exec` — SFTP+PHP 間接執行遠端 SQL（無法直連 MySQL 時）
+- `/full_deploy` — 整合部署（diff 安全閘 + 程式碼 + DB migration + smoke test）
 
 ## Docker 維運部
 
@@ -82,7 +85,7 @@
 
 ## Claude 維運部
 
-- `/learn_claude_skill` — 從對話學習，建立或改進 Claude Skill
+- `/retro` — 對話回顧：收割 Memory、Skill、Tool 改善
 - `/skill_audit` — 審查 Skill 耦合與重疊，建議合併或淘汰
 - `/harness_audit` — 審計 Claude Code 工具設置，產生評分報告
 - `/project_claudemd` — 為專案自動產生 CLAUDE.md 文件

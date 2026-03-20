@@ -161,9 +161,9 @@
             <div style="font-size:16px; font-weight:700; color:var(--text); margin-bottom:16px; text-transform:uppercase;">🛠️ 部署與通用工具</div>
             <div style="display:flex; flex-direction:column; gap:16px;">
               <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
-                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">部署到測試機</div>
-                <div style="font-size:14px; color:var(--muted); margin-bottom:12px;">透過 SFTP 上傳修改後的檔案。</div>
-                <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--text); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/sftp_deploy</code>
+                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">整合部署到測試機</div>
+                <div style="font-size:14px; color:var(--muted); margin-bottom:12px;">Diff 安全閘 + 程式碼 + DB 一鍵部署。</div>
+                <code style="display:block; font-family:var(--font-mono); font-size:14px; color:var(--text); background:var(--surface); padding:10px 14px; border-radius:8px; cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/full_deploy</code>
               </div>
               <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px;">
                 <div style="font-size:16px; font-weight:600; margin-bottom:6px;">產生標準 Commit</div>
@@ -227,7 +227,9 @@
             <div style="font-size:12px; color:var(--muted); margin-top:10px;">
               容器名稱：<code>dev-chromadb</code>（port 8010）<br>
               設為 <code>restart: unless-stopped</code>，Docker 執行中即自動常駐。<br>
-              使用內建 Embedding 模型（all-MiniLM-L6-v2，免費、本地執行）。
+              使用內建 Embedding 模型（all-MiniLM-L6-v2，免費、本地執行）。<br>
+              Admin UI：<a href="http://localhost:3100/" target="_blank" style="color:var(--purple);">http://localhost:3100/</a><br>
+              首次開啟進入 Setup 頁，Connection string 填 <code>http://chromadb:8000</code>，其餘預設，按 Connect。
             </div>
           </div>
 
@@ -357,11 +359,14 @@
       <!-- 部署維運部 -->
       <section class="bento-item span-4 dept-card">
         <div class="dept-name">部署維運部</div>
-        <div class="dept-desc">SFTP 上傳、下載、遠端除錯</div>
+        <div class="dept-desc">SFTP 部署、遠端 Diff、DB 間接執行、整合部署</div>
         <div class="tag-container">
           <a class="tag" href="javascript:void(0)">/sftp_deploy</a>
           <a class="tag" href="javascript:void(0)">/sftp_pull</a>
           <a class="tag" href="javascript:void(0)">/sftp_ops</a>
+          <a class="tag" href="javascript:void(0)">/remote_diff</a>
+          <a class="tag" href="javascript:void(0)">/remote_db_exec</a>
+          <a class="tag" href="javascript:void(0)">/full_deploy</a>
         </div>
       </section>
 
@@ -416,10 +421,10 @@
       <!-- Claude 維運部 -->
       <section class="bento-item span-4 dept-card">
         <div class="dept-name">Claude 維運部</div>
-        <div class="dept-desc">產出專案文件、學習與審計技能</div>
+        <div class="dept-desc">產出專案文件、對話回顧與審計技能</div>
         <div class="tag-container">
           <a class="tag" href="javascript:void(0)">/project_claudemd</a>
-          <a class="tag" href="javascript:void(0)">/learn_claude_skill</a>
+          <a class="tag" href="javascript:void(0)">/retro</a>
           <a class="tag" href="javascript:void(0)">/skill_audit</a>
           <a class="tag" href="javascript:void(0)">/harness_audit</a>
           <a class="tag" href="javascript:void(0)">/update_codemaps</a>
@@ -518,6 +523,7 @@
       <!-- Workflow Sub-tab Bar (Segmented Control Style) -->
       <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:8px; display:flex; flex-direction:row; gap:4px; align-items:center; margin-top:24px; border-radius:16px; width:fit-content;">
         <button class="wf-tab-btn active" data-wf="php" style="padding:10px 24px; border-radius:12px; font-size:14px;">PHP 開發流程</button>
+        <button class="wf-tab-btn" data-wf="deploy" style="padding:10px 24px; border-radius:12px; font-size:14px;">部署流程</button>
         <button class="wf-tab-btn" data-wf="mcp" style="padding:10px 24px; border-radius:12px; font-size:14px;">MCP Server 自檢</button>
       </section>
 
@@ -711,6 +717,138 @@
       </section>
 
       </div><!-- /wf-php -->
+
+      <!-- ─── Workflow: 部署流程 ─── -->
+      <div id="wf-deploy" class="wf-panel" style="display:none;">
+
+      <!-- Title -->
+      <section class="bento-item span-12 notes-item" style="border-color: var(--green); padding: 40px;">
+        <h2 class="notes-title" style="color: var(--green); font-size: 32px; letter-spacing: -0.04em;">部署流程 · Deployment Pipeline</h2>
+        <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">從本機開發完成到推上測試機的標準流程，支援直連 DB 與間接（SFTP+PHP）兩種 DB 存取方式。</p>
+      </section>
+
+      <!-- Environment Diagram -->
+      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
+        <div style="font-size:14px; font-weight:700; text-transform:uppercase; color:var(--muted); margin-bottom:20px; letter-spacing:.08em;">環境架構</div>
+        <div style="display:grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap:16px; align-items:center; text-align:center;">
+          <div style="background:var(--bg); border:2px solid var(--purple); border-radius:16px; padding:24px;">
+            <div style="font-size:16px; font-weight:800; color:var(--purple); margin-bottom:8px;">本機開發環境</div>
+            <div style="font-family:var(--font-mono); font-size:12px; color:var(--muted);">D:\Project\{ProjectFolder}</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:4px;">Git 版控 · 程式碼為主</div>
+          </div>
+          <div style="font-size:24px; color:var(--green);">→</div>
+          <div style="background:var(--bg); border:2px solid var(--cyan); border-radius:16px; padding:24px;">
+            <div style="font-size:16px; font-weight:800; color:var(--cyan); margin-bottom:8px;">內部測試機</div>
+            <div style="font-family:var(--font-mono); font-size:12px; color:var(--muted);">/var/www/html_{project}</div>
+            <div style="font-size:12px; color:var(--green); margin-top:4px;">SFTP + DB 直連</div>
+          </div>
+          <div style="font-size:24px; color:var(--green);">→</div>
+          <div style="background:var(--bg); border:2px solid #f59e0b; border-radius:16px; padding:24px;">
+            <div style="font-size:16px; font-weight:800; color:#f59e0b; margin-bottom:8px;">準測試機</div>
+            <div style="font-family:var(--font-mono); font-size:12px; color:var(--muted);">/var/www/html_{project}</div>
+            <div style="font-size:12px; color:#f59e0b; margin-top:4px;">SFTP + DB 間接（PHP 腳本）</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vertical Timeline -->
+      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
+        <ul class="timeline">
+
+          <!-- Phase A -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">Phase A — 安全閘</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">REMOTE DIFF</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">比對本機 vs 遠端檔案，找出同事直接 SFTP 修改過的檔案，避免覆蓋。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">1. SFTP 拉取遠端檔案 → diff</span>
+                  <a class="tag" href="javascript:void(0)">/remote_diff</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">2. 有衝突 → 決定覆蓋或 merge</span>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- Phase B -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">Phase B — 程式碼部署</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SFTP UPLOAD</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">以本機為主上傳程式碼，自動排除設定檔與非程式資源。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">1. SFTP 上傳（排除 config/.env/uploads）</span>
+                  <a class="tag" href="javascript:void(0)">/sftp_deploy</a>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- Phase C -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">Phase C — DB Migration</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">DATABASE UPDATE</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">依 DB 存取方式自動分流：直連用 execute_sql，無法直連用 SFTP+PHP 間接執行。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">直連（內部測試機）</span>
+                  <a class="tag" href="javascript:void(0)">/db_migration</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">間接（準測試機）</span>
+                  <a class="tag" href="javascript:void(0)">/remote_db_exec</a>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- Phase D -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">Phase D — 驗證</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SMOKE TEST</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">HTTP 打首頁與後台，確認部署後網站正常運作。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">1. send_http_request 首頁 → 200</span>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">2. 失敗時查 error log</span>
+                  <a class="tag" href="javascript:void(0)">/sftp_ops</a>
+                </div>
+              </div>
+            </div>
+          </li>
+
+        </ul>
+      </section>
+
+      <!-- 一鍵整合 -->
+      <section class="bento-item span-12" style="background:var(--bg); border:2px solid var(--green); border-radius:16px; padding:32px; text-align:center;">
+        <div style="font-size:14px; font-weight:700; text-transform:uppercase; color:var(--muted); margin-bottom:12px; letter-spacing:.08em;">一鍵整合</div>
+        <div style="font-size:20px; font-weight:800; color:var(--green); margin-bottom:8px;">以上四個 Phase 串成一條指令</div>
+        <code style="display:inline-block; font-family:var(--font-mono); font-size:18px; color:var(--green); background:var(--surface); padding:12px 24px; border-radius:12px; cursor:pointer; border:1px solid var(--border);" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/full_deploy</code>
+        <div style="font-size:14px; color:var(--muted); margin-top:12px;">支援 <code>code-only</code>、<code>db-only</code>、<code>--skip-diff</code> 參數</div>
+      </section>
+
+      </div><!-- /wf-deploy -->
 
       <!-- ─── Workflow: MCP Server 自檢流程 ─── -->
       <div id="wf-mcp" class="wf-panel" style="display:none;">
