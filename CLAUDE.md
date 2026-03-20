@@ -24,7 +24,10 @@ MCP_NodeServer/
 │   ├── word.js          ← read_word_file, read_word_files_batch (.docx → Markdown/HTML/Text)
 │   ├── pptx.js          ← read_pptx_file, read_pptx_files_batch (.pptx → Markdown/Text + 圖片)
 │   ├── pdf.js           ← read_pdf_file, read_pdf_files_batch (.pdf → Markdown/Text)
-│   └── git.js           ← git_status, git_diff, git_log, git_stash_ops
+│   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops
+│   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
+│   └── rag.js            ← rag_index, rag_query, rag_status（需 ChromaDB Docker，選用）
+├── chromadb/             ← ChromaDB Docker 環境（RAG 選用，docker-compose.yml）
 ├── skills/index.js      ← MCP Prompts 路由（注意：小寫 skills，不是 Skills）
 └── Skills/              ← Skill MD 檔
     ├── *_agent.md       ← MCP Prompts 內容
@@ -53,6 +56,60 @@ MCP_NodeServer/
 - 存取其他路徑：先呼叫 `grant_path_access`（重啟後清空）
 - DB 連線（`set_database`）只在當次對話有效，重啟後需重新設定
 - 書籤操作前需先關閉 Chrome
+
+---
+
+## Docker 選用元件
+
+以下元件皆為選用，不啟用時其他工具完全不受影響。需先確認 Docker Desktop 執行中。
+
+### Python 執行環境（`run_python_script` 工具）
+
+```bash
+# 啟動 Python 容器（一次性）
+cd D:\MCP_Server\python && docker compose up -d
+
+# 安裝額外套件（視需要）
+docker exec python_runner pip install 套件名稱
+```
+
+容器名稱：`python_runner`（Python 3.12-slim），設為 `restart: unless-stopped`。
+
+### RAG 向量檢索（`rag_index` / `rag_query` / `rag_status` 工具）
+
+ChromaDB 提供語意搜尋能力，讓 `rag_query` 從大量檔案中找出最相關的程式碼片段。
+**不啟用時其他工具完全不受影響。**
+
+### 首次設定（一次性）
+
+```bash
+# 1. 啟動 ChromaDB 容器（port 8010）
+cd D:\MCP_Server\chromadb && docker compose up -d
+
+# 2. 確認連線
+curl http://localhost:8010/api/v2/heartbeat
+```
+
+容器設為 `restart: unless-stopped`，Docker Desktop 執行中即自動啟動。
+
+### 為專案建立索引
+
+```
+rag_index { project: "{ProjectFolder}", paths: ["{ProjectFolder}/"] }
+```
+
+- 首次索引會掃描整個專案目錄，依副檔名過濾（.php, .js, .ts 等）
+- 之後再跑同一指令為**增量索引**，僅處理有變更的檔案
+- 強制全部重建：加 `force: true`
+- 每個專案一個 collection（`rag_{ProjectFolder}`），另有 `rag_shared` 供跨專案共用
+
+### 查詢與狀態
+
+```
+rag_query  { project: "{ProjectFolder}", query: "自然語言描述" }
+rag_status { project: "{ProjectFolder}" }   # 查看索引統計
+rag_status {}                                # 列出所有 collections
+```
 
 ---
 

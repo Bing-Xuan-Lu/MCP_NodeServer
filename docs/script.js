@@ -113,6 +113,13 @@ const TOOLS = {
   'git_diff':               { dept:'系統、Excel、Python 與 Git', title:'Git 改動比對', desc:'查看檔案改動內容 (git diff)，支援 staged 模式。', usage:'git_diff {file_path:"...", staged:true}', tools:[] },
   'git_log':                { dept:'系統、Excel、Python 與 Git', title:'Git 提交歷史', desc:'查看最近的 Commit 歷史 (git log)，預設顯示 5 筆一列。', usage:'git_log {limit:5}', tools:[] },
   'git_stash_ops':          { dept:'系統、Excel、Python 與 Git', title:'Git Stash 操作', desc:'執行 Git Stash 相關操作 (push, pop, list)，用於暫存臨時工作。', usage:'git_stash_ops {action:"push", message:"..."}', tools:[] },
+
+  'file_to_prompt':         { dept:'系統、Excel、文件、Python 與 Git', title:'檔案打包成 Prompt', desc:'將多個檔案內容打包成結構化 prompt（支援 glob pattern），免手動逐檔指定。輸出 XML/Markdown/Plain 格式。', usage:'file_to_prompt {glob:"project/**/*.php", format:"xml"}', tools:[] },
+  'file_to_prompt_preview': { dept:'系統、Excel、文件、Python 與 Git', title:'預覽檔案匹配結果', desc:'預覽 file_to_prompt 會匹配哪些檔案（不讀取內容，僅列清單與大小），確認範圍正確後再執行。', usage:'file_to_prompt_preview {glob:"project/**/*.php"}', tools:[] },
+
+  'rag_index':              { dept:'系統、Excel、文件、Python 與 Git', title:'RAG 索引建立', desc:'將專案檔案索引至 ChromaDB 向量資料庫，支援增量索引（僅處理變更檔案）。每個專案獨立 collection，可選共用 rag_shared。', usage:'rag_index {project:"PG_dbox3", paths:["PG_dbox3/admin/"]}', tools:['ChromaDB Docker'] },
+  'rag_query':              { dept:'系統、Excel、文件、Python 與 Git', title:'RAG 語意搜尋', desc:'用自然語言查詢已索引的程式碼，從 ChromaDB 向量檢索最相關的程式碼片段。', usage:'rag_query {project:"PG_dbox3", query:"訂單折扣邏輯"}', tools:['ChromaDB Docker'] },
+  'rag_status':             { dept:'系統、Excel、文件、Python 與 Git', title:'RAG 索引狀態', desc:'查看 ChromaDB 連線狀態、collection 統計、已索引檔案清單與語言分佈。', usage:'rag_status {project:"PG_dbox3"}', tools:['ChromaDB Docker'] },
 };
 
 /* ══════════════════════════════════════════════

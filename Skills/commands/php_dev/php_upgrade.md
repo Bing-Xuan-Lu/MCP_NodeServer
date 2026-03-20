@@ -289,6 +289,27 @@ define('WEB_ROOT', 'http://' . $_SERVER['HTTP_HOST'] . '/');
 
 ---
 
+### Rule 14：裸鍵名陣列 `[key=>$val]` → `['key'=>$val]`
+
+PHP 8.0 將未定義常數視為 Error（PHP 7 自動降級為字串 Notice）。
+
+```php
+// ❌ 修改前
+$result = [price=>$price, subtotal=>$subprice, volume=>$v];
+
+// ✅ 修改後
+$result = ['price'=>$price, 'subtotal'=>$subprice, 'volume'=>$v];
+```
+
+**陷阱：** 若被 `catch(Throwable)` 包裹，函式靜默回傳 null，API 回傳 `{"result":"1","data":null}` — 看似成功但資料為空。
+
+**掃描命令：**
+```bash
+grep -rnP '\[\w+=>' --include='*.php' {TARGET_DIR} | grep -v "'\w+=>"
+```
+
+---
+
 ## 執行流程
 
 ### Step 1：掃描檔案清單
