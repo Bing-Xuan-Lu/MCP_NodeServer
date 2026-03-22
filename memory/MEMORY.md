@@ -11,27 +11,23 @@
 | 檔案 | 說明 |
 | --- | --- |
 | [project/project_mcp_server.md](project/project_mcp_server.md) | 專案基本資訊與路徑設定 |
-| [project/project_deploy_pipeline.md](project/project_deploy_pipeline.md) | 部署流水線架構：remote_diff 安全閘 + full_deploy 四階段 |
-| [project/project_rag_chromadb.md](project/project_rag_chromadb.md) | RAG 架構：ChromaDB Docker、collection 策略、port 設定 |
 
 ### Reference
 | 檔案 | 說明 |
 | --- | --- |
 | [reference/reference_dept_mapping.md](reference/reference_dept_mapping.md) | commands/ 子資料夾對應部門表 |
 | [reference/reference_live_server.md](reference/reference_live_server.md) | 本機開發用 VS Code Live Server，port 5500 |
-| [reference/reference_playwright_config.md](reference/reference_playwright_config.md) | Playwright MCP 啟動參數與 session 保持設定 |
-| [reference/reference_known_issues.md](reference/reference_known_issues.md) | 已知問題速查（Playwright session、工具引用過時、Skill 洩漏） |
 
 ### Feedback — Playwright
 | 檔案 | 說明 |
 | --- | --- |
 | [feedback/playwright/feedback_playwright_screenshot.md](feedback/playwright/feedback_playwright_screenshot.md) | 截圖存 screenshot/ 不放根目錄 |
-| [feedback/playwright/feedback_playwright_ops.md](feedback/playwright/feedback_playwright_ops.md) | 快取清除、禁平行 Agent、卡住停止、禁 taskkill、動態連結展開 |
+| [feedback/playwright/feedback_playwright_ops.md](feedback/playwright/feedback_playwright_ops.md) | 快取清除、禁平行 Agent、卡住停止、禁 taskkill、動態連結展開、Background Agent 必須預授權所有 browser_* 工具 |
 
 ### Feedback — Workflow
 | 檔案 | 說明 |
 | --- | --- |
-| [feedback/workflow/feedback_skill_workflow.md](feedback/workflow/feedback_skill_workflow.md) | Skill 流程、行為規則、sub-Agent 防衝突、MCP 工具文件同步 |
+| [feedback/workflow/feedback_skill_workflow.md](feedback/workflow/feedback_skill_workflow.md) | Skill 建立、修改、部署流程與 dashboard 更新規則 |
 | [feedback/workflow/feedback_md_linting.md](feedback/workflow/feedback_md_linting.md) | MD lint pre-existing 警告批量修復，避免誤診 |
 
 ### Feedback — Tooling
@@ -40,6 +36,7 @@
 | [feedback/tooling/feedback_bat_encoding.md](feedback/tooling/feedback_bat_encoding.md) | Windows .bat 禁含中文，UTF-8 無 BOM 會損毀 ASCII |
 | [feedback/tooling/feedback_docker_ops.md](feedback/tooling/feedback_docker_ops.md) | Docker image 版本必須鎖定，升版前查證持久化路徑 |
 | [feedback/tooling/feedback_license_compliance.md](feedback/tooling/feedback_license_compliance.md) | 安裝第三方套件前確認授權合規，優先 MIT/Apache 2.0 |
+| [feedback/tooling/feedback_http_request_session.md](feedback/tooling/feedback_http_request_session.md) | send_http_request 不回傳 Set-Cookie，登入後測試需用 Playwright |
 
 ### Feedback — QC
 | 檔案 | 說明 |
