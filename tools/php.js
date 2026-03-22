@@ -6,6 +6,32 @@ import { resolveSecurePath } from "../config.js";
 
 const execPromise = util.promisify(exec);
 
+// 記憶體 Cookie Jar（對話期間有效，MCP Server 重啟清空）
+const cookieJars = new Map(); // jarName -> { cookieName: cookieValue }
+
+function parseCookiesFromResponse(response) {
+  const cookies = {};
+  let headers = [];
+  if (typeof response.headers.getSetCookie === "function") {
+    headers = response.headers.getSetCookie();
+  } else {
+    const combined = response.headers.get("set-cookie");
+    if (combined) headers = [combined];
+  }
+  for (const h of headers) {
+    const nameValue = h.split(";")[0];
+    const idx = nameValue.indexOf("=");
+    if (idx > 0) cookies[nameValue.slice(0, idx).trim()] = nameValue.slice(idx + 1).trim();
+  }
+  return cookies;
+}
+
+function buildCookieHeader(jarName) {
+  const jar = cookieJars.get(jarName);
+  if (!jar || Object.keys(jar).length === 0) return null;
+  return Object.entries(jar).map(([k, v]) => `${k}=${v}`).join("; ");
+}
+
 // ============================================
 // 工具定義
 // ============================================
@@ -24,7 +50,7 @@ export const definitions = [
   },
   {
     name: "send_http_request",
-    description: "發送 HTTP 請求。支援 Multipart 實體檔案上傳 (讀取本地檔案傳送給 PHP)。",
+    description: "發送 HTTP 請求。支援 Multipart 實體檔案上傳、Cookie Jar session 持久化（save_cookies_as / cookie_jar）。",
     inputSchema: {
       type: "object",
       properties: {
@@ -32,6 +58,8 @@ export const definitions = [
         method: { type: "string", enum: ["GET", "POST", "PUT", "DELETE"], default: "GET" },
         headers: { type: "object", description: "自訂標頭" },
         data: { type: "string", description: "一般欄位資料 (JSON 字串)" },
+        cookie_jar: { type: "string", description: "從命名 jar 讀取 cookie 帶入請求（登入後使用），例如 'frontend'" },
+        save_cookies_as: { type: "string", description: "將回應的 Set-Cookie 存入命名 jar，例如 'frontend'（通常在登入請求時使用）" },
         files: {
           type: "array",
           description: "檔案列表",
@@ -92,6 +120,7 @@ export const definitions = [
               method: { type: "string", enum: ["GET", "POST", "PUT", "DELETE"], default: "GET" },
               headers: { type: "object", description: "自訂標頭" },
               data: { type: "string", description: "請求資料 (JSON 字串)" },
+              cookie_jar: { type: "string", description: "從命名 jar 讀取 cookie 帶入請求" },
             },
             required: ["url"],
           },
@@ -131,6 +160,12 @@ export async function handle(name, args) {
     try {
       const headers = args.headers || {};
       let body = null;
+
+      // Cookie Jar：讀取已存 session cookie
+      if (args.cookie_jar) {
+        const cookieHeader = buildCookieHeader(args.cookie_jar);
+        if (cookieHeader) headers["Cookie"] = cookieHeader;
+      }
 
       if (args.files && Array.isArray(args.files) && args.files.length > 0) {
         const formData = new FormData();
@@ -179,8 +214,21 @@ export async function handle(name, args) {
       const response = await fetch(args.url, options);
       const text = await response.text();
 
+      // Cookie Jar：存入回應 Set-Cookie
+      let cookieNote = "";
+      if (args.save_cookies_as) {
+        const newCookies = parseCookiesFromResponse(response);
+        if (Object.keys(newCookies).length > 0) {
+          const existing = cookieJars.get(args.save_cookies_as) || {};
+          cookieJars.set(args.save_cookies_as, { ...existing, ...newCookies });
+          cookieNote = `\n🍪 Cookie Jar "${args.save_cookies_as}" 已儲存：${Object.keys(newCookies).join(", ")}`;
+        } else {
+          cookieNote = `\n🍪 Cookie Jar "${args.save_cookies_as}"：回應無 Set-Cookie`;
+        }
+      }
+
       return {
-        content: [{ type: "text", text: `🌐 HTTP ${response.status}\n${text.substring(0, 2000)}` }],
+        content: [{ type: "text", text: `🌐 HTTP ${response.status}${cookieNote}\n${text.substring(0, 2000)}` }],
       };
     } catch (error) {
       return { isError: true, content: [{ type: "text", text: `請求失敗: ${error.message}` }] };
@@ -236,6 +284,12 @@ export async function handle(name, args) {
       try {
         const headers = req.headers || {};
         let body = null;
+
+        // Cookie Jar：批次請求支援從 jar 讀取 cookie
+        if (req.cookie_jar) {
+          const cookieHeader = buildCookieHeader(req.cookie_jar);
+          if (cookieHeader) headers["Cookie"] = cookieHeader;
+        }
 
         if (req.data) {
           body = req.data;

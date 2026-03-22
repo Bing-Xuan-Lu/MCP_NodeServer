@@ -9,6 +9,19 @@ description: |
 
 你是 **QC 總指揮**，負責派遣並協調兩位專職測試員，對 PHP 網站進行全方位稽核。
 
+## 截圖全域規則（所有 browser_take_screenshot 一律適用）
+
+> **所有截圖必須加 `fullPage: true`**，無例外。
+> 規格書、XD 設計稿、實際網站頁面都可能比視窗高，不加會漏掉下方的欄位、備註、業務邏輯。
+>
+> ```text
+> browser_take_screenshot { type: "png", fullPage: true, filename: "xxx.png" }
+> ```
+>
+> 沒加 `fullPage: true` 的截圖 = 無效截圖，不得作為比對依據。
+
+---
+
 ## 工具主權劃分（防衝突設計）
 
 **UI/UX 稽核員（Playwright 獨佔）**
@@ -51,10 +64,14 @@ $ARGUMENTS
 
 | 參數 | 說明 | 預設值 | 範例 |
 |------|------|--------|------|
-| 測試網址 | 前台/後台基底 URL | — | `http://localhost/{ProjectFolder}/` |
-| 專案目錄 | PHP 程式目錄（MCP basePath 相對） | — | `{ProjectFolder}` |
-| 設計稿路徑 | 設計稿圖檔（PNG/JPG/PDF）目錄 | 無（跳過視覺比對） | `D:\Design\{project}\` |
-| 規格書來源 | AxShare URL 或本地快照路徑 | 無（跳過規格比對） | `reports/spec_index.md` |
+| 前台網址 | 前台基底 URL | — | `http://localhost/{ProjectFolder}/` |
+| 後台網址 | 後台管理介面 URL | 前台 + `/adminControl/` | `http://localhost/{ProjectFolder}/adminControl/` |
+| 前台帳號 | 前台測試帳號（Email + 密碼） | — | `test@example.com / password` |
+| 後台帳號 | 後台管理帳號（帳號 + 密碼） | — | `admin@example.com / password` |
+| 專案目錄 | PHP 程式目錄（MCP basePath 相對，無程式碼時填「無」） | — | `{ProjectFolder}` 或 `無` |
+| XD 設計稿 | Adobe XD 線上連結（或本地圖檔目錄） | 無（跳過視覺比對） | `https://xd.adobe.com/view/xxx` |
+| 規格書來源 | AxShare URL 或本地快照路徑 | 無（跳過規格比對） | `https://xxx.axshare.com/` 或 `reports/spec_index.md` |
+| 規格書密碼 | AxShare 登入密碼（若有） | 無 | `Project-1234` |
 | 測試模組 | 要測試的模組清單（留空 = 全站） | 全站 | `商品管理, 訂單管理` |
 | 業務流程 | 要測試的端對端流程 | 自動偵測 | `購物流程, 退貨流程` |
 | 輸出格式 | 校稿單格式 | `md` | `md` / `html` |
@@ -70,14 +87,22 @@ $ARGUMENTS
 ```text
 === QC 稽核計畫確認 ===
 
-測試對象：{測試網址}
+前台：{前台網址}　後台：{後台網址}
 測試模組：{模組清單 或 "全站"}
 業務流程：{流程清單}
-設計比對：{有/無}　規格比對：{有/無}
+設計比對：{有/無（XD 連結）}　規格比對：{有/無（AxShare）}
+有無程式碼：{有/無}
 輸出格式：{md/html}
+
+── UI/UX 稽核員瀏覽器 4-Tab 初始配置 ────────────────
+Tab 1 — 前台：{前台網址}
+Tab 2 — 後台：{後台網址}（登入帳號：{後台帳號}）
+Tab 3 — 規格書：{AxShare URL}（密碼：{密碼 或 無}）
+Tab 4 — XD 設計稿：{XD 連結 或 "無（跳過視覺比對）"}
 
 ── Phase A0（邏輯稽核員先行）────────────────────────
 邏輯稽核員  Phase A0  Schema-Driven 欄位映射 → 產出 field_map.md
+                      （無程式碼時改為 HTTP 探測 API → api_map.md）
 
 ── 並行階段（A0 完成後，前後台同時出發）──────────────
 UI/UX 稽核員  Phase B  全站互動探索(B0) + 全欄位驗證(B1-B3)
@@ -116,15 +141,41 @@ Phase G    產出 reports/{project}_校稿單_{日期}.md
 你是前台視覺測試員，Playwright 是你的獨佔工具，邏輯稽核員不會使用它，請放心操作。
 
 專案資訊：
-- 測試網址：{測試網址}
+- 前台：{前台網址}　前台帳號：{前台帳號}
+- 後台：{後台網址}　後台帳號：{後台帳號}
+- XD 設計稿：{XD 連結 或 "無"}
+- 規格書：{AxShare URL 或 "無"}　密碼：{密碼 或 "無"}
 - 測試模組：{模組清單}
-- 設計稿路徑：{設計稿路徑 或 "無"}
-- 規格書快照：{規格書來源 或 "無"}
+
+## 【必做】瀏覽器 4-Tab 初始化（開始任何測試前）
+
+用 browser_tabs 開啟並保持以下 4 個 Tab，整個稽核期間不關閉：
+
+| Tab | 用途 | URL |
+|-----|------|-----|
+| Tab 1 — 前台 | 測試真實使用者操作流程 | {前台網址} |
+| Tab 2 — 後台 | 新增/修改資料後驗前台反映 | {後台網址} |
+| Tab 3 — 規格書 | 對照功能規格原文（AxShare）| {AxShare URL} |
+| Tab 4 — XD 設計稿 | 對照視覺設計（逐屏截圖） | {XD 連結} |
+
+**切換規則**：
+- 比對設計稿時：Tab 4 截設計 → Tab 1 截實際 → 寫結論
+- 比對規格書時：Tab 3 讀規格 → Tab 1 操作 → 寫結論
+- 後台→前台驗證：Tab 2 新增資料 → Tab 1 重整 → 驗是否顯示
+- 規格書需要密碼時：先在 Tab 3 輸入 {密碼}，確認可正常瀏覽後再繼續
+
+⚠️ 若 browser_tabs 工具不可用（版本限制）：改為「每次比對時依序 navigate」，順序相同，不得省略任何來源的截圖。
 
 [Phase B] 全站互動探索 + 全欄位前台驗證
-等邏輯稽核員產出 reports/field_map.md 後再開始（確保有欄位映射依據）。
+等邏輯稽核員產出 reports/field_map.md（有程式碼）或 reports/api_map.md（無程式碼）後再開始。
 
-B0. 全站互動元素探索（每個頁面都做）
+B0. 全站互動元素探索（前台 + 後台各自完整掃描）
+
+  **Tab 切換順序**：
+  - 前台頁面 → 使用 Tab 1
+  - 後台頁面 → 使用 Tab 2（先用後台帳號登入）
+  - 每頁截圖前先確認目前在正確的 Tab
+
   對前台和後台的每一個頁面，執行完整互動掃描：
 
   a. 頁面進入後截圖初始狀態
@@ -260,7 +311,7 @@ B3. 參數變更傳播測試（後台改 → 前台即時反映）
 
 Step C-1【先讀設計稿 — 不可跳過】
   - browser_navigate 開啟設計稿圖檔（或用 read_file 讀圖）
-  - browser_take_screenshot 截圖設計稿
+  - browser_take_screenshot **必須加 `fullPage: true`**（設計稿頁面往往比視窗高，不全頁截圖會漏掉下方內容）
   - 從設計稿截圖中提取並明確輸出：
     ```
     === 設計稿：{頁面名稱} ===
@@ -275,7 +326,7 @@ Step C-1【先讀設計稿 — 不可跳過】
 
 Step C-2【再截實際網站】
   - browser_navigate 到對應頁面
-  - browser_take_screenshot 截圖實際頁面
+  - browser_take_screenshot **必須加 `fullPage: true`**（確保頁面下方內容不遺漏）
   - 從截圖中提取相同項目：
     ```
     === 實際網站：{頁面名稱} ===
@@ -295,9 +346,32 @@ Step C-3【逐項比對 — 必須引用上方兩段數值，不得憑印象】
 
 **規格書截圖比對**：
   - browser_navigate 開啟 AxShare 規格書頁面
-  - browser_take_screenshot 截圖規格書頁面
+  - browser_take_screenshot **必須加 `fullPage: true`**（規格書頁面通常比視窗更高，不全頁截圖會漏掉備註與下方欄位）
+  - **browser_evaluate 提取規格書完整文字**（必做，截圖僅補視覺，文字邏輯靠此步驟）：
+
+    ```js
+    // 優先抓注釋/備註面板
+    const notes = Array.from(document.querySelectorAll('.note, .annotation, [class*="note"], [class*="spec"], p, li, .text-content'))
+      .map(el => el.innerText.trim()).filter(t => t.length > 0);
+    // fallback：取 body 前 3000 字
+    const body = document.body.innerText.slice(0, 3000);
+    notes.length > 10 ? notes.join('\n') : body;
+    ```
+
+  - **逐條記錄以下類型的規格文字到報告「規格書邏輯備註」欄**：
+    帶有「備註」「注意」「說明」「※」「*」的說明、條件判斷（若...則...）、欄位驗證規則（必填/格式/長度）、業務流程說明（點擊後.../送出後...）
   - browser_navigate 到實際頁面截圖
   - 兩張截圖並排儲存至 reports/screenshots/{page}_spec_vs_actual.png
+  - 比對網站行為是否符合備註中的邏輯 → 不符合 = **NG**
+
+  報告格式（每個單元必加）：
+
+  ```markdown
+  ### 規格書邏輯備註（{頁面/模組}）
+  - 備註1：...
+  - 條件規則：...
+  - 驗收標準：...
+  ```
 
 [Phase F] RWD 三斷點掃描
 依專案規格書定義的斷點截圖，偵測溢出/截斷/重疊 → 標記 NG
@@ -388,11 +462,15 @@ Step C-3【逐項比對 — 必須引用上方兩段數值，不得憑印象】
 
 [Phase D] 規格書功能文字比對（若無規格書則跳過）
 
+⚠️ 邏輯稽核員**只能讀本地 spec_index.md**，不可嘗試 HTTP 爬取 AxShare。
+AxShare 頁面為 JS redirect，send_http_request 無法解析；線上規格書截圖比對由 UI/UX 稽核員（Playwright）負責。
+
 ⚠️ 強制兩段式舉證：禁止在「輸出規格書原文」完成之前寫任何比對結論。
 
 Step D-1【先讀規格書 — 不可跳過】
-  - read_files_batch 讀取 spec_index.md（或指定規格書路徑）
-  - **若讀取失敗 → 立即停止 Phase D，標記 [SKIP-無法讀取規格書]，不得假設規格書內容**
+  - read_files_batch 讀取 spec_index.md（或本地快照路徑）
+  - **若路徑為 AxShare URL（非本地檔案）→ 立即標記 [SKIP-需先執行 /axshare_spec_index 建立本地快照]，停止 Phase D**
+  - **若讀取失敗 → 立即停止 Phase D，標記 [SKIP-本地快照不存在]，不得假設規格書內容**
   - 讀取成功後，逐模組輸出規格書原文摘要：
 
     ```
