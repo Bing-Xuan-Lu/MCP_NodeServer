@@ -29,3 +29,5 @@ memory/_private/
 
 # Playwright 截圖（本機測試用，不進版控）
 /screenshot/
+
+reports/
