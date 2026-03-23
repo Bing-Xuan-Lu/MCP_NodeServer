@@ -11,6 +11,7 @@
 | 檔案 | 說明 |
 | --- | --- |
 | [project/project_mcp_server.md](project/project_mcp_server.md) | 專案基本資訊與路徑設定 |
+| [project/decision_architecture.md](project/decision_architecture.md) | 架構決策記錄：batch 工具、RAG 選用、_internal 隔離、basePath、單一 server、Skill 上限 |
 
 ### Reference
 | 檔案 | 說明 |
