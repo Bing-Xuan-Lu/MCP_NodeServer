@@ -123,6 +123,72 @@ export const definitions = [
     },
   },
   {
+    name: "sftp_upload_batch",
+    description: "批次上傳多組本機檔案/資料夾到遠端（共用一條連線，減少 tool call）",
+    inputSchema: {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              local_path:  { type: "string", description: "本機路徑（相對 basePath 或絕對路徑）" },
+              remote_path: { type: "string", description: "遠端目標絕對路徑" },
+            },
+            required: ["local_path", "remote_path"],
+          },
+          description: "上傳項目陣列，每項含 local_path 與 remote_path",
+        },
+      },
+      required: ["items"],
+    },
+  },
+  {
+    name: "sftp_download_batch",
+    description: "批次從遠端下載多組檔案/資料夾到本機（共用一條連線，減少 tool call）",
+    inputSchema: {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              remote_path: { type: "string", description: "遠端來源絕對路徑" },
+              local_path:  { type: "string", description: "本機目標路徑（相對 basePath 或絕對路徑）" },
+            },
+            required: ["remote_path", "local_path"],
+          },
+          description: "下載項目陣列，每項含 remote_path 與 local_path",
+        },
+      },
+      required: ["items"],
+    },
+  },
+  {
+    name: "sftp_delete_batch",
+    description: "批次刪除多個遠端檔案或目錄（共用一條連線，減少 tool call）",
+    inputSchema: {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              remote_path: { type: "string", description: "遠端檔案或目錄路徑" },
+              recursive:   { type: "boolean", description: "遞迴刪除目錄內容（預設 false）" },
+            },
+            required: ["remote_path"],
+          },
+          description: "刪除項目陣列",
+        },
+      },
+      required: ["items"],
+    },
+  },
+  {
     name: "ssh_exec",
     description:
       "透過 SSH 在遠端主機執行指令（需先 sftp_connect）。" +
@@ -392,6 +458,149 @@ export async function handle(name, args) {
 
       return {
         content: [{ type: "text", text: results.join("\n\n") }],
+      };
+    } catch (err) {
+      return errorResp(`SFTP 連線失敗：${err.message}`, ["確認 SFTP 連線設定是否正確"]);
+    } finally {
+      if (client) await client.end().catch(() => {});
+    }
+  }
+
+  // ── sftp_upload_batch ──
+  if (name === "sftp_upload_batch") {
+    const check = requireSftp();
+    if (!check.ok) return check.error;
+
+    if (!args.items || args.items.length === 0) {
+      return errorResp("items 陣列不可為空。");
+    }
+
+    let client;
+    try {
+      client = await createClient(check.config);
+      const results = [];
+      let okCount = 0;
+
+      for (const item of args.items) {
+        try {
+          const localAbs = resolveSecurePath(item.local_path);
+          if (!fs.existsSync(localAbs)) {
+            results.push(`❌ ${item.local_path} → ${item.remote_path}：本機路徑不存在`);
+            continue;
+          }
+          const stat = fs.statSync(localAbs);
+          if (stat.isDirectory()) {
+            await client.uploadDir(localAbs, item.remote_path);
+          } else {
+            // 自動建立遠端目錄（若不存在）
+            const remoteDir = item.remote_path.replace(/\/[^/]+$/, "");
+            if (remoteDir) {
+              await client.mkdir(remoteDir, true).catch(() => {});
+            }
+            await client.put(localAbs, item.remote_path);
+          }
+          results.push(`✅ ${item.local_path} → ${item.remote_path}`);
+          okCount++;
+        } catch (err) {
+          results.push(`❌ ${item.local_path} → ${item.remote_path}：${err.message}`);
+        }
+      }
+
+      return {
+        content: [{
+          type: "text",
+          text: `批次上傳完成：${okCount}/${args.items.length} 成功\n\n${results.join("\n")}`,
+        }],
+      };
+    } catch (err) {
+      return errorResp(`SFTP 連線失敗：${err.message}`, ["確認 SFTP 連線設定是否正確"]);
+    } finally {
+      if (client) await client.end().catch(() => {});
+    }
+  }
+
+  // ── sftp_download_batch ──
+  if (name === "sftp_download_batch") {
+    const check = requireSftp();
+    if (!check.ok) return check.error;
+
+    if (!args.items || args.items.length === 0) {
+      return errorResp("items 陣列不可為空。");
+    }
+
+    let client;
+    try {
+      client = await createClient(check.config);
+      const results = [];
+      let okCount = 0;
+
+      for (const item of args.items) {
+        try {
+          const localAbs = resolveSecurePath(item.local_path);
+          const remoteInfo = await client.stat(item.remote_path);
+
+          if (remoteInfo.isDirectory) {
+            fs.mkdirSync(localAbs, { recursive: true });
+            await client.downloadDir(item.remote_path, localAbs);
+          } else {
+            fs.mkdirSync(path.dirname(localAbs), { recursive: true });
+            await client.get(item.remote_path, localAbs);
+          }
+          results.push(`✅ ${item.remote_path} → ${item.local_path}`);
+          okCount++;
+        } catch (err) {
+          results.push(`❌ ${item.remote_path} → ${item.local_path}：${err.message}`);
+        }
+      }
+
+      return {
+        content: [{
+          type: "text",
+          text: `批次下載完成：${okCount}/${args.items.length} 成功\n\n${results.join("\n")}`,
+        }],
+      };
+    } catch (err) {
+      return errorResp(`SFTP 連線失敗：${err.message}`, ["確認 SFTP 連線設定是否正確"]);
+    } finally {
+      if (client) await client.end().catch(() => {});
+    }
+  }
+
+  // ── sftp_delete_batch ──
+  if (name === "sftp_delete_batch") {
+    const check = requireSftp();
+    if (!check.ok) return check.error;
+
+    if (!args.items || args.items.length === 0) {
+      return errorResp("items 陣列不可為空。");
+    }
+
+    let client;
+    try {
+      client = await createClient(check.config);
+      const results = [];
+      let okCount = 0;
+
+      for (const item of args.items) {
+        try {
+          const info = await client.stat(item.remote_path);
+          if (info.isDirectory) {
+            await client.rmdir(item.remote_path, item.recursive || false);
+          } else {
+            await client.delete(item.remote_path);
+          }
+          results.push(`✅ ${item.remote_path}`);
+          okCount++;
+        } catch (err) {
+          results.push(`❌ ${item.remote_path}：${err.message}`);
+        }
+      }
+
+      return {
+        content: [{
+          type: "text",
+          text: `批次刪除完成：${okCount}/${args.items.length} 成功\n\n${results.join("\n")}`,
+        }],
       };
     } catch (err) {
       return errorResp(`SFTP 連線失敗：${err.message}`, ["確認 SFTP 連線設定是否正確"]);

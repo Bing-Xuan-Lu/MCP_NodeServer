@@ -105,6 +105,29 @@ export const definitions = [
     },
   },
   {
+    name: "run_php_script_batch",
+    description: "批次執行多個 PHP 腳本（循序執行，減少 tool call 來回）",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scripts: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "PHP 檔案路徑" },
+              args: { type: "string", description: "選填：傳遞給腳本的參數" },
+              label: { type: "string", description: "選填：標籤方便識別" },
+            },
+            required: ["path"],
+          },
+          description: "腳本陣列，每項含 path 與可選的 args/label",
+        },
+      },
+      required: ["scripts"],
+    },
+  },
+  {
     name: "send_http_requests_batch",
     description: "批次發送多個 HTTP 請求（並行執行，減少 tool call 來回）",
     inputSchema: {
@@ -276,6 +299,38 @@ export async function handle(name, args) {
     } finally {
       await fs.unlink(tempFile).catch(() => {});
     }
+  }
+
+  if (name === "run_php_script_batch") {
+    if (!args.scripts || args.scripts.length === 0) {
+      return { isError: true, content: [{ type: "text", text: "scripts 陣列不可為空。" }] };
+    }
+    const results = [];
+    let okCount = 0;
+    for (let i = 0; i < args.scripts.length; i++) {
+      const s = args.scripts[i];
+      const label = s.label || `Script ${i + 1}`;
+      try {
+        const fullPath = resolveSecurePath(s.path);
+        if (!fullPath.endsWith(".php")) {
+          results.push(`[${i + 1}] ${label} ❌ 安全限制：只能執行 .php 檔案`);
+          continue;
+        }
+        const cmd = `php "${fullPath}" ${s.args || ""}`;
+        const { stdout, stderr } = await execPromise(cmd);
+        const output = stdout + (stderr ? `\n⚠️ stderr: ${stderr}` : "");
+        results.push(`[${i + 1}] ${label} ✅ ${s.path}\n${output.substring(0, 1500)}${output.length > 1500 ? "\n... (截斷)" : ""}`);
+        okCount++;
+      } catch (err) {
+        results.push(`[${i + 1}] ${label} ❌ ${s.path}\n${err.message.substring(0, 500)}`);
+      }
+    }
+    return {
+      content: [{
+        type: "text",
+        text: `批次 PHP 執行（${args.scripts.length} 個，✅${okCount} ❌${args.scripts.length - okCount}）：\n\n${results.join("\n\n---\n\n")}`,
+      }],
+    };
   }
 
   if (name === "send_http_requests_batch") {

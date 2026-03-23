@@ -82,6 +82,28 @@ export const definitions = [
     },
   },
   {
+    name: "create_file_batch",
+    description: "批次建立或覆寫多個檔案（減少 tool call 來回）",
+    inputSchema: {
+      type: "object",
+      properties: {
+        files: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "檔案路徑" },
+              content: { type: "string", description: "檔案內容" },
+            },
+            required: ["path", "content"],
+          },
+          description: "檔案陣列，每項含 path 與 content",
+        },
+      },
+      required: ["files"],
+    },
+  },
+  {
     name: "apply_diff",
     description: "修改檔案 (Search & Replace 模式)",
     inputSchema: {
@@ -184,6 +206,28 @@ export async function handle(name, args) {
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.writeFile(fullPath, args.content, "utf-8");
     return { content: [{ type: "text", text: `✅ 檔案已建立: ${args.path}` }] };
+  }
+
+  if (name === "create_file_batch") {
+    if (!args.files || args.files.length === 0) {
+      return { isError: true, content: [{ type: "text", text: "files 陣列不可為空。" }] };
+    }
+    const results = [];
+    let okCount = 0;
+    for (const file of args.files) {
+      try {
+        const fullPath = resolveSecurePath(file.path);
+        await fs.mkdir(path.dirname(fullPath), { recursive: true });
+        await fs.writeFile(fullPath, file.content, "utf-8");
+        results.push(`✅ ${file.path}`);
+        okCount++;
+      } catch (err) {
+        results.push(`❌ ${file.path}：${err.message}`);
+      }
+    }
+    return {
+      content: [{ type: "text", text: `批次建立完成：${okCount}/${args.files.length} 成功\n\n${results.join("\n")}` }],
+    };
   }
 
   if (name === "apply_diff") {

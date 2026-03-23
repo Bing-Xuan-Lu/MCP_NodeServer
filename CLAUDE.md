@@ -19,12 +19,12 @@ MCP_NodeServer/
 │   ├── reference/       ← 靜態參考資料與外部文件連結
 │   └── user/            ← 使用者偏好與設定
 ├── tools/               ← MCP 工具模組（各自匯出 definitions + handle）
-│   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, read_files_batch, list_files_batch
-│   ├── php.js           ← run_php_script, run_php_test, send_http_request（含 cookie_jar session）, tail_log, send_http_requests_batch
+│   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, read_files_batch, list_files_batch, create_file_batch
+│   ├── php.js           ← run_php_script, run_php_test, send_http_request（含 cookie_jar session）, tail_log, send_http_requests_batch, run_php_script_batch
 │   ├── database.js      ← set_database, load_db_connection, get_current_db, get_db_schema, execute_sql, get_db_schema_batch, execute_sql_batch
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   ├── bookmarks.js     ← Chrome 書籤管理（12 個工具）
-│   ├── sftp.js          ← sftp_connect, sftp_upload, sftp_download, sftp_list, sftp_delete, sftp_list_batch
+│   ├── sftp.js          ← sftp_connect, sftp_upload, sftp_download, sftp_list, sftp_delete, sftp_*_batch (list/upload/download/delete)
 │   ├── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
 │   ├── python.js        ← run_python_script (Docker)
 │   ├── word.js          ← read_word_file, read_word_files_batch (.docx → Markdown/HTML/Text)

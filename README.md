@@ -1,6 +1,6 @@
 # MCP NodeServer — 程式設計師的私人 AI 助理員工
 
-Node.js MCP Server，為 Claude Code 提供 **57 個 Skill 指令** 與 **64 個 MCP 工具**，讓 AI 直接讀寫檔案、操作 DB、執行 PHP、部署 SFTP。
+Node.js MCP Server，為 Claude Code 提供 **57 個 Skill 指令** 與 **69 個 MCP 工具**，讓 AI 直接讀寫檔案、操作 DB、執行 PHP、部署 SFTP。
 
 > 📊 **[查看技能儀表板 →](https://bing-xuan-lu.github.io/MCP_NodeServer/dashboard.html)**
 
@@ -83,12 +83,12 @@ MCP_NodeServer/
 ├── index.js             ← MCP Server 主程式
 ├── config.js            ← resolveSecurePath (預設 basePath 為 D:\Project\)
 ├── tools/               ← MCP 工具模組
-│   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, *_batch
-│   ├── php.js           ← run_php_script, run_php_test, send_http_request, tail_log, *_batch
+│   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, *_batch (read_files/list_files/create_file)
+│   ├── php.js           ← run_php_script, run_php_test, send_http_request, tail_log, *_batch (http_requests/php_script)
 │   ├── database.js      ← set_database, load_db_connection, get_db_schema, execute_sql, *_batch
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   ├── bookmarks.js     ← Chrome 書籤管理 (12 工具)
-│   ├── sftp.js          ← sftp_connect/upload/download/list/delete, sftp_list_batch
+│   ├── sftp.js          ← sftp_connect/upload/download/list/delete, sftp_*_batch (list/upload/download/delete)
 │   ├── python.js        ← run_python_script (via Docker python_runner)
 │   ├── word.js          ← read_word_file, read_word_files_batch (.docx → Markdown/HTML/Text)
 │   ├── pptx.js          ← read_pptx_file, read_pptx_files_batch (.pptx → Markdown/Text + 圖片)
