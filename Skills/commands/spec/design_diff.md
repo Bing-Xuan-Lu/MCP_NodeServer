@@ -51,18 +51,38 @@ $ARGUMENTS
 
 ## 線上 XD 設計稿處理流程
 
-若設計稿來源為 XD 線上連結：
+若設計稿來源為 XD 線上連結，**不要在 XD viewer 內截圖**（artboard 是 canvas 渲染在 scrollable div 中，zoom 縮小 + fullPage 都無法取得完整 artboard）。
+
+**正確做法 — CDN 圖片直連**：
 
 ```
 1. browser_navigate → XD grid 頁面（連結尾端加 /grid）
-2. browser_take_screenshot → 總覽截圖
-3. 從 grid 頁面識別所有畫面名稱
-4. 逐一點擊畫面 → 進入單頁檢視 → 截圖
-5. 每張截圖存為 xd_{page_name}.png
-6. 與前台實際截圖比對
+2. browser_evaluate → 從 [role="gridcell"] img 提取每個 artboard 的 CDN 圖片 URL
+   - URL 格式：https://cdn-sharing.adobecc.com/content/storage/id/urn:aaid:sc:US:{project_id};revision={N}?component_id={artboard_id}&api_key=CometServer1&access_token={token}
+   - img.naturalWidth / naturalHeight 可確認圖片尺寸（通常 960px 寬）
+3. 對每個目標 artboard：
+   a. browser_navigate → CDN 圖片 URL（瀏覽器直接顯示完整圖片）
+   b. browser_take_screenshot + fullPage: true → 截取完整 artboard
+   c. Read 截圖檔案 → 驗證內容是正確頁面且完整
+4. 每張截圖存為 xd_{page_name}.png
+5. 與前台實際截圖比對
 ```
 
-> **注意**：XD 線上版是 SPA，需等待載入完成。若頁面切換後畫面空白，用 `browser_wait_for` 等待 2-3 秒。
+> **提取 CDN URL 的 JS**：
+> ```js
+> (() => {
+>   const cells = document.querySelectorAll('[role="gridcell"]');
+>   return Array.from(cells).map((cell, i) => ({
+>     index: i,
+>     label: cell.textContent.replace('屏幕', '').trim(),
+>     src: cell.querySelector('img')?.src || '',
+>     w: cell.querySelector('img')?.naturalWidth,
+>     h: cell.querySelector('img')?.naturalHeight
+>   }));
+> })()
+> ```
+
+> **注意**：access_token 有時效性，每次從 grid view 重新提取。CDN 圖片背景為黑色（瀏覽器預設），比對時注意。
 
 ---
 
@@ -253,82 +273,9 @@ browser_evaluate:
 
 ### 步驟 5：產出比對報告
 
-```markdown
-# 設計稿比對報告
+讀取 `_design_diff/report_template.md` 作為報告骨架，填入步驟 4 的比對數據。
 
-比對時間：{date}
-設計稿來源：{設計稿路徑}
-實作網址：{base_url}
-
----
-
-## 比對總覽
-
-| # | 頁面 | 設計稿 | 實際截圖 | OK | NG | 符合率 |
-|---|------|--------|---------|:--:|:--:|:------:|
-| 1 | 首頁 | homepage.png | impl_homepage.png | 8 | 3 | 73% |
-| 2 | 商品列表 | product_list.png | impl_product_list.png | 10 | 1 | 91% |
-
----
-
-## 逐頁面比對
-
-### 1. {頁面名稱}
-
-**設計稿**：`{design_file}`
-**實際截圖**：`screenshots/{fe|be}/diff/{live_file}`
-
-#### 版面結構
-{4a 比對表}
-
-#### 顏色
-{4b 比對表}
-
-#### 字體
-{4c 比對表}
-
-#### 間距
-{4d 比對表}
-
-#### 元件完整性
-{4e 比對表}
-
-#### NG 項目修正建議
-
-| # | 問題 | 建議修正 | 影響檔案 |
-|---|------|---------|---------|
-| 1 | 主按鈕顏色不符 | `.btn-primary { background: #E74C3C; }` | css/style.css |
-| 2 | 購物車缺少 badge | 加入 `.cart-badge` 元件 | include/header.php + css/style.css |
-
----
-
-## 統計
-
-| 項目 | 數量 |
-|------|:----:|
-| 比對頁面 | N |
-| 總檢查項 | N |
-| OK | N |
-| NG | N |
-| 整體符合率 | N% |
-
----
-
-## 修正建議 Checklist
-
-- [ ] {NG 項目 1}：{修正描述}
-- [ ] {NG 項目 2}：{修正描述}
-- [ ] ...
-
----
-
-## 建議下一步
-
-- 前端開發修正 NG 項目 → 修正 NG 項目
-- /rwd_scan {url} → 響應式檢查（若有多斷點設計稿）
-- /spec_screenshot_diff {module} → 對照規格書確認功能正確性
-- /design_diff {path} → 修正後重新比對
-```
+報告包含：比對總覽表 → 逐頁五維度比對（版面/顏色/字體/間距/元件）→ NG 修正建議 → 統計 → Checklist。
 
 儲存至：`{project}/reports/{frontend|backend}/design_diff_{date}.md`
 
@@ -361,15 +308,11 @@ browser_evaluate:
 
 ## 注意事項
 
-- **設計稿是圖片**：使用 Read 工具讀取圖片，Claude 多模態能力會自動辨識版面結構、顏色、字體等
-- **PDF 設計文件**：使用 Read 工具的 `pages` 參數分頁讀取，每頁獨立分析
-- **Figma 設計稿**：使用者需先匯出為 PNG/JPG 圖片，本工具不直接存取 Figma API
-- **顏色容差**：RGB 各通道差值 <= 10 視為 OK（不同螢幕/渲染引擎會有微小差異）
-- **字體大小容差**：+-2px 視為 OK（設計稿和瀏覽器的計算方式可能不同）
-- **間距容差**：+-5px 視為 OK
-- **不修改程式碼**：此 Skill 只做比對與報告產出，不自動修正差異。修正建議寫在報告中供後續執行
-- **Playwright 單一 context**：不可與其他 Agent 並行使用，所有操作必須序列化
-- **設計稿品質**：若設計稿解析度過低或有壓縮痕跡，在報告中註明可能影響比對準確度
-- **動態內容**：設計稿通常用假資料，比對時關注結構與樣式，不比對具體文字內容（除非是固定標題/標籤）
-- **多斷點設計稿**：若設計師提供多個斷點版本（desktop/tablet/mobile），每個斷點獨立比對
-- **CSS 修正建議**：優先使用 CSS 變數（若專案已有 CSS 變數體系）
+- **PDF 設計文件**：使用 Read 工具的 `pages` 參數分頁讀取
+- **Figma 設計稿**：使用者需先匯出為 PNG/JPG，本工具不直接存取 Figma API
+- **容差標準**：顏色 RGB <=10、字體 +-2px、間距 +-5px（已定義在步驟 4 各維度中）
+- **Playwright 獨佔**：詳見 `_project_qc/global_rules.md`「工具主權劃分」
+- **不修改程式碼**：只做比對與報告，修正建議寫在報告中
+- **動態內容**：比對結構與樣式，不比對假資料文字（除非是固定標題/標籤）
+- **多斷點設計稿**：每個斷點獨立比對
+- **CSS 修正建議**：優先使用 CSS 變數（若專案已有）

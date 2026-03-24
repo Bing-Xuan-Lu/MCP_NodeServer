@@ -21,7 +21,7 @@ $ARGUMENTS
 - `{URL}`：單一 URL 或逗號分隔的多個 URL
 - `全頁面`：自動從首頁爬取所有內部連結進行掃描
 - `--breakpoints`（可選）：自訂三斷點，格式 `mobile:WxH,tablet:WxH,desktop:WxH`
-- `--full-page`（可選）：截取完整頁面長截圖（預設僅首屏）
+- `--full-page`（可選）：截取完整頁面長截圖（預設僅首屏）。啟用時遵循 `_project_qc/global_rules.md`「截圖全域規則」（必加 `fullPage: true`、AOS 卷軸動畫先觸發再截圖）
 - `--project`（可選）：指定專案以使用對應截圖目錄
 
 ---
@@ -136,8 +136,10 @@ for each URL:
     2b. browser_navigate(url={URL})
     2c. browser_take_screenshot(
           fileName="{page_name}_{breakpoint.width}.png",
-          savePath="{截圖目錄}"
+          savePath="{截圖目錄}",
+          fullPage: true  // 遵循 global_rules.md 截圖規則
         )
+        ⚠️ 若頁面使用 AOS 等卷軸動畫庫，截圖前須先漸進卷軸觸發動畫（見 `_project_qc/global_rules.md`「AOS 注意事項」）
     2d. browser_evaluate → 執行溢出偵測 JS（見步驟 3）
     2e. browser_snapshot → 記錄 DOM 結構供分析
 ```
@@ -319,7 +321,7 @@ RWD 掃描完成！
 
 ## 注意事項
 
-- **Playwright 單一 context**：不可與其他 Agent 並行使用 Playwright MCP，必須序列化
+- **Playwright 獨佔**：詳見 `_project_qc/global_rules.md`「工具主權劃分」，不可與其他 Agent 並行使用 Playwright
 - **登入 Session**：若頁面需要登入，在步驟 0 完成登入後，同一 browser context 內所有頁面都能存取
 - **截圖高度**：預設使用各斷點標準高度（Mobile 812 / Tablet 1024 / Desktop 900），`--full-page` 模式需用 `browser_evaluate` 取得 `document.body.scrollHeight` 後調整
 - **效能**：每個頁面 3 個斷點 = 3 次 resize + 3 次 navigate + 3 次 screenshot，大量頁面時耗時較長
