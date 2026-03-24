@@ -21,6 +21,7 @@
 - `/rwd_scan` — 三斷點截圖掃描，偵測響應式問題
 - `/web_performance` — Playwright 實測載入指標 + PageSpeed 評分
 - `/verify` — 提交前七合一驗證（含 AI 品質稽核），產出 PASS/FAIL 報告
+- `/e2e_golden_path` — 輕量黃金路徑煙霧測試，5 分鐘走完核心業務路徑
 
 ## 規格分析部
 
@@ -32,7 +33,8 @@
 
 ## 開發流程部
 
-- `/sprint_plan` — 依賴層快速開發計畫（Tier-based 並行）
+- `/task_map` — 從使用者旅程產出專案全景心智模型（黃金路徑 + 跨模組資料流）
+- `/sprint_plan` — 依賴層快速開發計畫（含陌生度/影響/回報頻率評估）
 - `/sadd` — 規格書驅動，逐任務派遣 Agent 開發 PHP 功能
 - `/tdd` — TDD Red-Green-Refactor 循環指引（含輸出契約定義）
 - `/clean_arch` — Clean Architecture 架構審查與重構建議

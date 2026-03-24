@@ -216,58 +216,11 @@ run_php_script("{projectPath}/{modelDir}/{className}.class.php")
 
 ---
 
-## 🎨 頁面欄位類型處理規則
+## 頁面欄位類型處理規則
 
-### 產生表單 HTML 的對應
+> 10 種欄位類型（text/textarea/time/password/select/radio/checkbox/parents/html/file）的完整 HTML 範例見 `_php_crud_generator/field_types.md`。
 
-```
-text     → <input type="text" name="{col}" value="<?= h($row['{col}'] ?? '') ?>" class="form-control">
-textarea → <textarea name="{col}" class="form-control"><?= h($row['{col}'] ?? '') ?></textarea>
-time     → <input type="date" name="{col}" value="<?= h($row['{col}'] ?? '') ?>" class="form-control">
-password → <input type="password" name="{col}" class="form-control" placeholder="留空則不修改">
-number   → <input type="number" name="{col}" value="<?= h($row['{col}'] ?? '') ?>" class="form-control">
-
-select   → <select name="{col}" class="form-control">
-             <?php foreach([1=>'啟用',0=>'停用'] as $v=>$l): ?>
-             <option value="<?= $v ?>" <?= ($row['{col}']??'')==$v?'selected':'' ?>><?= $l ?></option>
-             <?php endforeach; ?>
-           </select>
-
-radio    → <?php foreach([1=>'啟用',0=>'停用'] as $v=>$l): ?>
-           <div class="icheck-primary d-inline mr-2">
-             <input type="radio" name="{col}" id="{col}_<?= $v ?>" value="<?= $v ?>"
-               <?= ($row['{col}']??'')==$v?'checked':'' ?>>
-             <label for="{col}_<?= $v ?>"><?= $l ?></label>
-           </div>
-           <?php endforeach; ?>
-
-checkbox → (同 radio 但 type=checkbox，name="{col}[]"，儲存為逗號分隔)
-
-parents  → <select name="{col}" class="form-control">
-             <?php foreach($parentOptions as $opt): ?>
-             <option value="<?= $opt['id'] ?>" <?= ($row['{col}']??'')==$opt['id']?'selected':'' ?>>
-               <?= h($opt['title']) ?></option>
-             <?php endforeach; ?>
-           </select>
-           ← list.php 頂部加：$parentOptions = $pdo->query("SELECT id, {title} FROM {parentTable}")->fetchAll();
-
-html     → <textarea name="{col}" id="editor_{col}" class="form-control"><?= h($row['{col}']??'') ?></textarea>
-           <script>CKEDITOR.replace('editor_{col}');</script>
-
-file     → <input type="file" name="{col}" class="form-control-file">
-           <?php if(!empty($row['{col}'])): ?>
-           <div class="mt-1"><small>目前：<a href="/uploads/{uploadeName}/<?= $row['{col}'] ?>" target="_blank"><?= h($row['{col}']) ?></a></small></div>
-           <?php endif; ?>
-```
-
-### 列表頁顯示轉換
-
-```
-select/radio → 顯示 label（用選項陣列轉換，不顯示原始數字）
-parents      → JOIN 上層資料表取 title 欄位
-file         → <img src="/uploads/.../<?= $row['col'] ?>" style="max-height:40px"> 或 連結
-html         → strip_tags() 截斷顯示前 50 字
-```
+Step 4 產生表單 HTML 時，讀取該參考檔取得對應的 HTML 模板。
 
 ---
 
@@ -345,36 +298,11 @@ send_http_request("http://localhost/{project}/{module}/list.php", "GET")
 
 ---
 
-## 🏗️ AdminLTE 版本差異
+## AdminLTE 版本差異
 
-產生 HTML 時，依 Step 0b 偵測到的版本使用不同的 CSS class 和結構：
+> LTE2/LTE3/LTE4 的 CSS class 對照見 `_php_crud_generator/adminlte_versions.md`。
 
-### 卡片 / Box 元件
-
-| 元素 | LTE2 | LTE3 / LTE4 |
-|------|------|-------------|
-| 卡片容器 | `<div class="box">` | `<div class="card">` |
-| 有色卡片 | `box box-primary` | `card card-primary` |
-| 標題區 | `box-header with-border` | `card-header` |
-| 標題 | `<h3 class="box-title">` | `<h3 class="card-title">` |
-| 內容區 | `box-body` | `card-body` |
-| 底部 | `box-footer` | `card-footer` |
-
-### Grid / 表單
-
-| 元素 | LTE2 | LTE3 / LTE4 |
-|------|------|-------------|
-| 12 欄 | `col-xs-12` | `col-12` |
-| 表單群組 | `form-group` | `form-group` (LTE3) / `mb-3` (LTE4) |
-| 取消按鈕 | `btn btn-default` | `btn btn-default` (LTE3) / `btn btn-secondary` (LTE4) |
-
-### 資料迭代方式
-
-| 元素 | LTE2（cursor） | LTE3 / LTE4（array） |
-|------|---------------|---------------------|
-| 迭代 | `while ($rs = $db->getNext())` | `foreach ($datas as $value):` |
-| 欄位存取 | `$rs->field`（stdClass） | `$value['field']`（array） |
-| 編輯頁 | `$data->field` | `$data['field']` |
+Step 0b 偵測版本後，Step 4 依對照表選用正確的 class（box vs card、col-xs vs col、迭代方式等）。
 
 ---
 

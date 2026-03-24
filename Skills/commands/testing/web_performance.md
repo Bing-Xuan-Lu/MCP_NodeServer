@@ -301,115 +301,17 @@ process.stdin.on('end', () => {
 
 ### 步驟 3：產出效能報告
 
-整合所有結果，產出報告：
+讀取 `_web_performance/report_template.md` 中的「對話輸出格式」，填入步驟 1-2 的數據後輸出。
 
-```
-📊 前端效能檢測報告
-🔗 {URL}
-📅 {日期}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🔬 Playwright 實測指標
-
-| 指標 | 數值 | 評級 |
-|------|------|------|
-| TTFB（首字節時間） | {N}ms | 🟢/🟡/🔴 |
-| FCP（首次繪製） | {N}ms | 🟢/🟡/🔴 |
-| DOM Content Loaded | {N}ms | 🟢/🟡/🔴 |
-| 完全載入 | {N}ms | 🟢/🟡/🔴 |
-| DOM 元素數 | {N} | 🟢/🟡/🔴 |
-| 總資源數 | {N} | - |
-| 總傳輸量 | {N} KB | 🟢/🟡/🔴 |
-
-📦 資源分佈
-| 類型 | 數量 | 大小 |
-|------|------|------|
-| script | {N} | {N} KB |
-| css | {N} | {N} KB |
-| img | {N} | {N} KB |
-| font | {N} | {N} KB |
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🌐 外部評分（PageSpeed / Lighthouse / CrUX，若有）
-
-| | Mobile | Desktop |
-|--|--------|---------|
-| 總分 | {N}/100 | {N}/100 |
-| LCP | {N}s | {N}s |
-| FID/INP | {N}ms | {N}ms |
-| CLS | {N} | {N} |
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚠️ 發現的問題（依嚴重度排序）
-
-| # | 嚴重度 | 問題 | 影響 | 建議修正 |
-|---|--------|------|------|---------|
-| 1 | 🔴 嚴重 | {問題描述} | {影響指標} | {具體修正方式} |
-| 2 | 🟡 中等 | ... | ... | ... |
-| 3 | 🟢 建議 | ... | ... | ... |
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🛠️ 優化行動清單（依投入/效益排序）
-
-□ 1. {最高效益的改善項目}
-     做法：{具體步驟}
-□ 2. ...
-□ 3. ...
-```
+報告包含：Playwright 實測指標 → 外部評分（若有）→ 發現的問題（依嚴重度排序）→ 優化行動清單。
 
 ### 步驟 4：產出 MD 報告檔
 
-將步驟 3 的完整報告寫入 MD 檔案：
+讀取 `_web_performance/report_template.md` 中的「MD 報告檔格式」，產出完整版報告。
 
-```
-Write {MCP_ROOT}/reports/web_performance_{domain}_{YYYYMMDD}.md
-```
+儲存至：`{MCP_ROOT}/reports/web_performance_{domain}_{YYYYMMDD}.md`
 
-**檔案命名規則**：
-- `{domain}`：網址的域名部分，取代 `.` 為 `_`（如 `example_com`）
-- `{YYYYMMDD}`：檢測日期
-
-**報告內容結構**（完整版，比對話輸出更詳細）：
-
-```markdown
-# 前端效能檢測報告
-
-- **網址**：{URL}
-- **頁面標題**：{title}
-- **檢測日期**：{date}
-- **檢測工具**：Playwright MCP + Network Analysis
-- **外部評分工具**：{PageSpeed API / Lighthouse CLI / CrUX API / 均不可用}
-
-## 1. 載入時間指標
-（含評級標準對照表）
-
-## 2. 資源分佈
-（含各類型數量、大小、佔比）
-
-## 3. DOM 結構分析
-（圖片問題、render-blocking 資源清單）
-
-## 4. 隱私權合規檢查
-（<head> 載入順序、網路請求時序、修正建議含程式碼）
-
-## 5. 發現的問題（依嚴重度排序）
-（每個問題含：問題描述、影響指標、具體修正方式）
-
-## 6. 優化行動清單
-（含優先順序、預估效益、難度）
-
-## 7. 具體修正範例
-（每個修正含修正前/修正後的程式碼）
-
----
-*報告由 Claude Code /web_performance Skill 產出*
-```
-
-報告寫入後告知使用者檔案路徑。
+**檔案命名規則**：`{domain}` 取網址域名（`.` 換 `_`），`{YYYYMMDD}` 檢測日期。
 
 ### 步驟 5：互動式深入分析（可選）
 
@@ -458,23 +360,10 @@ Write {MCP_ROOT}/reports/web_performance_{domain}_{YYYYMMDD}.md
 
 ## 注意事項
 
-- `localhost` 網址只能用 Playwright 實測和 Lighthouse CLI，無法用 PageSpeed API 和 CrUX API
-- PageSpeed API 免費版有速率限制（約每分鐘 1-2 次），遇 429 自動 fallback 到 Lighthouse CLI
-- Lighthouse CLI 需先安裝：`npm install -g lighthouse`（免費，本機執行無速率限制）
-- Lighthouse 執行時會佔用 Chrome，若 Playwright 正在使用需先 `browser_close`，Lighthouse 完成後再重新開啟
-- CrUX API 免費、不需 API Key，但只有流量足夠的網站才有數據（過去 28 天彙總）
+- `localhost` 網址只能用 Playwright 實測 + Lighthouse CLI，無法用 PageSpeed/CrUX API
+- PageSpeed API 免費版有速率限制（~1-2 次/分），遇 429 自動 fallback 到 Lighthouse CLI
+- Lighthouse CLI 需先安裝 `npm install -g lighthouse`，執行時會佔用 Chrome（需先 `browser_close`）
+- CrUX API 免費不需 Key，但只有流量足夠的網站有數據（過去 28 天彙總）
 - Playwright 測試結果受本機效能影響，數值僅供相對比較
 - 報告中的「建議修正」應具體到可執行的程式碼或設定修改
-- 若需要登入才能測試的頁面，先用 Playwright 完成登入流程再分析
-
-### 三層 Fallback 摘要
-
-```
-PageSpeed API（公開網址首選）
-  ↓ 429 或失敗
-Lighthouse CLI（本機執行，需安裝）
-  ↓ 未安裝或失敗
-CrUX API（真實用戶數據，流量不足可能無數據）
-  ↓ 無數據
-僅使用 Playwright 實測指標
-```
+- 若需登入頁面，先用 Playwright 完成登入再分析

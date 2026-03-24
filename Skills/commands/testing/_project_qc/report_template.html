@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>{ProjectName} 網站校稿單</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; }
+  h1 { border-bottom: 3px solid #333; padding-bottom: 10px; }
+  h2 { border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 40px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+  th { background-color: #f5f5f5; }
+  .pass { color: #4CAF50; font-weight: bold; }
+  .fail { color: #f44336; font-weight: bold; }
+  .pending { color: #FF9800; font-weight: bold; }
+  .compare-row { display: flex; gap: 15px; margin: 15px 0; align-items: flex-start; }
+  .compare-col { flex: 1; }
+  .compare-col img { max-width: 100%; border: 2px solid #ccc; }
+  .compare-col.xd img { border-color: #4CAF50; }
+  .compare-col.live img { border-color: #2196F3; }
+  .compare-col.spec img { border-color: #FF9800; }
+  .rwd-row { display: flex; gap: 10px; margin: 15px 0; align-items: flex-start; }
+  .rwd-col img { border: 1px solid #ccc; }
+  .screenshot { max-width: 100%; border: 1px solid #ccc; margin: 5px 0; }
+  .ng-item { background-color: #fff3f3; padding: 10px; margin: 10px 0; border-left: 4px solid #f44336; }
+  .pass-item { background-color: #f3fff3; padding: 10px; margin: 10px 0; border-left: 4px solid #4CAF50; }
+</style>
+</head>
+<body>
+<h1>{ProjectName} 網站校稿單</h1>
+
+<p>
+<strong>稽核日期</strong>：{日期}
+<strong>版次</strong>：v{N}<br>
+<strong>UI/UX 稽核員</strong>：UI/UX Agent（Playwright 獨佔）<br>
+<strong>邏輯稽核員</strong>：Logic Agent（MCP 工具）
+</p>
+
+<h2>整體結論</h2>
+
+<table>
+<tr><th>項目</th><th>負責人</th><th>結果</th><th>NG 數量</th></tr>
+<tr><td>A0 欄位映射覆蓋率</td><td>邏輯稽核員</td><td>{N}%</td><td>—</td></tr>
+<tr><td>A 全欄位 CRUD</td><td>邏輯稽核員</td><td></td><td></td></tr>
+<tr><td>B0 全站互動探索</td><td>UI/UX 稽核員</td><td></td><td></td></tr>
+<tr><td>B1 後台表單</td><td>UI/UX 稽核員</td><td></td><td></td></tr>
+<tr><td>B2 後台→前台對應</td><td>UI/UX 稽核員</td><td></td><td></td></tr>
+<tr><td>B3 全欄位變更傳播</td><td>UI/UX 稽核員</td><td></td><td></td></tr>
+<tr><td>B4 欄位三方對映</td><td>邏輯稽核員</td><td></td><td></td></tr>
+<tr><td>C 視覺比對</td><td>UI/UX 稽核員</td><td></td><td></td></tr>
+<tr><td>D 規格書比對</td><td>邏輯稽核員</td><td></td><td></td></tr>
+<tr><td>E 業務流程</td><td>雙操作員</td><td></td><td></td></tr>
+<tr><td>F RWD</td><td>UI/UX 稽核員</td><td></td><td></td></tr>
+<tr><td><strong>總計</strong></td><td>—</td><td><strong></strong></td><td><strong></strong></td></tr>
+</table>
+
+<h2>Phase A0 — 欄位映射覆蓋率</h2>
+<table>
+<tr><th>模組</th><th>DB 欄位</th><th>後台可操作</th><th>前台可見</th><th>未覆蓋</th><th>覆蓋率</th></tr>
+</table>
+
+<h2>Phase A — 全欄位 CRUD</h2>
+<table>
+<tr><th>模組</th><th>欄位</th><th>類型</th><th>新增</th><th>讀取</th><th>更新</th><th>刪除</th><th>結果</th></tr>
+</table>
+
+<h2>Phase B0 — 全站互動探索</h2>
+<table>
+<tr><th>頁面</th><th>互動元素數</th><th>點擊</th><th>表單</th><th>滑動</th><th>Hover</th><th>POPUP</th><th>NG 數</th></tr>
+</table>
+
+<h2>Phase B1 — 後台表單操作</h2>
+<table>
+<tr><th>模組</th><th>欄位</th><th>輸入值</th><th>送出結果</th><th>截圖</th></tr>
+</table>
+
+<h2>Phase B2 — 後台新增→前台對應</h2>
+<table>
+<tr><th>模組</th><th>DB 欄位</th><th>後台輸入值</th><th>前台顯示值</th><th>一致</th><th>截圖</th></tr>
+</table>
+
+<h2>Phase B3 — 全欄位變更傳播</h2>
+<table>
+<tr><th>模組</th><th>欄位</th><th>原值</th><th>新值</th><th>前台結果</th><th>結果</th><th>截圖</th></tr>
+</table>
+
+<h2>Phase B4 — 欄位三方對映</h2>
+<table>
+<tr><th>模組</th><th>後台 label</th><th>form name</th><th>DB column</th><th>前台讀取欄位</th><th>一致</th></tr>
+</table>
+
+<h2>Phase C — 視覺比對</h2>
+<!-- 每個頁面：XD 設計稿 vs 實際網站並排截圖 + 差異表 -->
+<!--
+<h3>{頁面} — XD vs 實際</h3>
+<div class="compare-row">
+  <div class="compare-col xd"><p><strong>XD 設計稿</strong></p><img src="screenshots/c_{page}_xd.png" /></div>
+  <div class="compare-col live"><p><strong>實際網站</strong></p><img src="screenshots/c_{page}_live.png" /></div>
+</div>
+<table>
+<tr><th>差異項目</th><th>設計稿值</th><th>實際值</th><th>結果</th></tr>
+</table>
+-->
+
+<h2>Phase D — 規格書比對</h2>
+<table>
+<tr><th>模組</th><th>規格書描述</th><th>實際行為</th><th>NG</th></tr>
+</table>
+
+<h2>Phase E — 業務流程測試矩陣結果</h2>
+<table>
+<tr><th>案例</th><th>流程</th><th>測試條件</th><th>前台結果</th><th>後台 DB 驗證</th><th>NG</th></tr>
+</table>
+
+<h2>Phase F — RWD</h2>
+<!-- 每頁：三斷點並排截圖 -->
+<!--
+<h3>{頁面} — RWD 三斷點</h3>
+<div class="rwd-row">
+  <div class="rwd-col"><p>Mobile {width}px</p><img src="screenshots/f_{page}_mobile.png" style="max-width:200px;" /></div>
+  <div class="rwd-col"><p>Tablet {width}px</p><img src="screenshots/f_{page}_tablet.png" style="max-width:300px;" /></div>
+  <div class="rwd-col"><p>Desktop {width}px</p><img src="screenshots/f_{page}_desktop.png" style="max-width:500px;" /></div>
+</div>
+-->
+<table>
+<tr><th>頁面</th><th>Mobile</th><th>Tablet</th><th>Desktop</th><th>問題</th></tr>
+</table>
+
+<hr>
+
+<h2>NG 修正清單</h2>
+<ul>
+<!-- <li>[ ] [A-01] 後台 CRUD：{模組/欄位 + 問題}</li> -->
+</ul>
+
+</body>
+</html>

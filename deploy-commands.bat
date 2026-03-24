@@ -17,11 +17,14 @@ set VALID_LIST=%TEMP%\mcp_valid_skills.txt
 if exist "%VALID_LIST%" del "%VALID_LIST%"
 
 for /r "Skills\commands" %%F in (*.md) do (
-  echo %%~nxF | findstr /I /B "_" > nul
+  echo %%~dpF | findstr /I /C:"_archived" > nul
   if errorlevel 1 (
-    echo %%~nxF | findstr /I /E /C:"_internal.md" /C:"_steps.md" > nul
+    echo %%~nxF | findstr /I /B "_" > nul
     if errorlevel 1 (
-      echo %%~nxF >> "%VALID_LIST%"
+      echo %%~nxF | findstr /I /E /C:"_internal.md" /C:"_steps.md" > nul
+      if errorlevel 1 (
+        echo %%~nxF >> "%VALID_LIST%"
+      )
     )
   )
 )
@@ -48,14 +51,17 @@ for %%F in ("%GEMINI_DIR%\*.md") do (
 :: ---- Step 4: Deploy valid skills ----
 set count=0
 for /r "Skills\commands" %%F in (*.md) do (
-  echo %%~nxF | findstr /I /B "_" > nul
+  echo %%~dpF | findstr /I /C:"_archived" > nul
   if errorlevel 1 (
-    echo %%~nxF | findstr /I /E /C:"_internal.md" /C:"_steps.md" > nul
+    echo %%~nxF | findstr /I /B "_" > nul
     if errorlevel 1 (
-      copy /Y "%%F" "%CLAUDE_DIR%\%%~nxF" > nul
-      copy /Y "%%F" "%GEMINI_DIR%\%%~nxF" > nul
-      echo   deployed %%~nxF
-      set /a count+=1
+      echo %%~nxF | findstr /I /E /C:"_internal.md" /C:"_steps.md" > nul
+      if errorlevel 1 (
+        copy /Y "%%F" "%CLAUDE_DIR%\%%~nxF" > nul
+        copy /Y "%%F" "%GEMINI_DIR%\%%~nxF" > nul
+        echo   deployed %%~nxF
+        set /a count+=1
+      )
     )
   )
 )
@@ -66,4 +72,4 @@ echo.
 echo Done! %count% skills deployed, %stale% stale files removed.
 echo   Claude: %CLAUDE_DIR%
 echo   Gemini: %GEMINI_DIR%
-echo (Excluded: _skill_template.md, *_internal.md, *_steps.md)
+echo (Excluded: _skill_template.md, *_internal.md, *_steps.md, _archived/)
