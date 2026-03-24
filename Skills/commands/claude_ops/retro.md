@@ -13,12 +13,13 @@ description: |
 
 ## 背景
 
-開發對話中經常產生三種有價值的產出，但容易被遺漏：
+開發對話中經常產生四種有價值的產出，但容易被遺漏：
 - **Memory**：踩坑經驗、架構決策、使用者 feedback — 該存但忘了存
 - **Skill**：重複了 2-3 次的流程 — 該固化但沒做
 - **Tool**：MCP 工具的 bug 或缺少的功能 — 該改但沒提
+- **MCP Backlog**：從其他專案發現的 MCP 改進機會 — 跨專案收集，回到 MCP 專案再消化
 
-`/retro` 一次掃描三個面向，列出發現後由使用者決定處理哪些。
+`/retro` 一次掃描四個面向，列出發現後由使用者決定處理哪些。
 
 ---
 
@@ -28,12 +29,13 @@ $ARGUMENTS
 
 | 呼叫方式 | 說明 |
 |---|---|
-| `/retro` | 完整掃描三個面向 |
+| `/retro` | 完整掃描四個面向 |
 | `/retro memory` | 只掃 Memory |
 | `/retro skill` | 只掃 Skill（等同舊 `/learn_claude_skill`） |
 | `/retro skill 改進 {name}` | 改進指定 Skill |
 | `/retro skill 研究 {repo}` | 參考庫研究模式 |
 | `/retro tool` | 只掃 Tool 改善 |
+| `/retro backlog` | 讀取 MCP backlog，逐條決定處理（在 MCP 專案中使用） |
 
 ---
 
@@ -104,6 +106,26 @@ Glob pattern="~/.claude/projects/*/memory/MEMORY.md"
 | 新增工具 | 重複手動操作可自動化 |
 | 效能問題 | 工具執行太慢或佔用過多資源 |
 
+#### D — MCP Backlog 面向
+
+**只在非 MCP 專案對話中執行此面向。**
+
+掃描對話中是否有值得寫入 MCP backlog 的改進機會（Tool 面向未涵蓋的 Skill 改進、新增 Skill 機會等），詢問使用者確認後用 `apply_diff` append 到：
+
+```
+D:\Develop\MCP_NodeServer\improvements_backlog.md
+```
+
+格式：`- [ ] [類型] 描述 ← {當前專案名} (YYYY-MM-DD)`
+
+**`/retro backlog` 模式（在 MCP 專案使用）**：
+
+1. 用 `read_file` 讀取 `improvements_backlog.md`
+2. 列出所有未完成項目（`- [ ]`）
+3. 逐條詢問：實作 / 延後 / 捨棄
+4. 選擇實作 → 進入對應的 Tool 或 Skill 處理流程
+5. 選擇完成後 → 用 `apply_diff` 將 `- [ ]` 改為 `- [x]`
+
 ---
 
 ### 步驟 2：產出回顧報告
@@ -128,6 +150,10 @@ Glob pattern="~/.claude/projects/*/memory/MEMORY.md"
   1. [bug/增強/新增] 工具名 — 問題或建議
      影響範圍：哪些專案/流程受益
   （無發現時顯示「✅ 無工具改善需求」）
+
+📥 MCP Backlog（跨專案改進，非 MCP 專案才顯示）：
+  1. [類型] 描述 → append 到 improvements_backlog.md
+  （無發現時顯示「✅ 無 MCP 改進機會」）
 
 ━━━━━━━━━━━━━━━━━━━━━━━
   總計：N 個發現
