@@ -5,6 +5,44 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_CONFIG_FILE = path.join(__dirname, "..", ".mcp_db_config.json");
+const AUDIT_LOG = path.join(__dirname, "..", "..", "Project", "_mcp_audit.log");
+
+// ============================================
+// 防 Reward Hacking：危險語句檢查 + Audit Log
+// ============================================
+
+// 判斷單條 SQL 是否危險，回傳 null（安全）或 { block, reason }
+function checkDangerousStmt(sql) {
+  const trimmed = sql.trim();
+  const upper = trimmed.toUpperCase().replace(/\s+/g, " ");
+  const keyword = upper.match(/^(DELETE|UPDATE|DROP|TRUNCATE)\b/)?.[1];
+  if (!keyword) return null; // SELECT / INSERT / CREATE / ALTER / SHOW 等 → 安全
+
+  // 例外：測試清理（MCP_TEST_ 標記是 php_crud_test.md 定義的正式清理 pattern）
+  if (keyword === "DELETE" && trimmed.toUpperCase().includes("MCP_TEST_")) return null;
+
+  // 硬性封鎖：DELETE / UPDATE 無 WHERE（幾乎不可能是故意的）
+  if ((keyword === "DELETE" || keyword === "UPDATE") && !upper.includes(" WHERE ")) {
+    return { block: true, reason: `${keyword} 無 WHERE 條件，可能影響整張表` };
+  }
+
+  // 軟性閘門（需 confirm: true）
+  return {
+    block: false,
+    reason: `${keyword} 可能修改/刪除業務資料，需加 confirm: true 確認`,
+  };
+}
+
+// 將非 SELECT 語句寫入 append-only audit log
+async function auditSQL(sql, dbName) {
+  try {
+    const ts = new Date().toISOString();
+    const line = `[${ts}] [${dbName || "?"}] ${sql.replace(/\s+/g, " ").slice(0, 500)}\n`;
+    await fs.appendFile(AUDIT_LOG, line, "utf-8");
+  } catch {
+    // audit 失敗不影響主流程
+  }
+}
 
 // ============================================
 // 記憶體狀態：當前資料庫連線設定
@@ -63,10 +101,16 @@ export const definitions = [
   },
   {
     name: "execute_sql",
-    description: "執行 SQL 指令 (DDL/DML)，支援多條語句以分號分隔、逐條執行",
+    description: "執行 SQL 指令 (DDL/DML)，支援多條語句以分號分隔、逐條執行。DELETE/UPDATE/DROP/TRUNCATE 需加 confirm: true。",
     inputSchema: {
       type: "object",
-      properties: { sql: { type: "string" } },
+      properties: {
+        sql: { type: "string" },
+        confirm: {
+          type: "boolean",
+          description: "對 DELETE/UPDATE/DROP/TRUNCATE 必須明確傳 true，表示已確認操作不是為了規避測試失敗",
+        },
+      },
       required: ["sql"],
     },
   },
@@ -102,6 +146,10 @@ export const definitions = [
             required: ["sql"],
           },
           description: "SQL 查詢陣列",
+        },
+        confirm: {
+          type: "boolean",
+          description: "批次中含 DELETE/UPDATE/DROP/TRUNCATE 時必須傳 true",
         },
       },
       required: ["queries"],
@@ -364,6 +412,28 @@ export async function handle(name, args) {
     if (!check.ok) return check.error;
 
     const statements = splitSQL(args.sql);
+
+    // 危險語句預檢
+    const dangerList = [];
+    for (const sql of statements) {
+      const d = checkDangerousStmt(sql);
+      if (d) dangerList.push({ sql: sql.slice(0, 120), ...d });
+    }
+    const blocked = dangerList.filter((d) => d.block);
+    const needConfirm = dangerList.filter((d) => !d.block);
+    if (blocked.length > 0) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: `⛔ 封鎖 ${blocked.length} 條危險語句：\n${blocked.map((d) => `  • ${d.reason}：${d.sql}`).join("\n")}` }],
+      };
+    }
+    if (needConfirm.length > 0 && !args.confirm) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: `⚠️ 以下語句需加 confirm: true 才能執行（防止誤刪業務資料）：\n${needConfirm.map((d) => `  • ${d.reason}：${d.sql}`).join("\n")}` }],
+      };
+    }
+
     const conn = await mysql.createConnection(check.config);
     const results = [];
     try {
@@ -374,6 +444,11 @@ export async function handle(name, args) {
           if (Array.isArray(res)) {
             results.push(`[${i + 1}] 查詢結果 (${res.length} 筆)：\n${formatRows(res)}`);
           } else {
+            // 非 SELECT 寫入 audit log
+            const upper = sql.trim().toUpperCase();
+            if (!upper.startsWith("SELECT") && !upper.startsWith("SHOW") && !upper.startsWith("DESCRIBE")) {
+              await auditSQL(sql, check.config.database);
+            }
             results.push(`[${i + 1}] ✅ 執行成功。影響列數: ${res.affectedRows}`);
           }
         } catch (err) {
@@ -415,12 +490,37 @@ export async function handle(name, args) {
     const check = requireDb();
     if (!check.ok) return check.error;
 
+    // 危險語句預檢（所有批次項目）
+    const dangerList = [];
+    for (const q of args.queries) {
+      const d = checkDangerousStmt(q.sql);
+      if (d) dangerList.push({ label: q.label || q.sql.slice(0, 60), ...d });
+    }
+    const blocked = dangerList.filter((d) => d.block);
+    const needConfirm = dangerList.filter((d) => !d.block);
+    if (blocked.length > 0) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: `⛔ 封鎖 ${blocked.length} 條危險語句：\n${blocked.map((d) => `  • ${d.reason}：${d.label}`).join("\n")}` }],
+      };
+    }
+    if (needConfirm.length > 0 && !args.confirm) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: `⚠️ 批次中有 ${needConfirm.length} 條語句需加 confirm: true：\n${needConfirm.map((d) => `  • ${d.reason}：${d.label}`).join("\n")}` }],
+      };
+    }
+
     const conn = await mysql.createConnection(check.config);
     const results = [];
     try {
       for (const q of args.queries) {
         try {
           const [res] = await conn.execute(q.sql);
+          const upper = q.sql.trim().toUpperCase();
+          if (!upper.startsWith("SELECT") && !upper.startsWith("SHOW") && !upper.startsWith("DESCRIBE")) {
+            await auditSQL(q.sql, check.config.database);
+          }
           results.push(`${q.label || "SQL"}: ✅ 成功`);
         } catch (err) {
           results.push(`${q.label || "SQL"}: ❌ ${err.message}`);

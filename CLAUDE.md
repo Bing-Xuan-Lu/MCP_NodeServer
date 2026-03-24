@@ -19,9 +19,9 @@ MCP_NodeServer/
 │   ├── reference/       ← 靜態參考資料與外部文件連結
 │   └── user/            ← 使用者偏好與設定
 ├── tools/               ← MCP 工具模組（各自匯出 definitions + handle）
-│   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, read_files_batch, list_files_batch, create_file_batch
+│   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, read_files_batch, list_files_batch, create_file_batch（PROTECTED_PATTERNS 阻擋寫入 *.test.* / tests/ / _mcp_audit.log）
 │   ├── php.js           ← run_php_script, run_php_test, send_http_request（含 cookie_jar session）, tail_log, send_http_requests_batch, run_php_script_batch
-│   ├── database.js      ← set_database, load_db_connection, get_current_db, get_db_schema, execute_sql, get_db_schema_batch, execute_sql_batch
+│   ├── database.js      ← set_database, load_db_connection, get_current_db, get_db_schema, execute_sql（危險語句攔截 + confirm 參數 + audit log）, get_db_schema_batch, execute_sql_batch（同上）
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   ├── bookmarks.js     ← Chrome 書籤管理（12 個工具）
 │   ├── sftp.js          ← sftp_connect, sftp_upload, sftp_download, sftp_list, sftp_delete, sftp_*_batch (list/upload/download/delete)

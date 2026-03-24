@@ -83,9 +83,9 @@ MCP_NodeServer/
 ├── index.js             ← MCP Server 主程式
 ├── config.js            ← resolveSecurePath (預設 basePath 為 D:\Project\)
 ├── tools/               ← MCP 工具模組
-│   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, *_batch (read_files/list_files/create_file)
+│   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, *_batch (read_files/list_files/create_file)（PROTECTED_PATTERNS 防寫入測試檔 + audit log）
 │   ├── php.js           ← run_php_script, run_php_test, send_http_request, tail_log, *_batch (http_requests/php_script)
-│   ├── database.js      ← set_database, load_db_connection, get_db_schema, execute_sql, *_batch
+│   ├── database.js      ← set_database, load_db_connection, get_db_schema, execute_sql（危險語句攔截 + confirm + audit log）, *_batch
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   ├── bookmarks.js     ← Chrome 書籤管理 (12 工具)
 │   ├── sftp.js          ← sftp_connect/upload/download/list/delete, sftp_*_batch (list/upload/download/delete)

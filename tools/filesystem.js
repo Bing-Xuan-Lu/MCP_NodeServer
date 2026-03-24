@@ -2,6 +2,27 @@ import fs from "fs/promises";
 import path from "path";
 import { resolveSecurePath } from "../config.js";
 
+// 防 Reward Hacking：保護測試相關檔案，防止 Claude 為了讓測試通過而修改測試本身
+const PROTECTED_PATTERNS = [
+  /\btests?\//i,              // tests/ 或 test/ 目錄
+  /__tests__\//i,             // __tests__/ 目錄
+  /\.test\.(php|js|ts)$/i,    // *.test.php / *.test.js / *.test.ts
+  /_test\.(php|js|ts)$/i,     // *_test.php / *_test.js
+  /Test\.php$/,               // PHPUnit 慣例：*Test.php
+  /_mcp_audit\.log$/i,        // SQL audit log（append-only，不可被覆寫）
+];
+
+function checkProtected(filePath) {
+  const normalized = filePath.replace(/\\/g, "/");
+  const hit = PROTECTED_PATTERNS.find((p) => p.test(normalized));
+  if (hit) {
+    throw new Error(
+      `⛔ 防 Reward Hacking 保護：「${filePath}」是受保護的測試檔案（符合規則 ${hit}）。\n` +
+      `若確需修改，請使用者在對話中明確授權後再操作。`
+    );
+  }
+}
+
 // ============================================
 // 工具定義
 // ============================================
@@ -202,6 +223,7 @@ export async function handle(name, args) {
   }
 
   if (name === "create_file") {
+    checkProtected(args.path);
     const fullPath = resolveSecurePath(args.path);
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.writeFile(fullPath, args.content, "utf-8");
@@ -216,6 +238,7 @@ export async function handle(name, args) {
     let okCount = 0;
     for (const file of args.files) {
       try {
+        checkProtected(file.path);
         const fullPath = resolveSecurePath(file.path);
         await fs.mkdir(path.dirname(fullPath), { recursive: true });
         await fs.writeFile(fullPath, file.content, "utf-8");
@@ -231,6 +254,7 @@ export async function handle(name, args) {
   }
 
   if (name === "apply_diff") {
+    checkProtected(args.path);
     const fullPath = resolveSecurePath(args.path);
     const raw = await fs.readFile(fullPath, "utf-8");
 

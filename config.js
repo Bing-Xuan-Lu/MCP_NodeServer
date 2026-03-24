@@ -1,7 +1,7 @@
 import path from "path";
 
 export const CONFIG = {
-  basePath: "D:\\Project\\",
+  basePaths: ["D:\\Project\\", "D:\\Develop\\"],
 };
 
 /**
@@ -16,12 +16,12 @@ export function resolveSecurePath(userPath) {
   const isAbsolute = path.isAbsolute(userPath);
   const targetPath = isAbsolute
     ? path.resolve(userPath)
-    : path.resolve(CONFIG.basePath, userPath);
+    : path.resolve(CONFIG.basePaths[0], userPath);
 
   const normalizedTarget = targetPath.toLowerCase();
 
-  // 1. 預設允許：basePath 以內
-  if (normalizedTarget.startsWith(CONFIG.basePath.toLowerCase())) {
+  // 1. 預設允許：任一 basePath 以內
+  if (CONFIG.basePaths.some(p => normalizedTarget.startsWith(p.toLowerCase()))) {
     return targetPath;
   }
 

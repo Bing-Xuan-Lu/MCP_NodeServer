@@ -575,11 +575,15 @@
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 時程規劃</div>
                 <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">SPRINT PLANNING</div>
-                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">拆解任務清單並建立開發時程。</p>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">建立專案全景心智模型，拆解任務清單並規劃開發時程。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">1. 制定開發時程</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">1. 建立全景心智模型</span>
+                  <a class="tag" href="javascript:void(0)">/task_map</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">2. 制定開發時程</span>
                   <a class="tag" href="javascript:void(0)">/sprint_plan</a>
                 </div>
               </div>
@@ -604,6 +608,10 @@
                   <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">2. Schema 遷移</span>
                   <a class="tag" href="javascript:void(0)">/db_migration</a>
                 </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">3. 索引優化分析</span>
+                  <a class="tag" href="javascript:void(0)">/db_index_analyzer</a>
+                </div>
               </div>
             </div>
           </li>
@@ -622,12 +630,20 @@
                   <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">1. 新增 CRUD 模組</span>
                   <a class="tag" href="javascript:void(0)">/php_crud_generator</a>
                 </div>
+                <div class="timeline-step" style="border-color:var(--purple); border-style:dashed;" title="複雜邏輯模組（計算公式、狀態機、多角色權限）才需要">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--purple); margin-bottom:4px;">複雜邏輯模組前置</span>
+                  <a class="tag" href="javascript:void(0)" style="border-color:var(--purple);">/tdd</a>
+                </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">2. 逐任務派遣開發</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">2. 逐任務派遣開發（含契約定義）</span>
                   <a class="tag" href="javascript:void(0)">/sadd</a>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">3. 建立工作流程安全點</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">3. 架構複查</span>
+                  <a class="tag" href="javascript:void(0)">/clean_arch</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">4. 建立工作流程安全點</span>
                   <a class="tag" href="javascript:void(0)">/checkpoint</a>
                 </div>
               </div>
@@ -637,15 +653,24 @@
           <!-- 5. 前台開發 -->
           <li class="timeline-item">
             <div class="timeline-marker"></div>
-            <div class="timeline-content" style="border-left: 4px solid #f59e0b;">
+            <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:#f59e0b; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⑤ 前台開發</div>
                 <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em; letter-spacing:.08em;">FRONTEND DEV</div>
-                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">刻劃互動介面與資料串接 (待補)。</p>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">實作前台頁面與互動邏輯，並即時 QC 確保 UI 符合設計稿。</p>
               </div>
               <div class="timeline-actions">
-                <div class="timeline-step" style="justify-content:center; align-items:center; background:color-mix(in srgb, var(--bg) 80%, #f59e0b 20%); border-color:#f59e0b; border-style:dashed;">
-                  <span style="font-size:14px; font-weight:700; color:#f59e0b;">待補 Skill</span>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">1. 前台功能開發</span>
+                  <a class="tag" href="javascript:void(0)">/sadd</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">2. 前台逐頁 QC</span>
+                  <a class="tag" href="javascript:void(0)">/frontend_qc</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">3. 建立工作流程安全點</span>
+                  <a class="tag" href="javascript:void(0)">/checkpoint</a>
                 </div>
               </div>
             </div>
@@ -672,6 +697,14 @@
                 <div class="timeline-step">
                   <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">C. RWD</span>
                   <a class="tag" href="javascript:void(0)">/rwd_scan</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">D. 效能</span>
+                  <a class="tag" href="javascript:void(0)">/web_performance</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--cyan);">E. 快速回歸（每次改 code 後）</span>
+                  <a class="tag" href="javascript:void(0)" style="border-color:var(--cyan);">/e2e_golden_path</a>
                 </div>
                 <div class="timeline-step">
                   <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--purple);">全站 QC 彙整</span>
@@ -824,15 +857,19 @@
             <div class="timeline-content">
               <div class="timeline-header">
                 <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">Phase D — 驗證</div>
-                <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SMOKE TEST</div>
-                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">HTTP 打首頁與後台，確認部署後網站正常運作。</p>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SMOKE TEST + REGRESSION</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">確認部署後網站正常，並走一遍核心業務路徑確保主幹未斷。</p>
               </div>
               <div class="timeline-actions">
                 <div class="timeline-step">
                   <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">1. send_http_request 首頁 → 200</span>
                 </div>
                 <div class="timeline-step">
-                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">2. 失敗時查 error log</span>
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">2. 黃金路徑回歸驗證</span>
+                  <a class="tag" href="javascript:void(0)" style="border-color:var(--cyan);">/e2e_golden_path</a>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">3. 失敗時查 error log</span>
                   <a class="tag" href="javascript:void(0)">/sftp_ops</a>
                 </div>
               </div>
@@ -987,7 +1024,7 @@
 
       <section class="bento-item span-6 dept-card" style="border-left: 4px solid var(--cyan);">
         <div class="dept-name">檔案系統 & 資料庫</div>
-        <div class="dept-desc">讀寫檔案、執行 SQL 與取得 Schema</div>
+        <div class="dept-desc">讀寫檔案、執行 SQL 與取得 Schema<br><span style="font-size:12px;color:var(--muted);">🛡️ Reward Hacking 防護：apply_diff/create_file 阻擋寫入測試檔；execute_sql DELETE/UPDATE 需 confirm:true + append-only audit log</span></div>
         <div class="tag-container">
           <a class="tag tool-tag" href="javascript:void(0)">list_files</a><a class="tag tool-tag" href="javascript:void(0)">read_file</a><a class="tag tool-tag" href="javascript:void(0)">create_file</a><a class="tag tool-tag" href="javascript:void(0)">apply_diff</a><a class="tag tool-tag" href="javascript:void(0)">read_files_batch</a><a class="tag tool-tag" href="javascript:void(0)">list_files_batch</a><a class="tag tool-tag" href="javascript:void(0)">create_file_batch</a>
           <a class="tag tool-tag" href="javascript:void(0)">set_database</a><a class="tag tool-tag" href="javascript:void(0)">get_current_db</a><a class="tag tool-tag" href="javascript:void(0)">get_db_schema</a><a class="tag tool-tag" href="javascript:void(0)">execute_sql</a><a class="tag tool-tag" href="javascript:void(0)">get_db_schema_batch</a><a class="tag tool-tag" href="javascript:void(0)">execute_sql_batch</a>
