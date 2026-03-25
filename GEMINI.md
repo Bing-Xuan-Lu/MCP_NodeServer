@@ -33,7 +33,7 @@ MCP_NodeServer/
 └── Skills/              ← Skill MD 檔
     ├── *_agent.md       ← MCP Prompts 內容
     └── commands/        ← 斜線指令 (需符合 60 個上限與 Frontmatter 規範)
-```
+        └── _cold/       ← 冷凍技能區 (不計入上限，不自動部署，需手動啟用)
 
 ## 🧠 技能調用與管理 (Expert Skill Usage)
 本專案擁有強大的專家技能庫 (`Skills/commands/`)。任務涉及以下領域時，**必須**先讀取對應文件：
@@ -44,6 +44,7 @@ MCP_NodeServer/
 
 ### Skills 系統規範
 - **結構限制**：所有 Skill MD 必須存放在 `Skills/commands/{部門}/` 子資料夾內。
+- **Cold Skills**：不再使用的低頻技能移至 `_cold/` 目錄，以節省部署空間與 token 消耗。
 - **Frontmatter**：`life/` 部門不加，其餘部門視需求添加以啟用 AI 主動建議。
 - **兩套 Skills 系統**：系統 A (MCP Prompts)；系統 B (斜線指令，主要，部署至 `~/.claude/commands/`)。
 
@@ -56,6 +57,9 @@ MCP_NodeServer/
 4. **驗證與 Dashboard (Validate)**：修改後執行 `project_qc` 或相關測試。
 
 ## 🧩 RAG & ChromaDB 規範
+- **手冊**：Docker 與 RAG 的完整環境架設請詳閱 [`docs/docker_rag_setup.md`](docs/docker_rag_setup.md)。
+- **版本**：鎖定使用 `1.5.5`，持久化路徑 `D:/Project/ChromaDB`。
+
 - **版本**：鎖定使用 `1.5.5`，持久化路徑 `D:/Project/ChromaDB`。
 - **策略**：索引前先跑 `rag_status` 評估範圍，排除低價值目錄（CSS、第三方套件）。
 - **增量**：開發結束後、測試開始前，必須執行增量索引。
