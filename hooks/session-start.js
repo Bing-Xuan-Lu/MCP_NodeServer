@@ -225,7 +225,14 @@ async function main() {
     const rag = await checkRagStatus();
     if (rag) {
       if (rag.hasIndex) {
-        output.push(`\n[RAG] ${rag.collectionName} 已索引，語意搜尋可用。不確定功能在哪時優先用 rag_query 省 token，精確關鍵字才用 Grep。`);
+        output.push(
+          `\n[RAG] ${rag.collectionName} 已索引，語意搜尋可用。` +
+          `\n⚠️ 搜尋規則（必須遵守）：` +
+          `\n  - 不確定功能在哪個檔案 → 必須先用 rag_query，禁止直接 Glob+Grep+Read 掃描` +
+          `\n  - 知道確切函式名/變數名 → 用 Grep` +
+          `\n  - rag_query 回傳的 chunk 已包含程式碼片段，通常不需要再 Read 整個檔案` +
+          `\n  - 只有在需要看 chunk 周圍的完整上下文時，才用 Read(offset, limit) 讀取該區段`
+        );
       } else if (rag.online && rag.project) {
         output.push(`\n[RAG] ChromaDB 在線但此專案未索引。大型專案建議先執行 rag_index { project: "${rag.project}" } 建立索引，可大幅節省後續搜尋 token。`);
       }
