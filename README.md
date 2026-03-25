@@ -28,7 +28,7 @@ RAG 索引過程會在 CPU 執行 Embedding 模型（paraphrase-multilingual-Min
 
 ---
 
-## 快速開始
+## 快速開始（首次安裝）
 
 ```bash
 git clone https://github.com/Bing-Xuan-Lu/MCP_NodeServer.git
@@ -36,7 +36,19 @@ cd MCP_NodeServer
 .\setup.ps1        # 一鍵初始化（npm install + Python 容器 + 部署 Skills）
 ```
 
-設定 `~/.claude/mcp_settings.json` 或專案根目錄的 `.mcp.json`：
+安裝完成後，依下方「新專案掛載」將 MCP Server 接上你的專案，重啟 Claude Code 即可使用。
+
+---
+
+## 新專案掛載
+
+MCP Server 安裝一次即可，每個需要使用的專案只要掛上連線設定。有兩種方式：
+
+### 方式 A：全域設定（推薦）
+
+設定一次，所有專案自動共用，不需逐個專案設定。
+
+編輯 `~/.claude/mcp_settings.json`（不存在則新建）：
 
 ```json
 {
@@ -44,13 +56,40 @@ cd MCP_NodeServer
     "project-migration-assistant-pro": {
       "type": "stdio",
       "command": "node",
-      "args": ["{YourProjectPath}\\index.js"]  // 請填入 index.js 的絕對路徑
+      "args": ["{MCP_NodeServer安裝路徑}\\index.js"]
     }
   }
 }
 ```
 
-重啟 Claude Code 後，在對話輸入 `/skill-name` 即可觸發 Skill。
+> 將 `{MCP_NodeServer安裝路徑}` 替換為 `index.js` 的實際絕對路徑，例如 `D:\\MCP_NodeServer\\index.js`。
+
+### 方式 B：單專案設定
+
+只在特定專案啟用 MCP Server。在該專案的**根目錄**建立 `.mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "project-migration-assistant-pro": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["{MCP_NodeServer安裝路徑}\\index.js"]
+    }
+  }
+}
+```
+
+### 掛載後注意事項
+
+| 項目 | 說明 |
+|------|------|
+| 重啟 | 設定完成後需**重啟 Claude Code** 才會生效 |
+| 路徑存取 | MCP 檔案工具預設只能存取 `D:\Project\` 下的檔案；專案不在此路徑的話，每次對話需先呼叫 `grant_path_access` 授權 |
+| DB 連線 | `set_database` 只在當次對話有效，每次新對話需重新設定 |
+| Skills | 全域已部署的 `/skill-name` 指令自動可用，不需額外設定 |
+| RAG 索引 | 選用，對新專案執行 `rag_index` 即可建立語意搜尋索引 |
+| 驗證 | 重啟後在對話中輸入任意 `/skill-name`，能觸發即代表掛載成功 |
 
 ### RAG 向量檢索（選用）
 
