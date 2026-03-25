@@ -22,86 +22,52 @@ MCP_NodeServer/
 │   ├── project/         ← 專案特定知識與部署細節
 │   ├── reference/       ← 靜態參考資料與外部文件連結
 │   └── user/            ← 使用者偏好與設定
-├── tools/               ← MCP 工具模組
-│   ├── filesystem.js, php.js, database.js, excel.js, bookmarks.js, sftp.js, skill_factory.js, python.js, word.js, pptx.js, pdf.js, git.js
-│   ├── file_to_prompt.js ← 大規模程式碼打包工具
-│   └── rag.js           ← ChromaDB 向量索引與語義搜尋 (RAG)
+├── tools/               ← MCP 工具模組（優先使用 Batch 版本提升效率）
+│   ├── filesystem.js    ← read_files_batch, list_files_batch, create_file_batch
+│   ├── php.js           ← send_http_request (含 cookie_jar), run_php_script_batch
+│   ├── database.js      ← execute_sql_batch, get_db_schema_batch
+│   ├── sftp.js          ← sftp_*_batch (list/upload/download/delete)
+│   └── rag.js           ← ChromaDB 1.5.5 向量索引與語義搜尋 (RAG)
+├── hooks/               ← Session 鉤子：session-start (載入), pre-compact (快照), write-guard (防護)
 ├── skills/index.js      ← MCP Prompts 路由
 └── Skills/              ← Skill MD 檔
     ├── *_agent.md       ← MCP Prompts 內容
-    └── commands/        ← 斜線指令
-        ├── php_dev/, migration/, testing/, spec/, db_planning/, deploy/, docker/, dev_workflow/, tooling/, claude_ops/, content/, life/
-        ├── office/      ← Office 文件處理 (docx, pdf, pptx, xlsx)
-        └── _internal/   ← 私有 Skill（.gitignore 排除）
+    └── commands/        ← 斜線指令 (需符合 60 個上限與 Frontmatter 規範)
 ```
 
 ## 🧠 技能調用與管理 (Expert Skill Usage)
 本專案擁有強大的專家技能庫 (`Skills/commands/`)。任務涉及以下領域時，**必須**先讀取對應文件：
-- **RAG & 語義搜尋**：處理陌生大型專案時，優先使用 `rag_query` 尋找邏輯片段。
-- **PHP 開發 & 移植**：`php_dev/` (CRUD 生成、路徑修正)；`migration/`。
-- **資料庫**：`db_planning/` (Schema 設計、Migration)。
-- **自動化測試**：`testing/` (Playwright UI 測試、邏輯測試)；`spec/` (規格分析)。
-- **UI/UX 設計**：`ui-ux-pro-max` (位於 `.claude/skills/ui-ux-pro-max/`)。
-- **運維 & Docker**：`deploy/` (SFTP)、`docker/` (Compose/Relocate)。
-- **流程 & 管理**：`dev_workflow/` (DDD/TDD)、`claude_ops/` (Skill 審計)。
-- **Office 處理**：`office/` (Word, PDF, PPTX 內容擷取與轉換)。
-- **工具與內容**：`tooling/` (系統工具)、`content/` (內容擷取)、`life/` (自動化)。
+- **RAG & 語義搜尋**：優先使用 `rag_query` 尋找邏輯片段。距離 > 0.5 時應改用 `Grep`。
+- **PHP 開發 & 測試**：`php_dev/` (CRUD 生成)；使用 `send_http_request` 的 `cookie_jar` 維持登入態進行 E2E 測試。
+- **自動化測試**：`testing/` (Playwright UI 測試、`project_qc` 協議、`e2e_golden_path`)。
+- **技能維護**：執行 `/skill_audit` 審查冗餘技能。新增 Skill 後**必須同步更新 `docs/dashboard.html`**。
 
 ### Skills 系統規範
 - **結構限制**：所有 Skill MD 必須存放在 `Skills/commands/{部門}/` 子資料夾內。
-- **兩套 Skills 系統**：
-    - **系統 A: MCP Prompts**：存放於 `Skills/*_agent.md`。
-    - **系統 B: 斜線指令**：存放於 `Skills/commands/{dept}/*.md`，透過 `save_claude_skill` 部署。
-- **Memory 整合**：優化 Skill 時應參考 `memory/feedback/` 中的過往錯誤經驗。
+- **Frontmatter**：`life/` 部門不加，其餘部門視需求添加以啟用 AI 主動建議。
+- **兩套 Skills 系統**：系統 A (MCP Prompts)；系統 B (斜線指令，主要，部署至 `~/.claude/commands/`)。
 
 ## 🛠️ 開發與驗證流程 (Lifecycle & Validation)
 1. **研究 (Research)**：
-   - 熟悉專案：執行 `rag_index` 索引，再以 `rag_query` 檢索。
-   - 邏輯理解：使用 `file_to_prompt` 打包關鍵目錄提供給 LLM 分析。
-2. **策略 (Strategy)**：提出具體計畫，註明調用的 Skills 部門。
-3. **執行 (Act)**：遵循目錄結構進行開發。
-4. **驗證與 Dashboard (Validate)**：修改後執行相關測試。
+   - 熟悉專案：執行 `rag_index` 進行**增量索引**，再以 `rag_query` 檢索。
+   - 邏輯理解：使用 `file_to_prompt` 打包關鍵目錄，或用 `task_map` 標記進度。
+2. **策略 (Strategy)**：提出計畫，註明調用的 Skills 部門，優先考慮批次 (Batch) 工具。
+3. **執行 (Act)**：遵循目錄結構進行開發。修改後必須執行 `rag_index` 同步向量庫。
+4. **驗證與 Dashboard (Validate)**：修改後執行 `project_qc` 或相關測試。
 
 ## 🧩 RAG & ChromaDB 規範
-當需要進行大規模程式碼搜尋或專案分析時：
-- **索引**：優先對 `src/` 或 `admin/` 目錄執行 `rag_index`。
-- **查詢**：使用自然語言描述需求（如「這張表的權限檢查在哪？」）進行 `rag_query`。
-- **Docker**：確保 `chromadb` 容器處於 Running 狀態。
+- **版本**：鎖定使用 `1.5.5`，持久化路徑 `D:/Project/ChromaDB`。
+- **策略**：索引前先跑 `rag_status` 評估範圍，排除低價值目錄（CSS、第三方套件）。
+- **增量**：開發結束後、測試開始前，必須執行增量索引。
 
 ## 🌐 Playwright & Browser MCP 初始化標準 (SOP)
-根據使用的工具環境，參考對應的安裝指南：
-
-### A. Claude Code 環境 (MCP 模式)
-> 詳細參考：`docs/playwright-setup.md`
-1. **環境初始化**：`npm init playwright@latest -- --yes --quiet --browser=chromium --lang=JavaScript`。
-2. **MCP 設定**：將 `playwright` 加入 `.mcp.json` 的 `mcpServers`。
-3. **多 Playwright 實例備案**：若需雙 Agent 並行操作，在 `.mcp.json` 登記第二個 MCP，指定不同 `--port`（預設 3000，第二實例用 3001）。
-
-### B. Gemini CLI 環境 (Standalone Browser 模式 - 推薦)
-> **功能描述**：使用官方 Playwright MCP，讓 AI 具備完全自主的瀏覽器控制能力，不需手動點擊 Connect 即可進行自動化測試與截圖。
-1. **環境需求**：Node.js 18 或以上版本。
-2. **設定方式**：修改 `~/.gemini/settings.json` (全域) 或專案目錄下的 `.gemini/settings.json` (區域)。
-3. **MCP 伺服器配置**：
-   ```json
-   {
-     "mcpServers": {
-       "playwright": {
-         "command": "npx",
-         "args": ["-y", "@modelcontextprotocol/server-playwright"]
-       }
-     }
-   }
-   ```
-4. **安裝瀏覽器核心**：執行 `npx playwright install chromium`。
-5. **驗證**：重啟 Gemini CLI，看到 `playwright - Ready` 即表示成功。您可以直接下令：「使用 playwright 導航至 localhost 並截圖」。
-
-## 📁 專案專屬規範
-- **路徑存取**：預設 `basePath = D:\Project\`。跨目錄需呼叫 `grant_path_access`。
-- **環境初始化**：新機器或環境異動後，應先執行 `powershell ./setup.ps1`。
-- **Memory 存取**：持續更新 `memory/MEMORY.md` 以維持 Agent 的上下文連續性。
+### Gemini CLI 環境 (Standalone Browser 模式)
+1. **設定**：修改 `~/.gemini/settings.json` 或專案 `.gemini/settings.json`。
+2. **配置**：`mcpServers` 中加入 `@modelcontextprotocol/server-playwright`。
+3. **驗證**：確保 `playwright - Ready`。截圖統一存放於 `screenshots/` 且使用 `fullPage: true`。
 
 ## 📜 Commit 規範
-- 執行 `git commit` 前，必須參考 `Skills/commands/tooling/git_commit.md`。提供「簡易版」與「完整版」供選擇。
+- 執行 `git commit` 前，必須參考 `Skills/commands/tooling/git_commit.md` 並提供擬定訊息供確認。
 
 ---
 *本文件為 Gemini CLI 之最高指令，未經使用者明確授權不得修改。*
