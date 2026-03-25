@@ -16,7 +16,7 @@ VALID_LIST=$(mktemp)
 
 find Skills/commands -type f -name "*.md" | while read -r file; do
   filename=$(basename "$file")
-  if [[ ! "$filename" =~ ^_ ]] && [[ ! "$filename" =~ _internal\.md$ ]] && [[ ! "$filename" =~ _steps\.md$ ]]; then
+  if [[ "$file" != *"/_cold/"* ]] && [[ ! "$filename" =~ ^_ ]] && [[ ! "$filename" =~ _internal\.md$ ]] && [[ ! "$filename" =~ _steps\.md$ ]]; then
     echo "$filename" >> "$VALID_LIST"
   fi
 done
@@ -46,7 +46,7 @@ done
 count=0
 find Skills/commands -type f -name "*.md" | while read -r file; do
   filename=$(basename "$file")
-  if [[ ! "$filename" =~ ^_ ]] && [[ ! "$filename" =~ _internal\.md$ ]] && [[ ! "$filename" =~ _steps\.md$ ]]; then
+  if [[ "$file" != *"/_cold/"* ]] && [[ ! "$filename" =~ ^_ ]] && [[ ! "$filename" =~ _internal\.md$ ]] && [[ ! "$filename" =~ _steps\.md$ ]]; then
     cp "$file" "$CLAUDE_DIR/$filename"
     cp "$file" "$GEMINI_DIR/$filename"
     echo "  deployed $filename"
@@ -60,4 +60,4 @@ echo ""
 echo "Done! Skills deployed ($stale stale files removed)."
 echo "  Claude: $CLAUDE_DIR"
 echo "  Gemini: $GEMINI_DIR"
-echo "(Excluded: _skill_template.md, *_internal.md, *_steps.md)"
+echo "(Excluded: _skill_template.md, *_internal.md, *_steps.md, _cold/)"
