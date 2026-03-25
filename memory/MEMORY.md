@@ -58,5 +58,6 @@
 | [feedback/general/feedback_test_user_perspective.md](feedback/general/feedback_test_user_perspective.md) | 修完 Bug 用 Playwright 從使用者角度實測驗證 |
 | [feedback/general/feedback_php_long_page_split.md](feedback/general/feedback_php_long_page_split.md) | PHP 頁面超過 300-400 行主動切 include |
 | [feedback/general/feedback_js_falsy_fallback.md](feedback/general/feedback_js_falsy_fallback.md) | JS `\|\|` falsy 陷阱，值可為 0 時用 `??` |
+| [feedback/general/feedback_no_blind_read.md](feedback/general/feedback_no_blind_read.md) | 禁止盲讀大檔案，先 Grep/RAG/codemap 定位再帶 offset/limit 讀 |
 
 > `_private/` 資料夾：機敏記憶（.gitignore 排除，僅本機）
