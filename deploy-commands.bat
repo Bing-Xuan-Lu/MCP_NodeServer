@@ -17,7 +17,7 @@ set VALID_LIST=%TEMP%\mcp_valid_skills.txt
 if exist "%VALID_LIST%" del "%VALID_LIST%"
 
 for /r "Skills\commands" %%F in (*.md) do (
-  echo %%~dpF | findstr /I /C:"_archived" > nul
+  echo %%~dpF | findstr /I /C:"_cold" > nul
   if errorlevel 1 (
     echo %%~nxF | findstr /I /B "_" > nul
     if errorlevel 1 (
@@ -51,7 +51,7 @@ for %%F in ("%GEMINI_DIR%\*.md") do (
 :: ---- Step 4: Deploy valid skills ----
 set count=0
 for /r "Skills\commands" %%F in (*.md) do (
-  echo %%~dpF | findstr /I /C:"_archived" > nul
+  echo %%~dpF | findstr /I /C:"_cold" > nul
   if errorlevel 1 (
     echo %%~nxF | findstr /I /B "_" > nul
     if errorlevel 1 (
