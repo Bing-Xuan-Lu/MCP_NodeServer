@@ -1,7 +1,9 @@
 import path from "path";
 
 export const CONFIG = {
-  basePaths: ["D:\\Project\\", "D:\\Develop\\","D:\\MCP_Server\\"],
+  basePaths: ["D:\\Project\\", "D:\\Develop\\", "D:\\MCP_Server\\"],
+  /** @deprecated 向後相容：舊程式碼用 CONFIG.basePath，回傳 basePaths[0] */
+  get basePath() { return this.basePaths[0]; },
 };
 
 /**
