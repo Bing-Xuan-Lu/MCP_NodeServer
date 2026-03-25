@@ -86,7 +86,11 @@
         <div style="display:flex; flex-direction:column; gap:20px;">
           <div style="border-left:4px solid var(--purple); padding-left:16px;">
             <div id="statSkills" style="font-size:32px; font-weight:800; line-height:1;">-</div>
-            <div style="font-size:12px; font-weight:600; color:var(--muted); margin-top:4px;">SKILLS COMMANDS</div>
+            <div style="font-size:12px; font-weight:600; color:var(--muted); margin-top:4px;">HOT SKILLS / 60</div>
+          </div>
+          <div style="border-left:4px solid #64748b; padding-left:16px;">
+            <div id="statColdSkills" style="font-size:32px; font-weight:800; line-height:1; color:var(--muted);">-</div>
+            <div style="font-size:12px; font-weight:600; color:var(--muted); margin-top:4px;">COLD SKILLS</div>
           </div>
           <div style="border-left:4px solid var(--cyan); padding-left:16px;">
             <div id="statTools" style="font-size:32px; font-weight:800; line-height:1;">-</div>
@@ -431,6 +435,7 @@
           <a class="tag" href="javascript:void(0)">/harness_audit</a>
           <a class="tag" href="javascript:void(0)">/update_codemaps</a>
           <a class="tag" href="javascript:void(0)">/settings_cleanup</a>
+          <a class="tag" href="javascript:void(0)">/memory_sync</a>
         </div>
       </section>
 
@@ -482,6 +487,52 @@
         </div>
       </section>
 
+
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <!-- 冷技能庫（不佔 60 上限，需要時手動呼叫）                     -->
+      <!-- ══════════════════════════════════════════════════════════ -->
+      <section class="bento-item span-12 notes-item" style="border-color:#64748b; margin-top:24px;">
+        <h2 class="notes-title" style="color:#64748b;">❄ 冷技能庫（Cold Skills）</h2>
+        <p style="color:var(--muted); font-size:13px; margin-top:4px; margin-bottom:16px;">以下 Skill 未部署到 <code>~/.claude/commands/</code>，<strong>不佔 60 個熱技能上限</strong>。需要時手動輸入 <code>/skill-name</code> 或先執行 <code>deploy-commands.bat</code> 升熱。</p>
+        <div style="display:flex; flex-wrap:wrap; gap:8px 24px;">
+          <div>
+            <div style="font-size:11px; font-weight:700; color:#64748b; margin-bottom:6px; text-transform:uppercase; letter-spacing:.06em;">PHP 開發</div>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/php_upgrade</a>
+          </div>
+          <div>
+            <div style="font-size:11px; font-weight:700; color:#64748b; margin-bottom:6px; text-transform:uppercase; letter-spacing:.06em;">Docker 維運</div>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/docker_setup</a>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/docker_compose_ops</a>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/version_conflict_debug</a>
+          </div>
+          <div>
+            <div style="font-size:11px; font-weight:700; color:#64748b; margin-bottom:6px; text-transform:uppercase; letter-spacing:.06em;">文書處理</div>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/docx</a>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/pdf</a>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/pptx</a>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/xlsx</a>
+          </div>
+          <div>
+            <div style="font-size:11px; font-weight:700; color:#64748b; margin-bottom:6px; text-transform:uppercase; letter-spacing:.06em;">系統工具</div>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/directory_reorganize</a>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/bookmark_organizer</a>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/relocate_directory</a>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/windows_node_autostart</a>
+          </div>
+          <div>
+            <div style="font-size:11px; font-weight:700; color:#64748b; margin-bottom:6px; text-transform:uppercase; letter-spacing:.06em;">內容 & 生活</div>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/yt_transcript</a>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/youtube_organizer</a>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/n8n_workflow_ops</a>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/n8n_discord_dispatcher</a>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/n8n_webhook_debug</a>
+          </div>
+          <div>
+            <div style="font-size:11px; font-weight:700; color:#64748b; margin-bottom:6px; text-transform:uppercase; letter-spacing:.06em;">測試</div>
+            <a class="tag" href="javascript:void(0)" style="opacity:0.7;">/gemini_playwright_setup</a>
+          </div>
+        </div>
+      </section>
 
       <!-- ══════════════════════════════════════════════════════════ -->
       <!-- 待建部門（尚無 Skill，規劃中）                               -->
