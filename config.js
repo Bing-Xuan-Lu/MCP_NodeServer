@@ -1,7 +1,7 @@
 import path from "path";
 
 export const CONFIG = {
-  basePaths: ["D:\\Project\\", "D:\\Develop\\"],
+  basePaths: ["D:\\Project\\", "D:\\Develop\\","D:\\MCP_Server\\"],
 };
 
 /**

@@ -113,6 +113,29 @@ rag_index { project: "{ProjectFolder}", paths: ["{ProjectFolder}/"] }
 rag_query { project: "{ProjectFolder}", query: "自然語言描述" }
 ```
 
+### Session Hooks（全域自動生效）
+
+已在 `~/.claude/settings.json` 全域設定，所有專案對話自動觸發：
+
+| Hook | 事件 | 功能 |
+| ---- | ---- | ---- |
+| `session-start.js` | SessionStart | 對話開場載入 MEMORY.md 摘要、上次 session 快照、24h 內更新的記憶檔、近期踩坑紀錄 |
+| `pre-compact.js` | PreCompact | Context 壓縮前自動存快照到 `~/.claude/sessions/`，偵測重試/失敗模式並存踩坑紀錄 |
+| `write-guard.js` | PreToolUse (Write\|Edit) | 寫入 `.env`、credentials、私鑰等敏感檔案時發出警告（非阻擋式） |
+
+Hook 腳本存放於 `hooks/` 目錄，設定在全域 `~/.claude/settings.json` 的 `hooks` 欄位。
+
+**全域 vs 專案 Hooks：**
+
+| 設定位置 | 檔案 | 適用範圍 |
+| ---- | ---- | ---- |
+| 全域 | `~/.claude/settings.json` → `hooks` | 所有專案對話自動觸發 |
+| 專案 | `{project}/.claude/settings.json` → `hooks` | 僅該專案對話觸發 |
+| 專案本地 | `{project}/.claude/settings.local.json` → `hooks` | 同上，不進版控 |
+
+本專案的 3 個 hooks 設定在**全域**，因為 session 記憶載入與敏感檔案防護不限於特定專案。
+若需要專案專屬 hook（如特定專案的 lint 檢查），可在該專案的 `.claude/settings.json` 另行設定。
+
 ---
 
 ## 目錄結構
@@ -140,6 +163,10 @@ MCP_NodeServer/
 ├── Skills/commands/     ← Skill MD 檔（12 個部門子資料夾）
 ├── python/              ← Python Docker 環境（python_runner 容器）
 ├── chromadb/            ← ChromaDB Docker 環境（RAG 選用）
+├── hooks/               ← Claude Code Session Hooks（全域生效）
+│   ├── session-start.js ← SessionStart：對話開場自動載入記憶與上次摘要
+│   ├── pre-compact.js   ← PreCompact：context 壓縮前存快照 + 踩坑偵測
+│   └── write-guard.js   ← PreToolUse(Write|Edit)：敏感檔案寫入警告
 ├── docs/                ← 技能儀表板 (dashboard.html / style.css / script.js)
 ├── setup.ps1            ← 一鍵環境初始化
 └── deploy-commands.bat  ← 部署所有 Skills 到 ~/.claude/commands/

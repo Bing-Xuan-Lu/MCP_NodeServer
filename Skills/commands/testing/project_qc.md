@@ -93,6 +93,30 @@ Phase G    產出 reports/{project}_校稿單_{日期}.html（含嵌入截圖）
 
 ---
 
+### 步驟 0.5：規格書全頁涵蓋率 Checklist（有規格書時必做）
+
+校稿單**必須概括規格書全部的內容**，包括頁面、流程圖、備註說明，缺一不可。
+
+1. 讀取規格書頁面索引（`spec_reference.md` 或用 Playwright 爬 AxShare sitemap）
+2. 列出規格書所有頁面（含流程頁如「退款計算流程」），產出 checklist：
+
+```text
+=== 規格書全頁 Checklist ===
+[ ] 頁面1: xxx — 對應測試: Phase C / Phase E Txx
+[ ] 頁面2: xxx — 對應測試: Phase C / Phase D
+[ ] 流程1: xxx — 對應測試: Phase E Txx
+...
+未涵蓋頁面: 0
+```
+
+3. 每個規格書頁面都必須有對應的測試項目（Phase C 視覺比對、Phase D 功能比對、或 Phase E 流程測試）
+4. 流程頁（非畫面頁）→ 必須對應 Phase E 測試案例
+5. **未涵蓋頁面 > 0 時不得進入 Phase G 產出校稿單**
+
+> 展示 checklist 並等使用者確認後繼續。
+
+---
+
 ### 步驟 1：讀取參考檔 → 先跑 Phase A0 → 再並行派遣
 
 **1-1. 讀取全局規則與 Agent Prompt**
@@ -178,11 +202,32 @@ Phase G    產出 reports/{project}_校稿單_{日期}.html（含嵌入截圖）
    - `[UNVERIFIED]` > 0 → 先補充舉證或標記 `[SKIP-無法取得證據]`
 3. **語意一致**：同一模組在 Phase A（DB 層）與 Phase B（UI 層）NG 標準是否相同？
    - 不一致 → 校稿單該模組加注 `[判準待對齊]`
+4. **規格書涵蓋率**：比對步驟 0.5 的 checklist，確認每個規格書頁面都有對應測試結果
+   - 有遺漏 → 補測或標記 `[SKIP-規格書頁面未涵蓋]`
 
-讀取 `_project_qc/report_template.html` 作為骨架，填入各 Phase 報告數據，
-輸出至 `reports/{project}_校稿單_{YYYY-MM-DD}.html`。
+**產出 JSON + HTML 兩份檔案**（JSON 是資料源，HTML 是檢視器）：
 
-> 校稿單中每個 Phase 的每筆 PASS/NG 結論旁，必須用 `<img>` 嵌入對應截圖。
+1. 參考 `_project_qc/qc_report_schema.json` 的結構，組裝校稿單 JSON
+2. 輸出至 `reports/qc_report.json`
+3. 複製 `_project_qc/report_template.html` 到 `reports/{project}_校稿單_{YYYY-MM-DD}_v{N}.html`
+4. `report_template.html` 會自動讀取同目錄下的 `qc_report.json` 渲染
+
+> **好處**：版次遞增只需更新 JSON（新增 versionHistory/fixes/ngItems），HTML 模板不變。
+> JSON 中各 Phase 的 PASS/NG 結論旁，screenshots 欄位必須填入截圖相對路徑。
+
+**JSON 結構速查**（完整 schema 見 `_project_qc/qc_report_schema.json`）：
+```
+{
+  meta: { project, projectName, date, version, environment, urls, auditors },
+  summary: { pages, screenshots, modules, fixed, ng, techDebt },
+  phases: [{ id, name, owner, result, ng, note }],
+  versionHistory: [{ version, ng, changes }],
+  fixes: [{ id, problem, fix, version }],
+  ngItems: [{ id, severity, title, description, screenshots }],
+  techDebt: [{ id, title, note }],
+  phaseDetails: { "A0": { title, html }, ... }  // 可選，各 Phase 詳細 HTML
+}
+```
 
 ---
 
@@ -237,7 +282,8 @@ Phase G    產出 reports/{project}_校稿單_{日期}.html（含嵌入截圖）
 - `reports/uiux_qc.md` — UI/UX 稽核員原始報告
 - `reports/logic_qc.md` — 邏輯稽核員原始報告
 - `reports/e2e_results.md` — 遞棒業務流程測試結果
-- `reports/{project}_校稿單_{YYYY-MM-DD}_v{N}.html` — 版次校稿單（HTML 含嵌入截圖）
+- `reports/qc_report.json` — 校稿單結構化資料（JSON，版次遞增時只更新此檔）
+- `reports/{project}_校稿單_{YYYY-MM-DD}_v{N}.html` — 校稿單檢視器（從 template 複製，讀取 qc_report.json 渲染）
 - `reports/{project}_修正任務單_v{N}.md` — P1/P2/P3 修正清單
 - `reports/screenshots/` — 所有截圖
 
