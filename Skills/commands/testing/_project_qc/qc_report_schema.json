@@ -1,0 +1,71 @@
+{
+  "$schema": "校稿單 JSON Schema v1",
+  "$comment": "project_qc Skill 產出此 JSON，report_template.html 讀取後渲染成 HTML。以下為範例結構，實際值由 Skill 填入。",
+
+  "meta": {
+    "project": "{ProjectFolder}",
+    "projectName": "{ProjectName}",
+    "date": "2026-01-15",
+    "version": 2,
+    "environment": "localhost（Docker PHP 8.4 + MariaDB）",
+    "frontendUrl": "http://localhost/",
+    "backendUrl": "http://localhost/adminControl/",
+    "xdUrl": "https://xd.adobe.com/view/xxx",
+    "specUrl": "https://example.axshare.com",
+    "auditors": {
+      "uiux": "UI/UX Agent（Playwright 獨佔）",
+      "logic": "Logic Agent（MCP 工具）"
+    }
+  },
+
+  "summary": {
+    "pages": 12,
+    "screenshots": 45,
+    "modules": 8,
+    "fixed": 3,
+    "ng": 2,
+    "techDebt": 1
+  },
+
+  "phases": [
+    { "id": "A0", "name": "欄位映射覆蓋率", "owner": "邏輯稽核員", "result": "100%", "ng": 0, "note": "8 模組完整映射" },
+    { "id": "A",  "name": "全欄位 CRUD（3 模組）", "owner": "邏輯稽核員", "result": "PASS", "ng": 0, "note": "基本 CRUD 正常" },
+    { "id": "B0", "name": "全站探索（12 頁）", "owner": "UI/UX 稽核員", "result": "PASS", "ng": 0, "note": "" },
+    { "id": "C",  "name": "XD 設計稿（10 頁）", "owner": "UI/UX 稽核員", "result": "PASS", "ng": 1, "note": "8 PASS / 1 WARN / 1 NG" },
+    { "id": "D",  "name": "規格書比對（3 模組）", "owner": "邏輯稽核員", "result": "PASS", "ng": 0, "note": "欄位完全符合" },
+    { "id": "E",  "name": "業務流程（10 案例）", "owner": "雙稽核員", "result": "PASS", "ng": 1, "note": "8 PASS / 1 SKIP / 1 NG" },
+    { "id": "F",  "name": "RWD（3 頁 × 3 斷點）", "owner": "UI/UX 稽核員", "result": "PASS", "ng": 0, "note": "" }
+  ],
+
+  "versionHistory": [
+    { "version": 1, "ng": 5, "changes": "初始稽核" },
+    { "version": 2, "ng": 2, "changes": "XSS 修正、必填驗證補強、RWD 溢出修正" }
+  ],
+
+  "fixes": [
+    { "id": "A-01", "problem": "Stored XSS（標題欄位未跳脫）",     "fix": "輸出端加 htmlspecialchars()", "version": 2 },
+    { "id": "A-02", "problem": "缺伺服器端必填驗證",               "fix": "新增 validateFields() 方法",  "version": 2 },
+    { "id": "F-01", "problem": "RWD Tablet 水平溢出",              "fix": "CSS 加 @media flex-wrap",     "version": 2 }
+  ],
+
+  "ngItems": [
+    {
+      "id": "C-01",
+      "severity": "NG",
+      "title": "按鈕位置不符 XD 設計稿",
+      "description": "XD：按鈕在表頭區域。實際：按鈕在展開明細內。",
+      "screenshots": { "xd": "screenshots/qc_c01_xd.png", "live": "screenshots/qc_c01_live.png" }
+    },
+    {
+      "id": "E-01",
+      "severity": "WARN",
+      "title": "列表欄位順序與規格書不同",
+      "description": "規格書定義 A→B→C 順序，實際為 A→C→B。功能正常但順序不符。",
+      "screenshots": {}
+    }
+  ],
+
+  "techDebt": [
+    { "id": "TD-01", "title": "驗證方法未整合至所有模組", "note": "已有共用方法，需各模組逐一呼叫" }
+  ]
+}

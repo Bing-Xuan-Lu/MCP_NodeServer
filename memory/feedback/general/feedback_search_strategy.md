@@ -30,7 +30,7 @@ type: feedback
 |------|------|
 | 知道具體函式名/變數名 | **Grep** |
 | 不確定功能在哪個檔案（語意搜尋）| **RAG** |
-| 後台 CRUD 頁面 | 直接 **Read** `adminControl/{module}/list.php` |
+| 後台 CRUD 頁面 | 直接 **Read** 對應模組的 list.php |
 | RAG 搜尋結果不相關（distance > 0.5）| 改用 **Grep** |
 
 RAG 索引 paths 必須精確指向**專案內子目錄**（帶專案名前綴），不可指向母資料夾，否則會把同層其他專案混入 collection。

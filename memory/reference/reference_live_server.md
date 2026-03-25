@@ -6,5 +6,5 @@ type: reference
 
 VS Code Live Server port: **5500**
 
-- dashboard.html → http://127.0.0.1:5500/docs/dashboard.html
+- dashboard.html → 透過 Live Server 在 port 5500 開啟
 - 所有本機 HTML 預覽都透過 Live Server，不用另起 serve / http-server

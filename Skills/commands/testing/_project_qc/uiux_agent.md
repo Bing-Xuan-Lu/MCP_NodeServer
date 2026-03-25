@@ -41,6 +41,14 @@
 
 a. 頁面進入後截圖初始狀態
 
+**【截圖自驗規則 — 每張截圖必做】**
+截圖產出後，必須用 Read 工具讀取該截圖圖片，確認：
+- 頁面已完整載入（無 Loading spinner、無白屏、無錯誤頁面）
+- 截圖內容與預期頁面一致（不是空購物車去比對有商品的設計稿）
+- fullPage 截圖已涵蓋整個頁面（非只截到 viewport）
+若截圖驗證不通過 → 重新截圖（等 `waitForLoadState('networkidle')` 後再截）。
+未經驗證的截圖不得用於 PASS/NG 判定。
+
 b. browser_evaluate 蒐集頁面所有互動元素：
 
 ```js
@@ -239,6 +247,7 @@ B0 完成後**必須**建立 `reports/coverage_map.md`：
 **Step C-2【再截實際網站】**
 - browser_navigate 到對應頁面
 - browser_take_screenshot **必須加 `fullPage: true`**
+- **截圖後必須 Read 圖片驗證**：確認頁面已完整載入（非 Loading/空白/錯誤），否則重截
 - 從截圖中提取相同項目（用 browser_evaluate 取 getComputedStyle 確認色值）
 
 **Step C-3【逐項比對 — 必須引用上方兩段數值】**

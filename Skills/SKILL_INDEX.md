@@ -90,6 +90,7 @@
 - `/retro` — 對話回顧：收割 Memory、Skill、Tool 改善
 - `/skill_audit` — 審查 Skill 耦合與重疊，建議合併或淘汰
 - `/harness_audit` — 審計 Claude Code 工具設置，產生評分報告
+- `/settings_cleanup` — 掃描並整理 settings.json 權限規則，合併重複、移除垃圾
 - `/project_claudemd` — 為專案自動產生 CLAUDE.md 文件
 - `/update_codemaps` → 見開發流程部
 
