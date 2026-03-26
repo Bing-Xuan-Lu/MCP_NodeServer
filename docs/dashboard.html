@@ -436,6 +436,7 @@
           <a class="tag" href="javascript:void(0)">/update_codemaps</a>
           <a class="tag" href="javascript:void(0)">/settings_cleanup</a>
           <a class="tag" href="javascript:void(0)">/memory_sync</a>
+          <a class="tag" href="javascript:void(0)">/memory_audit</a>
         </div>
       </section>
 
@@ -579,6 +580,7 @@
         <button class="wf-tab-btn active" data-wf="php" style="padding:10px 24px; border-radius:12px; font-size:14px;">PHP 開發流程</button>
         <button class="wf-tab-btn" data-wf="deploy" style="padding:10px 24px; border-radius:12px; font-size:14px;">部署流程</button>
         <button class="wf-tab-btn" data-wf="mcp" style="padding:10px 24px; border-radius:12px; font-size:14px;">MCP Server 自檢</button>
+        <button class="wf-tab-btn" data-wf="memory" style="padding:10px 24px; border-radius:12px; font-size:14px;">記憶生命週期</button>
       </section>
 
       <!-- ─── Workflow: PHP 開發流程 ─── -->
@@ -1063,6 +1065,98 @@
       </section>
 
       </div><!-- /wf-mcp -->
+
+      <!-- ─── Workflow: 記憶生命週期 ─── -->
+      <div id="wf-memory" class="wf-panel" style="display:none;">
+
+      <!-- Title -->
+      <section class="bento-item span-12 notes-item" style="border-color: var(--green); padding: 40px;">
+        <h2 class="notes-title" style="color: var(--green); font-size: 32px; letter-spacing: -0.04em;">記憶生命週期 · Memory Lifecycle</h2>
+        <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">從對話中調教到跨機器同步的 4 階段記憶管理流程。</p>
+      </section>
+
+      <!-- Vertical Timeline -->
+      <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
+        <ul class="timeline">
+
+          <!-- ① 對話中調教 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① 對話中調教</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:.08em;">IN-CONVERSATION TRAINING</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">在日常對話中修正 Claude 的行為，糾正錯誤判斷、確認好的做法。Claude 會自動寫入 memory 檔案。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">「記住這個」「以後別這樣做」「這個做法很好」</span>
+                </div>
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">→ 自動寫入 ~/.claude/projects/{encoded}/memory/</span>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- ② 對話結束收割 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 對話結束收割</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:.08em;">SESSION HARVEST</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">回顧本次對話的踩坑經驗、架構決策、workflow 慣例，萃取成持久化記憶。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">對話結束前執行</span>
+                  <a class="tag" href="javascript:void(0)">/retro</a>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- ③ 定期清理 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">③ 定期清理</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:.08em;">PERIODIC CLEANUP</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">審計記憶健康度：清除死連結、合併重複、刪除過時記憶，保持 MEMORY.md 精簡。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">每 2-4 週執行一次</span>
+                  <a class="tag" href="javascript:void(0)">/memory_audit</a>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <!-- ④ 跨機器同步 -->
+          <li class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <div style="font-size:20px; font-weight:800; color:var(--text); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">④ 跨機器同步</div>
+                <div style="font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:.08em;">CROSS-MACHINE SYNC</div>
+                <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">將本機記憶推送到 Git 版控，或從 Git 拉取到新環境，確保知識不因換機器而遺失。</p>
+              </div>
+              <div class="timeline-actions">
+                <div class="timeline-step">
+                  <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted); margin-bottom:4px; letter-spacing:0.02em;">換環境後 pull / 整理完 push</span>
+                  <a class="tag" href="javascript:void(0)">/memory_sync</a>
+                </div>
+              </div>
+            </div>
+          </li>
+
+        </ul>
+      </section>
+
+      </div><!-- /wf-memory -->
 
       </div><!-- /tab-workflows -->
 

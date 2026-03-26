@@ -210,10 +210,18 @@ D:\Develop\MCP_NodeServer\improvements_backlog.md
 
 ---
 
-### 步驟 5：完成報告
+### 步驟 5：完成報告並存檔
+
+將回顧報告存到記憶目錄，供下次對話參考：
 
 ```
-✅ 對話回顧完成
+檔案：{memory_path}/reports/retro_{YYYY-MM-DD}.md
+```
+
+報告內容：
+
+```
+✅ 對話回顧完成（{YYYY-MM-DD}）
 
 📊 處理結果：
   Memory：存入 N 筆 / 更新 N 筆
@@ -222,6 +230,8 @@ D:\Develop\MCP_NodeServer\improvements_backlog.md
 
 ⚠️ 請重啟 Claude Code 讓 Skill 變更生效
 ```
+
+`reports/` 目錄下的檔案不納入 MEMORY.md 索引，僅作歷史紀錄。只保留最近 5 份報告，舊的自動刪除。
 
 ---
 

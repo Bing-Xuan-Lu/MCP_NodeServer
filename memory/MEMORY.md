@@ -12,18 +12,27 @@
 | --- | --- |
 | [project/project_mcp_server.md](project/project_mcp_server.md) | 專案基本資訊與路徑設定 |
 | [project/decision_architecture.md](project/decision_architecture.md) | 架構決策記錄：batch 工具、RAG 選用、_internal 隔離、basePath、單一 server、Skill 上限 |
+| [project/project_rag_chromadb.md](project/project_rag_chromadb.md) | ChromaDB RAG 技術細節：embedding model、persistence path、Docker 設定 |
+| [project/project_deploy_pipeline.md](project/project_deploy_pipeline.md) | 部署流水線架構：remote_diff → sftp → DB migration → smoke test |
 
 ### Reference
 | 檔案 | 說明 |
 | --- | --- |
 | [reference/reference_dept_mapping.md](reference/reference_dept_mapping.md) | commands/ 子資料夾對應部門表 |
 | [reference/reference_live_server.md](reference/reference_live_server.md) | 本機開發用 VS Code Live Server，port 5500 |
+| [reference/reference_known_issues.md](reference/reference_known_issues.md) | 已知問題：Playwright session、MCP 工具名參照、Skill 資訊洩漏 |
+| [reference/reference_playwright_config.md](reference/reference_playwright_config.md) | Playwright --user-data-dir 持久化登入 session 設定 |
 
 ### Feedback — Playwright
 | 檔案 | 說明 |
 | --- | --- |
 | [feedback/playwright/feedback_playwright_screenshot.md](feedback/playwright/feedback_playwright_screenshot.md) | 截圖存 screenshot/ 不放根目錄 |
 | [feedback/playwright/feedback_playwright_ops.md](feedback/playwright/feedback_playwright_ops.md) | 快取清除、禁平行 Agent、卡住停止、禁 taskkill、動態連結展開、Background Agent 必須預授權所有 browser_* 工具 |
+
+### Feedback — Deploy
+| 檔案 | 說明 |
+| --- | --- |
+| [feedback/deploy/feedback_sftp_config_protect.md](feedback/deploy/feedback_sftp_config_protect.md) | SFTP 部署禁覆蓋環境設定檔（DB 連線、.env） |
 
 ### Feedback — Workflow
 | 檔案 | 說明 |
@@ -51,5 +60,6 @@
 | --- | --- |
 | [feedback/general/feedback_search_strategy.md](feedback/general/feedback_search_strategy.md) | 搜尋策略：3次找不到就問、文件缺失進系統確認、RAG vs Grep |
 | [feedback/general/feedback_repetition_awareness.md](feedback/general/feedback_repetition_awareness.md) | 重複呼叫同類工具 3+ 次應自省，建議 batch 或新工具 |
+| [feedback/general/feedback_test_user_perspective.md](feedback/general/feedback_test_user_perspective.md) | 修 bug 後必須從使用者視角用 Playwright 測試，不能只看 code |
 
 > `_private/` 資料夾：機敏記憶（.gitignore 排除，僅本機）
