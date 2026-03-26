@@ -30,6 +30,7 @@ MCP_NodeServer/
 │   ├── word.js          ← read_word_file, read_word_files_batch (.docx → Markdown/HTML/Text)
 │   ├── pptx.js          ← read_pptx_file, read_pptx_files_batch (.pptx → Markdown/Text + 圖片)
 │   ├── pdf.js           ← read_pdf_file, read_pdf_files_batch (.pdf → Markdown/Text)
+│   ├── images.js        ← read_image, read_images_batch（圖片讀取 + 縮放，支援 PNG/JPG/WebP/GIF/SVG）
 │   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops
 │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
 │   └── rag.js            ← rag_index, rag_query, rag_status（需 ChromaDB Docker，選用）

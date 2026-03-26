@@ -22,6 +22,7 @@ import * as pdf           from "./tools/pdf.js";
 import * as fileToPrompt  from "./tools/file_to_prompt.js";
 import * as rag           from "./tools/rag.js";
 import * as git           from "./tools/git.js";
+import * as images        from "./tools/images.js";
 
 // ── Skills 模組 ───────────────────────────────────────────
 import { definitions as skillDefinitions, getPrompt } from "./skills/index.js";
@@ -29,7 +30,7 @@ import { definitions as skillDefinitions, getPrompt } from "./skills/index.js";
 // ============================================
 // 工具模組清單 (新增模組只需在此加一行)
 // ============================================
-const TOOL_MODULES = [filesystem, php, database, excel, bookmarks, skillFactory, sftp, python, word, pptx, pdf, fileToPrompt, rag, git];
+const TOOL_MODULES = [filesystem, php, database, excel, bookmarks, skillFactory, sftp, python, word, pptx, pdf, images, fileToPrompt, rag, git];
 
 // ============================================
 // MCP Server 初始化
