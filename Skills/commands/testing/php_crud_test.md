@@ -1,9 +1,6 @@
 ---
 name: php_crud_test
-description: |
-  對 PHP 模組進行完整整合測試。涵蓋：CRUD 操作驗證、資料寫入驗證、檔案上傳/下載測試、測試報告產出。
-  資料層 CRUD 驗證用此；UI 操作與 Xdebug 除錯改用 /playwright_ui_test。
-  當使用者說「測試」「跑測試」「test」，或完成 PHP 模組開發後需要驗證功能時使用。
+description: "測試、跑測試、test、CRUD 驗證"
 ---
 
 # /php_crud_test — PHP CRUD 模組整合測試

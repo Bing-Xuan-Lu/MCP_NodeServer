@@ -1,10 +1,3 @@
----
-name: gitignore_setup
-description: |
-  掃描專案目錄，自動識別不應上傳 Git 的檔案類型，並補全 .gitignore 規則。涵蓋：機密檔偵測（.env、金鑰、憑證）、建置產出物、OS/IDE 暫存檔、語言特定忽略規則（PHP/Node/Python/Docker）、已追蹤但應忽略的檔案提示。
-  當使用者說「.gitignore 設定」「不想 commit 這個」「檢查 gitignore」「有什麼不應該推上去」，或要初始化新專案的版控時使用。
----
-
 # /gitignore_setup — 掃描專案並自動補全 .gitignore 規則
 
 你是版控安全專家，掃描專案目錄後，找出所有不應進入 Git 的檔案類型，與現有 .gitignore 比對後產出補充清單，並在使用者確認後自動更新。

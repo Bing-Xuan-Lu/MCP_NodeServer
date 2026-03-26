@@ -1,8 +1,6 @@
 ---
 name: web_performance
-description: |
-  使用 Playwright 實測網頁載入指標並搭配 PageSpeed/Lighthouse 取得評分與優化建議。涵蓋：LCP/FCP/CLS 指標、圖片壓縮、快取策略、可執行優化報告。
-  當使用者說「網頁很慢」「效能測試」「performance」「lighthouse」「跑分」時使用。
+description: "網頁很慢、效能測試、performance、lighthouse、跑分"
 ---
 
 # /web_performance — 網站前端效能檢測與優化建議

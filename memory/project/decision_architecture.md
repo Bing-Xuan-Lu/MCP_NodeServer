@@ -24,13 +24,20 @@ ChromaDB 容器未啟動時，`rag_*` 工具靜默失敗，其他所有工具完
 
 ---
 
-## _internal 資料夾隔離
+## _internal 資料夾隔離（冷儲存）
 
 客戶專屬 Skill 統一放 `Skills/commands/_internal/`，整個資料夾被 `.gitignore` 排除。
 
-**Why:** 公開 Skill 可能進版控並分享給其他人，不能含客戶真實資訊（域名、資料表、模組名）。`_internal` 是唯一的合法例外區。
+**自 2026-03-26 起，_internal 一律為冷儲存（Cold Storage）**：不部署到 `~/.claude/commands/`，不出現在 system-reminder skill 清單中。需要時由 Claude 直接 Read MD 檔載入。
 
-**How to apply:** 含客戶名稱/URL/密碼的 Skill 一律放 `_internal/`；公開 Skill 用 `{ProjectFolder}` 等佔位符。
+**Why:**
+1. 公開 Skill 不能含客戶真實資訊，`_internal` 是唯一合法例外區。
+2. internal skills 僅在特定專案工作時使用，常駐部署浪費每次對話的 system-reminder token。冷儲存 = 按需載入 = 省 token。
+
+**How to apply:**
+- 含客戶名稱/URL/密碼的 Skill 一律放 `_internal/`
+- `deploy-commands-internal.bat` 已改為清理用途（移除殘留），不再部署
+- 使用 internal skill：直接 `Read Skills/commands/_internal/{project}/{skill}.md`
 
 ---
 

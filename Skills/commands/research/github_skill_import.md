@@ -1,10 +1,3 @@
----
-name: github_skill_import
-description: |
-  爬取 GitHub 上他人的 Claude Skill 儲存庫，下載所有 .md 技能檔並整理成本地學習參考庫。涵蓋：掃描 repo 目錄結構、批次下載 Skill MD 檔、儲存至 Skills/references/、與現有 Skills 差異比對。
-  當使用者說「爬 GitHub Skill」「學習別人的技能庫」「import GitHub skills」「下載 Skill 參考」時使用。
----
-
 # /github_skill_import — 爬取 GitHub Skill 儲存庫並建立本地學習參考庫
 
 你是 AI 技能研究員，從 GitHub 上的 Claude Skill 儲存庫爬取所有 `.md` 技能檔，整理成本地學習參考庫，供未來建立或改進 Skill 時參考。

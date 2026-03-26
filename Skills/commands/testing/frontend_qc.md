@@ -1,10 +1,6 @@
 ---
 name: frontend_qc
-description: |
-  前台逐頁品質檢查：對照設計稿 + 規格書，用 Playwright 實際走訪每個頁面，產出結構化 Bug 清單。
-  涵蓋：視覺比對（設計稿 vs 實際）、功能驗證（規格書 vs 實際）、互動測試（表單/AJAX/POPUP）、RWD 檢查。
-  當使用者說「前台逐頁測試」「逐頁 QC」「Bug 清單」「frontend_qc」時使用。
-  單一前台頁面精細比對（設計稿 + 規格書）用此；全站雙 Agent 稽核（含後台邏輯）改用 /project_qc。
+description: "前台逐頁測試、逐頁 QC、Bug 清單、frontend_qc"
 ---
 
 # /frontend_qc — 前台逐頁品質檢查，產出結構化 Bug 清單

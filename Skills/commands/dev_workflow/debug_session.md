@@ -1,8 +1,6 @@
 ---
 name: debug_session
-description: |
-  管理多輪迭代除錯工作階段，產出版本化除錯指示文件作為調查與修復之間的介面。涵蓋：初始診斷、版本化問題清單（已解決/待修復）、成功標準定義、零程式碼約束、跨迭代進度追蹤。
-  當使用者說「除錯」「開除錯階段」「debug session」「產出除錯指示」「bug 搞不定」「繼續上次的 bug」時使用。
+description: "除錯、debug session、bug 搞不定、繼續上次的 bug"
 ---
 
 # /debug_session — 管理版本化除錯工作階段

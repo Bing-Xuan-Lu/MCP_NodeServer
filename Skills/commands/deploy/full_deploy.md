@@ -1,8 +1,6 @@
 ---
 name: full_deploy
-description: |
-  整合部署流程：差異檢查 + 程式碼上傳 + 資料庫遷移 + 驗證，一鍵完成。涵蓋：remote_diff 安全閘、SFTP 程式部署、DB migration（直連或 SFTP+PHP 間接）、smoke test。
-  當使用者說「全部署」「full deploy」「程式跟資料庫一起推」「完整部署」時使用。
+description: "全部署、full deploy、程式跟資料庫一起推、完整部署"
 ---
 
 # /full_deploy — 整合部署：程式碼 + 資料庫 + 安全檢查

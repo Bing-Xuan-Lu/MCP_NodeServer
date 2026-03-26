@@ -1,8 +1,6 @@
 ---
 name: db_index_analyzer
-description: |
-  分析 MySQL 慢查詢或表格結構，找出缺少或冗餘的索引並產生優化建議。涵蓋：EXPLAIN 分析、CREATE/DROP INDEX 建議、效能改善估算。
-  當使用者說「查詢很慢」「SQL 效能差」「index 優化」「資料庫慢」時使用。
+description: "查詢很慢、SQL 效能差、index 優化、資料庫慢"
 ---
 
 # /db_index_analyzer — 分析 MySQL 查詢效能並建議索引優化

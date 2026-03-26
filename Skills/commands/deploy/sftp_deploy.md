@@ -1,8 +1,6 @@
 ---
 name: sftp_deploy
-description: |
-  透過 SFTP 將本機 PHP 專案部署到遠端測試機。涵蓋：整個目錄或指定檔案上傳、部署前確認清單、自動備份。
-  當使用者說「部署」「deploy」「上傳到測試機」「推到遠端」時使用。
+description: "部署、deploy、上傳到測試機、推到遠端"
 ---
 
 # /sftp_deploy — 將本機 PHP 專案部署到遠端測試機
