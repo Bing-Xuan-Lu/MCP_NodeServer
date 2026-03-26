@@ -1,8 +1,6 @@
 ---
 name: design_diff
-description: |
-  設計稿比對：將設計圖檔（PNG/JPG/PDF）或線上 XD/Figma 連結與實際網站截圖進行視覺比對，檢查排版、顏色、字體、間距、元件完整性。
-  當使用者說「設計稿比對」「UI 比對」「design diff」「PSD 比對」「Figma 比對」「XD 比對」「和設計稿一樣嗎」時使用。
+description: "設計稿比對、UI 比對、design diff、Figma 比對、XD 比對"
 ---
 
 # /design_diff — 設計稿 vs 實際網站截圖比對

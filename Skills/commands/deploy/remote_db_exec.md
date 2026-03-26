@@ -1,8 +1,6 @@
 ---
 name: remote_db_exec
-description: |
-  透過 SFTP 上傳 PHP 腳本間接執行 SQL，適用於無法直連 MySQL 的遠端主機。涵蓋：帶 token 驗證的 PHP 腳本產生、上傳執行刪除一氣呵成、SELECT/DDL/DML 皆支援。
-  當使用者說「遠端執行 SQL」「準測試機跑 SQL」「沒辦法直連 DB」「remote db」時使用。
+description: "遠端執行 SQL、準測試機跑 SQL、沒辦法直連 DB、remote db"
 ---
 
 # /remote_db_exec — 透過 SFTP + PHP 間接執行遠端 SQL

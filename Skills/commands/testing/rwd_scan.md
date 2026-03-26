@@ -1,9 +1,6 @@
 ---
 name: rwd_scan
-description: |
-  RWD 三斷點截圖掃描：在 Mobile / Tablet / Desktop 三個斷點自動截圖，偵測水平溢出/文字截斷/元素重疊，產出響應式問題報告。
-  斷點尺寸可由使用者自訂（每個專案規格書定義不同）。
-  當使用者說「RWD 測試」「響應式檢查」「手機版截圖」「三斷點」「rwd scan」時使用。
+description: "RWD 測試、響應式檢查、手機版截圖、三斷點"
 ---
 
 # /rwd_scan — RWD 三斷點截圖掃描

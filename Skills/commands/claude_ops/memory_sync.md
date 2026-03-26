@@ -1,10 +1,3 @@
----
-name: memory_sync
-description: |
-  雙向同步 Git 專案 memory/ 與本機 Claude 自動記憶資料夾。涵蓋：git memory → 本機 Claude（pull）、本機 Claude → git memory（push）、差異比對（status）、全域或專案範圍選擇。
-  當使用者說「同步記憶」「memory sync」「換環境」「把記憶帶過去」「更新本機記憶」時使用。
----
-
 # /memory_sync — 同步 Git memory/ 與本機 Claude 記憶
 
 你負責在「Git 專案 memory/ 資料夾」與「本機 Claude 自動記憶路徑」之間同步記憶檔案。

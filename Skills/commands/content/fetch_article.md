@@ -1,8 +1,6 @@
 ---
 name: fetch_article
-description: |
-  從網頁 URL 擷取文章正文並**儲存為 .txt 檔案**（持久化存檔用）。涵蓋：移除廣告/導覽列等雜訊、輸出純文字、指定本機存檔路徑。
-  當使用者說「把這篇存下來」「下載文章」「抓到本機」「archive 這篇」時使用；若只是想當場閱讀摘要，改用 /read_article。
+description: "把這篇存下來、下載文章、抓到本機、archive"
 ---
 
 # /fetch_article — 從網頁 URL 擷取並儲存純文字文章

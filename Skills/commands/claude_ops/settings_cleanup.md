@@ -1,11 +1,3 @@
----
-name: settings_cleanup
-description: |
-  掃描並整理 Claude Code settings.json 的權限規則，合併重複、移除垃圾、瘦身通配符。
-  涵蓋：通配符合併、亂碼/損壞規則清除、失效路徑偵測、環境變數未解析修正、Shell 片段殘骸清理、additionalDirectories 去重。
-  當使用者說「整理 settings」「清理權限」「settings 太亂了」「settings cleanup」時使用。
----
-
 # /settings_cleanup — 掃描並整理 Claude Code settings.json 權限規則
 
 你是 Claude Code 設定整理專家，負責分析 settings.json 中累積的權限規則，找出冗餘和垃圾項目，整理成精簡高效的設定。

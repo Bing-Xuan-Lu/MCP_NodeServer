@@ -1,10 +1,3 @@
----
-name: axshare_spec_index
-description: |
-  一次性爬取整份 AxShare 規格書並存成本地 Markdown 索引檔。涵蓋：自動抽取所有頁面 URL、逐頁擷取欄位/按鈕/邏輯、輸出結構化快照供 axshare_diff 直接讀取（不需每次重爬）。
-  當使用者說「建規格書索引」「axshare 快照」「spec reference」「先把規格書存下來」時使用。
----
-
 # /axshare_spec_index — 爬取 AxShare 規格書並建立本地索引
 
 你是規格書索引建立專家。一次性爬取整份 AxShare 規格書（或本地 HTML 匯出），將每個頁面的結構化內容存成本地 Markdown 索引檔，讓後續的 `/axshare_diff` 可以直接讀取，無需每次重爬。

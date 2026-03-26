@@ -1,8 +1,6 @@
 ---
 name: remote_diff
-description: |
-  比對本機 Git 專案與遠端 SFTP 主機上的實際檔案差異，找出同事直接在遠端修改的檔案。涵蓋：遠端檔案拉取、git diff 比對、衝突報告、選擇性 merge 回本機。
-  當使用者說「遠端有人改過嗎」「diff 遠端」「remote diff」「部署前檢查」「會不會蓋到別人改的」時使用。
+description: "遠端有人改過嗎、diff 遠端、remote diff、部署前檢查"
 ---
 
 # /remote_diff — 比對本機 vs 遠端 SFTP 檔案差異
