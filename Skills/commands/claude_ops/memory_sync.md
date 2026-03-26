@@ -38,12 +38,15 @@
 **Git memory 路徑**：讀取當前工作目錄，找到 `memory/MEMORY.md`，即為根目錄。
 
 **Claude 本機路徑（project）**：
-1. 取得專案絕對路徑（如 `D:\Develop\MCP_NodeServer`）
-2. 編碼規則：`D:\Develop\MCP_NodeServer` → `d--Develop-MCP-NodeServer`
-   - 磁碟代號轉小寫
+
+1. 取得專案絕對路徑（如 `D:\MCP_Server`）
+2. 編碼規則：`D:\MCP_Server` → `d--MCP-Server`
+   - 磁碟代號保留原始大小寫（取決於開啟時的路徑）
    - `:\` 替換為 `--`
    - `\` 替換為 `-`
+   - `_` 替換為 `-`
 3. 完整路徑：`~/.claude/projects/{encoded}/memory/`
+4. **不要猜測編碼**，直接用 Glob `~/.claude/projects/*/memory/` 列出實際路徑，再匹配專案名
 
 **Claude 本機路徑（global）**：`~/.claude/memory/`（若不存在，初始化時建立）
 

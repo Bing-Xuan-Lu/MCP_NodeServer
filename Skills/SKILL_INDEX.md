@@ -92,6 +92,8 @@
 - `/harness_audit` — 審計 Claude Code 工具設置，產生評分報告
 - `/settings_cleanup` — 掃描並整理 settings.json 權限規則，合併重複、移除垃圾
 - `/project_claudemd` — 為專案自動產生 CLAUDE.md 文件
+- `/memory_sync` — 同步 Git memory/ 與本機 Claude 記憶（pull/push/status）
+- `/memory_audit` — 審計與整理 Claude 記憶系統（死連結、孤兒、重複、過時偵測）
 - `/update_codemaps` → 見開發流程部
 
 ## 生活自動化部
