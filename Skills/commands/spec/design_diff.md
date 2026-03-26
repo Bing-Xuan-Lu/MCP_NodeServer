@@ -49,38 +49,52 @@ $ARGUMENTS
 
 ## 線上 XD 設計稿處理流程
 
-若設計稿來源為 XD 線上連結，**不要在 XD viewer 內截圖**（artboard 是 canvas 渲染在 scrollable div 中，zoom 縮小 + fullPage 都無法取得完整 artboard）。
+若設計稿來源為 XD 線上連結，XD viewer 是 **canvas 渲染**，不是 `<img>` 標籤。以下方法皆無效：
+- ❌ grid view CDN URL — 只有縮圖（~188px 寬），文字完全看不清
+- ❌ detail view fullPage screenshot — canvas 只截到 viewport 範圍
+- ❌ 拉高 viewport — canvas 會等比縮放變更模糊
 
-**正確做法 — CDN 圖片直連**：
+**正確做法 — Detail View 分段捲動截圖**：
 
 ```
-1. browser_navigate → XD grid 頁面（連結尾端加 /grid）
-2. browser_evaluate → 從 [role="gridcell"] img 提取每個 artboard 的 CDN 圖片 URL
-   - URL 格式：https://cdn-sharing.adobecc.com/content/storage/id/urn:aaid:sc:US:{project_id};revision={N}?component_id={artboard_id}&api_key=CometServer1&access_token={token}
-   - img.naturalWidth / naturalHeight 可確認圖片尺寸（通常 960px 寬）
-3. 對每個目標 artboard：
-   a. browser_navigate → CDN 圖片 URL（瀏覽器直接顯示完整圖片）
-   b. browser_take_screenshot + fullPage: true → 截取完整 artboard
-   c. Read 截圖檔案 → 驗證內容是正確頁面且完整
-4. 每張截圖存為 xd_{page_name}.png
-5. 與前台實際截圖比對
+1. browser_navigate → XD grid 頁面（URL 尾端加 /grid）
+2. browser_evaluate → 從 [role="gridcell"] 找到目標 artboard 名稱
+3. browser_navigate → artboard detail 頁面：
+   https://xd.adobe.com/view/{project_id}/screen/{artboard_id}/
+4. 關閉「網格視圖」彈窗（若出現）
+5. browser_run_code → 找 scrollable container，迴圈 scroll + 逐段截圖
+6. Read 每段截圖 → 驗證內容完整且文字清晰可讀
+7. 每段截圖存為 xd_{page_name}_part{N}.png
 ```
 
-> **提取 CDN URL 的 JS**：
+> **分段截圖的 browser_run_code**：
 > ```js
-> (() => {
->   const cells = document.querySelectorAll('[role="gridcell"]');
->   return Array.from(cells).map((cell, i) => ({
->     index: i,
->     label: cell.textContent.replace('屏幕', '').trim(),
->     src: cell.querySelector('img')?.src || '',
->     w: cell.querySelector('img')?.naturalWidth,
->     h: cell.querySelector('img')?.naturalHeight
->   }));
-> })()
+> async (page) => {
+>   const container = await page.evaluate(() => {
+>     const all = document.querySelectorAll('*');
+>     for (const el of all) {
+>       if (el.scrollHeight > el.clientHeight + 10 && el.clientHeight > 100) {
+>         el.id = '__xd_scroll__';
+>         return { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
+>       }
+>     }
+>   });
+>   const steps = Math.ceil(container.scrollHeight / container.clientHeight);
+>   for (let i = 0; i < steps; i++) {
+>     await page.evaluate(({ top }) => {
+>       document.getElementById('__xd_scroll__').scrollTop = top;
+>     }, { top: i * container.clientHeight });
+>     await page.waitForTimeout(1000); // 等 canvas 重繪
+>     await page.screenshot({ path: `screenshots/xd_part${i + 1}.png`, type: 'png' });
+>   }
+>   return { steps };
+> }
 > ```
 
-> **注意**：access_token 有時效性，每次從 grid view 重新提取。CDN 圖片背景為黑色（瀏覽器預設），比對時注意。
+> **注意**：
+> - XD 設計稿的 fixed bottom nav 是畫在 canvas 上的設計元素，無法用 CSS 隱藏，但分段截圖後每段內容都完整可見
+> - `browser_run_code` 中不能用 `setTimeout`，必須用 `page.waitForTimeout()`
+> - 每段等待 1000ms 確保 canvas 重繪完成
 
 ---
 

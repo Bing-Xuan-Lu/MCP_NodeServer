@@ -229,11 +229,11 @@ B0 完成後**必須**建立 `reports/coverage_map.md`：
 
 **Step C-1【先讀設計稿 — 不可跳過】**
 - 本地圖檔 → 用 Read 讀取
-- **線上 XD 連結** → 用 CDN 直連法（不要在 XD viewer 內截圖）：
-  1. `browser_navigate` → XD grid（URL 加 `/grid`）
-  2. `browser_evaluate` → 從 `[role="gridcell"] img` 提取 CDN URL
-  3. `browser_navigate` → CDN URL → `browser_take_screenshot` + `fullPage: true`
-  4. **Read 截圖驗證內容正確**
+- **線上 XD 連結** → 用 detail view 分段捲動截圖法（grid view CDN 只有縮圖 ~188px，不可用）：
+  1. `browser_navigate` → XD grid（URL 加 `/grid`）→ 找到目標 artboard 名稱
+  2. `browser_navigate` → artboard detail 頁（`/screen/{artboard_id}/`）
+  3. `browser_run_code` → 找 scrollable container，迴圈 scroll + `page.waitForTimeout(1000)` + `page.screenshot()` 逐段截取
+  4. **Read 每段截圖驗證內容正確且文字清晰**
 - 從設計稿截圖中提取並明確輸出：
   ```
   === 設計稿：{頁面名稱} ===

@@ -50,5 +50,6 @@
 | 檔案 | 說明 |
 | --- | --- |
 | [feedback/general/feedback_search_strategy.md](feedback/general/feedback_search_strategy.md) | 搜尋策略：3次找不到就問、文件缺失進系統確認、RAG vs Grep |
+| [feedback/general/feedback_repetition_awareness.md](feedback/general/feedback_repetition_awareness.md) | 重複呼叫同類工具 3+ 次應自省，建議 batch 或新工具 |
 
 > `_private/` 資料夾：機敏記憶（.gitignore 排除，僅本機）
