@@ -1,6 +1,6 @@
-# /verify — 提交前七合一驗證並產出 PASS/FAIL 報告
+# /verify — 提交前八合一驗證並產出 PASS/FAIL 報告
 
-你是提交前守門員，依序執行語法檢查、測試、Lint、git 狀態、AI 品質稽核七項驗證，產出一份可閱讀的 PASS/FAIL 報告。
+你是提交前守門員，依序執行語法檢查、測試、Lint、git 狀態、AI 品質稽核、依賴審查八項驗證，產出一份可閱讀的 PASS/FAIL 報告。
 
 ---
 
@@ -9,7 +9,7 @@
 $ARGUMENTS
 
 - `quick` — 只跑語法 + git status
-- `full`（預設）— 全部七項（含 AI 品質稽核）
+- `full`（預設）— 全部八項（含 AI 品質稽核 + 依賴審查）
 - `pre-commit` — 語法 + 測試 + console.log 稽核 + AI 品質稽核 + git status
 - `pre-pr` — 全部 + 確認無 `*_internal*` 被 stage
 
@@ -130,6 +130,33 @@ Grep pattern="function {changed_function_name}" 全域搜尋
 
 > 注意：以上結果需人工確認，AI 無法保證判斷正確——標記 [?] 表示「值得人工看一眼」，不等同 FAIL。
 
+**⑧ 依賴審查**（`full` / `pre-pr` 模式）
+
+偵測 `package.json` / `composer.json` / `requirements.txt`，對直接依賴執行三項檢查：
+
+A. 未使用套件：
+
+```
+Grep pattern="require\(.*{pkg}\)|import.*{pkg}|use {Namespace}" 在非 test 目錄的程式碼中
+→ 完全找不到使用點 → 標記 [UNUSED?]
+```
+
+B. 版本未鎖定：
+
+```
+找出 package.json 中含 ^、~、* 的版本聲明
+→ 標記 [UNLOCKED] — 建議移除 ^ 並確認 lock 檔已 commit
+```
+
+C. 此次新增的套件（git diff 中新增的依賴）：
+
+```
+git_diff → 找出 package.json / composer.json 的 + 行
+→ 新增套件 → 標記 [NEW_DEP] — 確認是否有標準庫或 10 行內自寫可取代
+```
+
+> ⑧ 結果全為標記候選，不自動判 FAIL——需人工確認。
+
 ---
 
 ### 步驟 3：產出報告
@@ -147,6 +174,7 @@ VERIFICATION: [PASS / FAIL]
 ⑤ Git：      [staged: N / unstaged: N / untracked: N]
 ⑥ 敏感檔：  [OK / ⚠️ {filename} 不應被 stage]
 ⑦ AI 品質： [OK / ⚠️ HALLUCINATION? N 處 / HARDCODE? N 處 / DRIFT? N 處]
+⑧ 依賴：    [OK / ⚠️ UNUSED? N 個 / UNLOCKED N 個 / NEW_DEP N 個]
 
 ============================
 可提交：[YES / NO]

@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 > nul
 :: Deploy skills to Claude Code and Gemini CLI
-:: Exclude: starts with _, ends with _internal.md / _steps.md
+:: Exclude: in any _* subdirectory, filename starts with _, ends with _internal.md / _steps.md
 :: Also removes stale files no longer in source
 
 set CLAUDE_DIR=%USERPROFILE%\.claude\commands
@@ -17,7 +17,7 @@ set VALID_LIST=%TEMP%\mcp_valid_skills.txt
 if exist "%VALID_LIST%" del "%VALID_LIST%"
 
 for /r "Skills\commands" %%F in (*.md) do (
-  echo %%~dpF | findstr /I /C:"_cold" > nul
+  echo %%~dpF | findstr /I /C:"\_" > nul
   if errorlevel 1 (
     echo %%~nxF | findstr /I /B "_" > nul
     if errorlevel 1 (
@@ -51,7 +51,7 @@ for %%F in ("%GEMINI_DIR%\*.md") do (
 :: ---- Step 4: Deploy valid skills ----
 set count=0
 for /r "Skills\commands" %%F in (*.md) do (
-  echo %%~dpF | findstr /I /C:"_cold" > nul
+  echo %%~dpF | findstr /I /C:"\_" > nul
   if errorlevel 1 (
     echo %%~nxF | findstr /I /B "_" > nul
     if errorlevel 1 (
@@ -72,4 +72,4 @@ echo.
 echo Done! %count% skills deployed, %stale% stale files removed.
 echo   Claude: %CLAUDE_DIR%
 echo   Gemini: %GEMINI_DIR%
-echo (Excluded: _skill_template.md, *_internal.md, *_steps.md, _archived/)
+echo (Excluded: any _* subdirectory, *_internal.md, *_steps.md, filenames starting with _)
