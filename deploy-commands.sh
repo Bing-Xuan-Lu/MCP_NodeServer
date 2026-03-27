@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy skills to Claude Code & Gemini CLI
-# Exclude: starts with _, ends with _internal.md / _steps.md
+# Exclude: in any _* subdirectory, filename starts with _, ends with _internal.md / _steps.md
 # Also removes stale files no longer in source
 
 CLAUDE_DIR="$HOME/.claude/commands"
@@ -16,7 +16,7 @@ VALID_LIST=$(mktemp)
 
 find Skills/commands -type f -name "*.md" | while read -r file; do
   filename=$(basename "$file")
-  if [[ "$file" != *"/_cold/"* ]] && [[ ! "$filename" =~ ^_ ]] && [[ ! "$filename" =~ _internal\.md$ ]] && [[ ! "$filename" =~ _steps\.md$ ]]; then
+  if [[ "$file" != *"/_"* ]] && [[ ! "$filename" =~ ^_ ]] && [[ ! "$filename" =~ _internal\.md$ ]] && [[ ! "$filename" =~ _steps\.md$ ]]; then
     echo "$filename" >> "$VALID_LIST"
   fi
 done
@@ -46,7 +46,7 @@ done
 count=0
 find Skills/commands -type f -name "*.md" | while read -r file; do
   filename=$(basename "$file")
-  if [[ "$file" != *"/_cold/"* ]] && [[ ! "$filename" =~ ^_ ]] && [[ ! "$filename" =~ _internal\.md$ ]] && [[ ! "$filename" =~ _steps\.md$ ]]; then
+  if [[ "$file" != *"/_"* ]] && [[ ! "$filename" =~ ^_ ]] && [[ ! "$filename" =~ _internal\.md$ ]] && [[ ! "$filename" =~ _steps\.md$ ]]; then
     cp "$file" "$CLAUDE_DIR/$filename"
     cp "$file" "$GEMINI_DIR/$filename"
     echo "  deployed $filename"
@@ -60,4 +60,4 @@ echo ""
 echo "Done! Skills deployed ($stale stale files removed)."
 echo "  Claude: $CLAUDE_DIR"
 echo "  Gemini: $GEMINI_DIR"
-echo "(Excluded: _skill_template.md, *_internal.md, *_steps.md, _cold/)"
+echo "(Excluded: any _* subdirectory, *_internal.md, *_steps.md, filenames starting with _)"
