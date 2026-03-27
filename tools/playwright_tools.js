@@ -60,7 +60,7 @@ export const definitions = [
                   "click", "hover", "type", "select", "check", "uncheck",
                   "dismiss", "wait", "wait_for", "scroll_to",
                   "evaluate", "extract", "extract_all", "screenshot",
-                  "navigate",
+                  "navigate", "watch_network", "collect_network",
                 ],
                 description: "動作類型",
               },
@@ -84,6 +84,9 @@ export const definitions = [
               styles: { type: "array", items: { type: "string" }, description: "extract data=styles 時的 CSS 屬性清單" },
               url: { type: "string", description: "navigate 動作的目標 URL" },
               wait_for_navigation: { type: "boolean", description: "click 後是否等待頁面導航完成(預設 false)" },
+              filter: { type: "string", description: "watch_network 用:URL 過濾關鍵字(只捕捉包含此字串的請求,如 'ajax/' 或 'api/')" },
+              include_body: { type: "boolean", description: "watch_network 用:是否捕捉 response body(預設 true)" },
+              max_body_size: { type: "number", description: "watch_network 用:response body 最大擷取字元數(預設 2000)" },
             },
             required: ["type"],
           },
@@ -192,6 +195,13 @@ async function handleBrowserInteract(args) {
 
     const results = [];
     const contentBlocks = [];
+
+    // Network 監聽器狀態（由 watch_network / collect_network 動態控制）
+    let networkCaptures = [];
+    let networkFilter = "";
+    let networkIncludeBody = true;
+    let networkMaxBodySize = 2000;
+    let networkListener = null;
 
     for (let i = 0; i < actions.length; i++) {
       const action = actions[i];
@@ -304,6 +314,74 @@ async function handleBrowserInteract(args) {
             }
             await page.goto(targetUrl, { waitUntil: "networkidle", timeout });
             results.push({ action: label, ok: true, url: page.url() });
+            break;
+          }
+
+          case "watch_network": {
+            // 清空之前的捕捉
+            networkCaptures = [];
+            networkFilter = action.filter || "";
+            networkIncludeBody = action.include_body !== false;
+            networkMaxBodySize = action.max_body_size || 2000;
+
+            // 移除舊的 listener（避免重複掛載）
+            if (networkListener) {
+              page.removeListener("response", networkListener);
+            }
+
+            networkListener = async (response) => {
+              const req = response.request();
+              const resType = req.resourceType();
+              // 只捕捉 XHR / fetch（跳過圖片、CSS、JS 等靜態資源）
+              if (resType !== "xhr" && resType !== "fetch") return;
+
+              const reqUrl = req.url();
+              if (networkFilter && !reqUrl.includes(networkFilter)) return;
+
+              const entry = {
+                url: reqUrl.substring(0, 500),
+                method: req.method(),
+                status: response.status(),
+                postData: req.postData()?.substring(0, networkMaxBodySize) || null,
+                responseBody: null,
+              };
+
+              if (networkIncludeBody) {
+                try {
+                  const body = await response.text();
+                  entry.responseBody = body.substring(0, networkMaxBodySize);
+                  // 嘗試 parse JSON 以便結構化顯示
+                  try { entry.responseBody = JSON.parse(entry.responseBody); } catch {}
+                } catch {
+                  entry.responseBody = "(無法讀取 body)";
+                }
+              }
+
+              networkCaptures.push(entry);
+            };
+
+            page.on("response", networkListener);
+            results.push({ action: label, ok: true, note: `開始監聽 XHR/Fetch${networkFilter ? `（過濾: ${networkFilter}）` : "（全部）"}` });
+            break;
+          }
+
+          case "collect_network": {
+            // 先等一下讓非同步 response 回來
+            await page.waitForTimeout(action.ms || 500);
+
+            if (networkCaptures.length === 0) {
+              results.push({ action: label, ok: true, note: "沒有捕捉到 XHR/Fetch 請求", captures: [] });
+            } else {
+              results.push({
+                action: label,
+                ok: true,
+                note: `捕捉到 ${networkCaptures.length} 個請求`,
+                captures: networkCaptures,
+              });
+            }
+
+            // 收集後清空，可再次 watch_network 開啟新一輪
+            networkCaptures = [];
             break;
           }
 
