@@ -24,7 +24,7 @@ RAG 索引過程會在 CPU 執行 Embedding 模型（paraphrase-multilingual-Min
 | 磁碟空間 | 1GB | 2GB+（Docker image + 索引資料） |
 | CPU | 任意 | 多核心可加速索引（Embedding 為 CPU 密集運算） |
 
-若電腦資源有限，可不安裝 RAG，其他 47 個工具完全不受影響。
+若電腦資源有限，可不安裝 RAG，其他 50 個工具完全不受影響。
 
 ---
 
@@ -157,7 +157,10 @@ MCP_NodeServer/
 │   ├── pdf.js           ← read_pdf_file, read_pdf_files_batch (.pdf → Markdown/Text)
 │   ├── images.js        ← read_image, read_images_batch（圖片讀取 + 縮放，支援 PNG/JPG/WebP/GIF/SVG）
 │   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops
-│   ├── css_compare.js   ← css_compare（批次比對兩個 URL 的 computed style 差異，需 Playwright）
+│   ├── dom_compare.js   ← dom_compare（批次比對兩個 URL 的 CSS/HTML/JS 差異，需 Playwright）
+│   ├── playwright_tools.js ← browser_interact, page_audit（自帶 headless 瀏覽器，需 Playwright）
+│   ├── image_diff.js    ← image_diff（設計稿 vs 截圖像素級比對，產生 diff 圖）
+│   ├── agent_coord.js   ← agent_coord（多 Agent 協調：post/poll/status，JSON 檔案持久化）
 │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
 │   ├── rag.js           ← rag_index, rag_query, rag_status（選用，需 ChromaDB）
 │   └── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access

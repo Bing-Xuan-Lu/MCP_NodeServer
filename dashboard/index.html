@@ -174,6 +174,8 @@
         <button class="wf-tab-btn" data-wf="deploy" style="padding:10px 24px; border-radius:12px; font-size:14px;">部署流程</button>
         <button class="wf-tab-btn" data-wf="mcp" style="padding:10px 24px; border-radius:12px; font-size:14px;">MCP Server 自檢</button>
         <button class="wf-tab-btn" data-wf="memory" style="padding:10px 24px; border-radius:12px; font-size:14px;">記憶生命週期</button>
+        <button class="wf-tab-btn" data-wf="design" style="padding:10px 24px; border-radius:12px; font-size:14px;">設計稿比對</button>
+        <button class="wf-tab-btn" data-wf="dual-agent" style="padding:10px 24px; border-radius:12px; font-size:14px;">雙 Agent 協作</button>
       </section>
 
       <!-- ─── Workflow: 專案初始化與環境配置 (Project Bootstrap) ─── -->
@@ -181,6 +183,34 @@
         <section class="bento-item span-12 notes-item" style="border-color:#f59e0b; padding:40px;">
           <h2 class="notes-title" style="color:#f59e0b; font-size:32px; letter-spacing:-0.04em;">🛠️ 專案初始化與環境配置 Project Bootstrap</h2>
           <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">當開始一個新專案時，遵循此標準化流程建立基礎架構、環境變數與 AI 專案地圖，確保後續開發能享有完整的工具鏈與 context 保護。</p>
+        </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:#f59e0b;">為什麼需要初始化？</b><br>
+            · Claude 每次對話都是全新 context — <code>CLAUDE.md</code> 和 <code>codemap.md</code> 是讓 Claude 「秒懂專案」的關鍵文件<br>
+            · 沒有 <code>.gitignore</code> 就可能把 <code>.env</code>、DB 密碼推上 Git — 初始化時攔截<br>
+            · 沒有 codemap 的大型專案，Claude 每次都要 Grep 探索，浪費大量 token<br>
+            · 移植案需要 AxShare 規格書索引，否則後續 QC 沒有「黃金標準」可比對
+          </div>
+        </section>
+
+        <section class="bento-item span-6" style="background:var(--surface); border:1px solid var(--border); padding:24px 32px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:var(--green);">✅ 必做步驟</b><br>
+            · <code>/gitignore_setup</code> — 每個專案都需要<br>
+            · <code>/project_claudemd</code> — 每個專案都需要<br>
+            · <code>/update_codemaps</code> — 中大型專案強烈建議
+          </div>
+        </section>
+
+        <section class="bento-item span-6" style="background:var(--surface); border:1px solid var(--border); padding:24px 32px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:var(--muted);">⬜ 視情況選做</b><br>
+            · <code>/axshare_spec_index</code> — 僅移植案需要<br>
+            · <code>/db_schema_designer</code> — 有新 DB 需求時<br>
+            · <code>/docker_setup</code> — 需要本地容器環境時
+          </div>
         </section>
 
         <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
@@ -317,15 +347,39 @@
       <div id="wf-php" class="wf-panel" style="display:contents;">
         <section class="bento-item span-12 notes-item" style="border-color: var(--purple); padding: 40px;">
           <h2 class="notes-title" style="color: var(--purple); font-size: 32px; letter-spacing: -0.04em;">專案開發流程 · PHP Pipeline</h2>
-          <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">從規格分析到交付驗收的標準 7 步驟，依序執行以達成高品質交付。</p>
+          <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">從規格分析到交付驗收的標準 7 步驟，每一步都有對應的 Skill 自動化執行，依序走完即達成高品質交付。</p>
+        </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:var(--purple);">流程設計理念</b><br>
+            · 每一步的產出是下一步的輸入：規格書索引 → 開發計畫 → DB Schema → CRUD 模組 → 測試 → 驗收<br>
+            · 測試不是最後才做 — 前台開發階段就用 <code>/frontend_qc</code> 即時比對，避免累積到最後爆量修改<br>
+            · 步驟 ①②③ 是「規劃期」（不寫 code），④⑤ 是「開發期」，⑥⑦ 是「品保期」<br>
+            · 每個步驟都可獨立執行，不一定要從頭走 — 接手既有專案可從 ④ 開始
+          </div>
+        </section>
+
+        <section class="bento-item span-6" style="background:var(--surface); border:1px solid var(--border); padding:24px 32px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:var(--green);">✅ 適合場景</b><br>
+            · 全新 PHP 專案從零開始<br>
+            · 既有系統移植（舊系統 → 新架構）<br>
+            · AxShare 規格書驅動的案子
+          </div>
+        </section>
+
+        <section class="bento-item span-6" style="background:var(--surface); border:1px solid var(--border); padding:24px 32px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:#f59e0b;">⚠ 注意事項</b><br>
+            · 規格書變更後，要重跑 <code>/axshare_spec_index</code> 更新索引<br>
+            · DB Schema 改動後記得跑 <code>/db_migration</code> 同步遠端<br>
+            · 驗收階段的 <code>/project_qc</code> 會用 Playwright 實際走訪，需較長執行時間
+          </div>
         </section>
 
         <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
           <ul class="timeline">
-            <!-- Timeline items (truncated for brevity, keep the structure from docs/dashboard.html) -->
-            <!-- ... (Keeping all timeline items from docs/dashboard.html but updating tags if needed) ... -->
-            <!-- Note: I will include all items to ensure completeness as per GEMINI.md mandate -->
-            
             <li class="timeline-item">
               <div class="timeline-marker"></div>
               <div class="timeline-content">
@@ -504,24 +558,174 @@
       <div id="wf-deploy" class="wf-panel" style="display:none;">
         <section class="bento-item span-12 notes-item" style="border-color: var(--green); padding: 40px;">
           <h2 class="notes-title" style="color: var(--green); font-size: 32px; letter-spacing: -0.04em;">部署流程 · Deployment Pipeline</h2>
-          <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">從本機開發完成到推上測試機的標準流程，支援直連 DB 與間接（SFTP+PHP）兩種 DB 存取方式。</p>
+          <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">從本機開發完成到推上測試機的標準流程，包含安全閘門、程式上傳、DB 遷移與驗證。</p>
         </section>
-        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px; text-align:center;">
-          <code style="display:inline-block; font-family:var(--font-mono); font-size:18px; color:var(--green); background:var(--surface); padding:12px 24px; border-radius:12px; cursor:pointer; border:1px solid var(--border);" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/full_deploy</code>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:var(--green);">部署架構</b><br>
+            · 部署目標是 SFTP 測試機（非 Git-based deploy），適用於傳統 PHP 主機環境<br>
+            · 部署前必須跑 <code>/remote_diff</code> 安全閘 — 比對本機 vs 遠端差異，避免覆蓋同事直接在遠端修改的檔案<br>
+            · DB 遷移支援兩種模式：直連 MySQL 或 SFTP 上傳 PHP 腳本間接執行（無法直連 DB 的主機用）<br>
+            · 環境設定檔（DB 連線、<code>.env</code>）會被 SFTP 部署自動跳過，不會覆蓋遠端設定
+          </div>
+        </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
+          <ul class="timeline">
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:#ef4444; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① 安全閘門</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SAFETY GATE</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">比對本機 Git 與遠端 SFTP 差異，找出同事直接在遠端修改的檔案，避免覆蓋。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">本機 vs 遠端差異檢查</span>
+                    <a class="tag" href="javascript:void(0)">/remote_diff</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 程式部署</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">CODE UPLOAD</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">透過 SFTP 上傳變更的檔案到測試機，自動跳過環境設定檔。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">SFTP 檔案上傳</span>
+                    <a class="tag" href="javascript:void(0)">/sftp_deploy</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">③ DB 遷移</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">DB MIGRATION</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">執行 Schema 變更。直連 DB 或透過 SFTP 上傳 PHP 腳本間接執行。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">A. 直連 DB</span>
+                    <a class="tag" href="javascript:void(0)">/db_migration</a>
+                  </div>
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">B. 間接（無法直連）</span>
+                    <a class="tag" href="javascript:void(0)">/remote_db_exec</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">④ 驗證</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SMOKE TEST</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">部署後用 Playwright 走訪關鍵頁面，確認主幹功能正常。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">黃金路徑煙霧測試</span>
+                    <a class="tag" href="javascript:void(0)">/e2e_golden_path</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <div style="font-size:14px; color:var(--muted); line-height:1.8;">
+            <b style="color:var(--text);">💡 快速指令：</b>
+            <code style="font-family:var(--font-mono); font-size:16px; color:var(--green); cursor:pointer;" title="點擊複製" onclick="navigator.clipboard.writeText(this.innerText)">/full_deploy</code>
+            — 一鍵執行上述全部步驟（安全閘 → 上傳 → DB 遷移 → 驗證）
+          </div>
         </section>
       </div><!-- /wf-deploy -->
 
       <!-- ─── Workflow: MCP Server 自檢流程 ─── -->
       <div id="wf-mcp" class="wf-panel" style="display:none;">
-        <section class="bento-item span-12 notes-item" style="border-color: var(--cyan);">
-          <h2 class="notes-title" style="color: var(--cyan);">MCP Server 自檢流程 · MCP Health Check Pipeline</h2>
-          <p style="color:var(--muted); font-size:14px; margin-top:8px;">每次重啟或更新 MCP Server 後執行，確保工具完整、路徑可達、Skills 已同步、Dashboard 一致。</p>
+        <section class="bento-item span-12 notes-item" style="border-color: var(--cyan); padding: 40px;">
+          <h2 class="notes-title" style="color: var(--cyan); font-size: 32px; letter-spacing: -0.04em;">MCP Server 自檢 · MCP Health Check Pipeline</h2>
+          <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">確保 MCP 工具鏈完整可用、Skills 同步、Dashboard 資訊一致。</p>
         </section>
-        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
-          <div style="display:flex; flex-direction:column; gap:12px;">
-            <a class="tag" href="javascript:void(0)" style="align-self: flex-start;">/skill_audit</a>
-            <a class="tag" href="javascript:void(0)" style="align-self: flex-start;">/harness_audit</a>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:var(--cyan);">什麼時候該跑自檢？</b><br>
+            · 新增或修改 MCP 工具模組後（確認 index.js 註冊正確、工具能載入）<br>
+            · 新增或修改 Skill MD 後（確認已部署到 <code>~/.claude/commands/</code>、dashboard 已同步）<br>
+            · 更新 npm 套件後（確認無 breaking change 導致工具異常）<br>
+            · 感覺「某個工具怎麼叫不出來」的時候
           </div>
+        </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
+          <ul class="timeline">
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① Skill 審計</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SKILL AUDIT</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">掃描所有 Skill MD，檢查耦合與重疊、frontmatter 格式、部署狀態，建議合併或淘汰。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">Skills 完整性與品質</span>
+                    <a class="tag" href="javascript:void(0)">/skill_audit</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 工具鏈審計</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">HARNESS AUDIT</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">檢查 MCP 工具模組載入、settings.json 權限、Hooks 設定、Dashboard 數字一致性。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">MCP 環境完整性</span>
+                    <a class="tag" href="javascript:void(0)">/harness_audit</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">③ 設定整理</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SETTINGS CLEANUP</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">清理 settings.json 的冗餘權限規則（選用，權限規則累積過多時執行）。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">權限規則瘦身</span>
+                    <a class="tag" href="javascript:void(0)">/settings_cleanup</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+          </ul>
         </section>
       </div><!-- /wf-mcp -->
 
@@ -529,16 +733,310 @@
       <div id="wf-memory" class="wf-panel" style="display:none;">
         <section class="bento-item span-12 notes-item" style="border-color: var(--green); padding: 40px;">
           <h2 class="notes-title" style="color: var(--green); font-size: 32px; letter-spacing: -0.04em;">記憶生命週期 · Memory Lifecycle</h2>
-          <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">從對話中調教到跨機器同步的 4 階段記憶管理流程。</p>
+          <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">Claude 的記憶不是自動累積的 — 需要主動收割、定期審計、跨機器同步，才能讓每次對話都站在上次的肩膀上。</p>
         </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:var(--green);">記憶系統架構</b><br>
+            · 記憶存放於 <code>~/.claude/projects/{project}/memory/</code>，每個專案獨立<br>
+            · <code>MEMORY.md</code> 是索引檔（< 200 行），每次對話自動載入，指向各主題 MD 檔<br>
+            · 分四類：<b>user</b>（使用者偏好）、<b>feedback</b>（操作回饋）、<b>project</b>（專案知識）、<b>reference</b>（外部連結）<br>
+            · 記憶只存「結論」不存「過程」— 寫「X 情況下應該用 Y 方法」，不寫對話流水帳<br>
+            · 記憶會過期 — project 類型變動最快，feedback 最持久
+          </div>
+        </section>
+
         <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
-          <div style="display:flex; flex-wrap:wrap; gap:12px;">
-            <a class="tag" href="javascript:void(0)">/retro</a>
-            <a class="tag" href="javascript:void(0)">/memory_audit</a>
-            <a class="tag" href="javascript:void(0)">/memory_sync</a>
+          <ul class="timeline">
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① 收割</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">HARVEST</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">對話結束前回顧：踩過什麼坑、學到什麼、有哪些可復用的經驗值得記下來。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">對話回顧收割</span>
+                    <a class="tag" href="javascript:void(0)">/retro</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 審計</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">AUDIT</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">定期檢查記憶品質：刪除過期的、合併重複的、修正與現狀不符的。MEMORY.md 超過 200 行時必須瘦身。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">記憶品質審計</span>
+                    <a class="tag" href="javascript:void(0)">/memory_audit</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">③ 同步</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SYNC</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">將本機記憶同步到 Git，或從 Git 拉到另一台機器。確保換電腦後 Claude 的認知不歸零。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">跨機器記憶同步</span>
+                    <a class="tag" href="javascript:void(0)">/memory_sync</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <div style="font-size:14px; color:var(--muted); line-height:1.8;">
+            <b style="color:var(--text);">💡 建議頻率：</b>
+            <code>/retro</code> 每次重要對話結束後 ·
+            <code>/memory_audit</code> 每月一次或記憶超過 20 個檔案時 ·
+            <code>/memory_sync</code> 換機器前
           </div>
         </section>
       </div><!-- /wf-memory -->
+
+      <!-- ─── Workflow: 設計稿比對 ─── -->
+      <div id="wf-design" class="wf-panel" style="display:none;">
+        <section class="bento-item span-12 notes-item" style="border-color: #f59e0b; padding: 40px;">
+          <h2 class="notes-title" style="color: #f59e0b; font-size: 32px; letter-spacing: -0.04em;">設計稿比對 · Design Diff Pipeline</h2>
+          <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">將 XD/Figma 設計稿（PNG）與實際網站進行多層次比對：像素級 diff、視覺語意分析、DOM 結構差異。</p>
+        </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
+          <ul class="timeline">
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① 截圖準備</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">SCREENSHOT</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">用 headless 瀏覽器截取網站實際畫面，viewport 對齊設計稿尺寸。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">截取目標頁面</span>
+                    <a class="tag tool-tag" href="javascript:void(0)">browser_interact</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:#f59e0b; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 像素比對</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">PIXEL DIFF</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">逐像素比對設計稿 PNG 與截圖，產生紅色標記差異圖與不一致百分比。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">設計稿 vs 截圖</span>
+                    <a class="tag tool-tag" href="javascript:void(0)">image_diff</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">③ 視覺語意分析</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">VISUAL REVIEW</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">Claude 多模態視覺分析：理解排版、顏色、字體、間距差異，產出語意化問題清單。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">設計稿比對報告</span>
+                    <a class="tag" href="javascript:void(0)">/design_diff</a>
+                  </div>
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">規格書截圖對照</span>
+                    <a class="tag" href="javascript:void(0)">/spec_screenshot_diff</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">④ DOM 結構驗證</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">DOM COMPARE</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">比對兩個版本的 CSS computed style、HTML 結構與 JS 行為差異（選用）。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">CSS/HTML/JS 差異</span>
+                    <a class="tag tool-tag" href="javascript:void(0)">dom_compare</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </div><!-- /wf-design -->
+
+      <!-- ─── Workflow: 雙 Agent 協作 ─── -->
+      <div id="wf-dual-agent" class="wf-panel" style="display:none;">
+        <section class="bento-item span-12 notes-item" style="border-color: #f59e0b; padding: 40px;">
+          <h2 class="notes-title" style="color: #f59e0b; font-size: 32px; letter-spacing: -0.04em;">雙 Agent 協作 · Dual Agent Coordination</h2>
+          <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">開兩個 VS Code Claude Code 聊天室，前端 / 後端各自獨立開發同一專案，透過 <code>agent_coord</code> 工具溝通協調。</p>
+        </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:#f59e0b;">運作原理</b><br>
+            · 兩個 VS Code 視窗開同一個專案，各自啟動 Claude Code 聊天室<br>
+            · 兩邊共用同一個 MCP Server（讀同一份 <code>.mcp.json</code>），<b>不需要額外設定</b><br>
+            · 各自有獨立的 conversation context，天然隔離不互相干擾<br>
+            · 透過 <code>agent_coord</code> 工具讀寫 JSON 檔案做非同步溝通（非即時推播）<br>
+            · 協調資料持久化於 <code>D:\Project\_coordination\{project}\</code>，重啟不消失
+          </div>
+        </section>
+
+        <section class="bento-item span-6" style="background:var(--surface); border:1px solid var(--border); padding:24px 32px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:var(--green);">✅ 適合場景</b><br>
+            · 前後端同時趕工，總時間砍半<br>
+            · 前端做頁面 + 後端做 API 無交叉<br>
+            · 多個獨立模組並行開發
+          </div>
+        </section>
+
+        <section class="bento-item span-6" style="background:var(--surface); border:1px solid var(--border); padding:24px 32px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:#ef4444;">⚠ 代價與限制</b><br>
+            · Token 消耗約 2 倍（兩個獨立 context）<br>
+            · 必須嚴格分工，避免同時改同一檔案<br>
+            · 非即時通訊，需主動 poll 才能收到對方訊息
+          </div>
+        </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
+          <ul class="timeline">
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① 開場自報身分</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">AGENT INIT</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">各聊天室宣告角色（frontend / backend），並 poll 既有訊息了解上次進度。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">查看既有頻道與狀態</span>
+                    <a class="tag tool-tag" href="javascript:void(0)">agent_coord</a>
+                    <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: list_channels</code>
+                  </div>
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">讀取對方留言</span>
+                    <a class="tag tool-tag" href="javascript:void(0)">agent_coord</a>
+                    <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: poll</code>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 登記任務</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">TASK REGISTER</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">各自在 task-board 通報負責項目與會碰到的檔案範圍，確認不衝突。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">通報工作範圍</span>
+                    <a class="tag tool-tag" href="javascript:void(0)">agent_coord</a>
+                    <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: post, channel: task-board</code>
+                  </div>
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">更新任務狀態</span>
+                    <a class="tag tool-tag" href="javascript:void(0)">agent_coord</a>
+                    <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: status, task_status: doing</code>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">③ 各自開發</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">PARALLEL DEV</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">正常開發。有 API 變更或需要對方配合時，發訊息到 channel。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">通知 API 變更</span>
+                    <a class="tag tool-tag" href="javascript:void(0)">agent_coord</a>
+                    <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: post, category: api_change</code>
+                  </div>
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">定期輪詢對方訊息</span>
+                    <a class="tag tool-tag" href="javascript:void(0)">agent_coord</a>
+                    <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: poll</code>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:#f59e0b; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">④ 收尾合併</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">MERGE &amp; VERIFY</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">雙方完成後標記 done，合併分支或確認無衝突，跑整合測試。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">標記完成</span>
+                    <a class="tag tool-tag" href="javascript:void(0)">agent_coord</a>
+                    <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: status, task_status: done</code>
+                  </div>
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">整合測試</span>
+                    <a class="tag" href="javascript:void(0)">/project_qc</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <div style="font-size:14px; color:var(--muted); line-height:1.8;">
+            <b style="color:var(--text);">💡 使用提示：</b><br>
+            · 省錢策略：其中一邊用 <code>/model sonnet</code> 切換較便宜的模型<br>
+            · 檔案分工：前端只碰 views/js/css，後端只碰 model/controller/ajax，避免衝突<br>
+            · 協調資料存放於 <code>D:\Project\_coordination\{project}\</code>，純 JSON 可人工檢視<br>
+            · 重開聊天室後記得先 poll 看對方有沒有留訊息
+          </div>
+        </section>
+      </div><!-- /wf-dual-agent -->
 
       </div><!-- /tab-workflows -->
 
@@ -560,7 +1058,11 @@
             <a class="tag tool-tag" href="javascript:void(0)">execute_sql</a>
             <a class="tag tool-tag" href="javascript:void(0)">sftp_upload</a>
             <a class="tag tool-tag" href="javascript:void(0)">rag_query</a>
-            <a class="tag tool-tag" href="javascript:void(0)">css_compare</a>
+            <a class="tag tool-tag" href="javascript:void(0)">dom_compare</a>
+            <a class="tag tool-tag" href="javascript:void(0)">browser_interact</a>
+            <a class="tag tool-tag" href="javascript:void(0)">page_audit</a>
+            <a class="tag tool-tag" href="javascript:void(0)">image_diff</a>
+            <a class="tag tool-tag" href="javascript:void(0)">agent_coord</a>
             <span style="color:var(--muted); font-size:12px;">（請切換至 Skills 頁面查看完整指令與用途）</span>
           </div>
         </section>

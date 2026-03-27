@@ -19,6 +19,8 @@
     "mammoth": "^1.12.0",
     "mysql2": "^3.16.2",
     "pdfjs-dist": "^5.5.207",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
     "sharp": "^0.34.5",
     "ssh2-sftp-client": "^12.0.1",
     "turndown": "^7.2.2",
