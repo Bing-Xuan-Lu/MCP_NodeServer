@@ -900,7 +900,7 @@
       <div id="wf-dual-agent" class="wf-panel" style="display:none;">
         <section class="bento-item span-12 notes-item" style="border-color: #f59e0b; padding: 40px;">
           <h2 class="notes-title" style="color: #f59e0b; font-size: 32px; letter-spacing: -0.04em;">雙 Agent 協作 · Dual Agent Coordination</h2>
-          <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">開兩個 VS Code Claude Code 聊天室，前端 / 後端各自獨立開發同一專案，透過 <code>agent_coord</code> 工具溝通協調。</p>
+          <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">開兩個 VS Code Claude Code 聊天室，各自載入角色設定，獨立開發同一專案，透過 <code>agent_coord</code> 工具非同步溝通。</p>
         </section>
 
         <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
@@ -910,16 +910,27 @@
             · 兩邊共用同一個 MCP Server（讀同一份 <code>.mcp.json</code>），<b>不需要額外設定</b><br>
             · 各自有獨立的 conversation context，天然隔離不互相干擾<br>
             · 透過 <code>agent_coord</code> 工具讀寫 JSON 檔案做非同步溝通（非即時推播）<br>
-            · 協調資料持久化於 <code>D:\Project\_coordination\{project}\</code>，重啟不消失
+            · 協調資料持久化於 <code>_coordination/{project}/</code>，重啟不消失、可人工檢視
+          </div>
+        </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <div style="font-size:15px; color:var(--text); line-height:2;">
+            <b style="color:var(--purple);">分工策略 — 依專案架構選擇</b><br>
+            · <b>前後端分離</b>（React + API）→ 按「前端 vs 後端」分，天然隔離，衝突最低<br>
+            · <b>PHP 混 Vue</b>（同一檔案含 PHP + JS）→ 按「模組 A vs 模組 B」分，各自負責整個模組的全端<br>
+            · <b>大量驗證 + 清理</b>→ 按「任務類型」分，如「後台驗證+程式清理 vs 前台 QC+CSS 修復」<br>
+            · 共用檔案（layout、全域 CSS/JS、config）指定一邊負責，另一邊要改就 post 請對方處理
           </div>
         </section>
 
         <section class="bento-item span-6" style="background:var(--surface); border:1px solid var(--border); padding:24px 32px;">
           <div style="font-size:15px; color:var(--text); line-height:2;">
             <b style="color:var(--green);">✅ 適合場景</b><br>
-            · 前後端同時趕工，總時間砍半<br>
-            · 前端做頁面 + 後端做 API 無交叉<br>
-            · 多個獨立模組並行開發
+            · 趕工期，總時間砍半<br>
+            · 多個獨立模組並行開發<br>
+            · 前台 QC + 後台清理同時進行<br>
+            · Bug 清單拆兩半各自處理
           </div>
         </section>
 
@@ -928,7 +939,8 @@
             <b style="color:#ef4444;">⚠ 代價與限制</b><br>
             · Token 消耗約 2 倍（兩個獨立 context）<br>
             · 必須嚴格分工，避免同時改同一檔案<br>
-            · 非即時通訊，需主動 poll 才能收到對方訊息
+            · 非即時通訊，需主動 poll 才能收到對方訊息<br>
+            · API 529 過載機率上升（同時發大量請求）
           </div>
         </section>
 
@@ -938,20 +950,37 @@
               <div class="timeline-marker"></div>
               <div class="timeline-content">
                 <div class="timeline-header">
-                  <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① 開場自報身分</div>
-                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">AGENT INIT</div>
-                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">各聊天室宣告角色（frontend / backend），並 poll 既有訊息了解上次進度。</p>
+                  <div style="font-size:20px; font-weight:800; color:#ef4444; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⓪ 前置：建立角色設定</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">CONFIG SETUP（只做一次）</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">在 <code>_coordination/{project}/_config.json</code> 定義各角色的負責模組、可碰目錄、禁區與規則。這是分工的「契約」，後續每次重開聊天都會讀取。</p>
                 </div>
                 <div class="timeline-actions">
                   <div class="timeline-step">
-                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">查看既有頻道與狀態</span>
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">_config.json 結構</span>
+                    <code style="font-size:12px; color:var(--muted); display:block; margin-top:4px; line-height:1.6;">agents.{agent-id}.modules — 負責的目錄清單<br>agents.{agent-id}.tasks — 待辦任務<br>agents.{agent-id}.rules — 行為規則（如「只讀不改」）<br>shared.paths — 共用資源（修改前須通知對方）</code>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① 載入角色</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">ROLE INIT（每次重開聊天）</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">各聊天室用 <code>role</code> 動作載入身分，Claude 會自動讀取角色卡、顯示負責模組與規則、檢查未讀訊息。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">載入角色設定 + 未讀檢查</span>
                     <a class="tag tool-tag" href="javascript:void(0)">agent_coord</a>
-                    <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: list_channels</code>
+                    <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: role, agent_id: agent-a</code>
                   </div>
                   <div class="timeline-step">
-                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">讀取對方留言</span>
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">讀取對方留言（若有未讀）</span>
                     <a class="tag tool-tag" href="javascript:void(0)">agent_coord</a>
-                    <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: poll</code>
+                    <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: poll, channel: task-board</code>
                   </div>
                 </div>
               </div>
@@ -963,11 +992,11 @@
                 <div class="timeline-header">
                   <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 登記任務</div>
                   <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">TASK REGISTER</div>
-                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">各自在 task-board 通報負責項目與會碰到的檔案範圍，確認不衝突。</p>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">在 task-board 通報本次要做的具體項目與會碰到的檔案，確認與對方不衝突。</p>
                 </div>
                 <div class="timeline-actions">
                   <div class="timeline-step">
-                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">通報工作範圍</span>
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">通報工作範圍與檔案清單</span>
                     <a class="tag tool-tag" href="javascript:void(0)">agent_coord</a>
                     <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: post, channel: task-board</code>
                   </div>
@@ -986,11 +1015,11 @@
                 <div class="timeline-header">
                   <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">③ 各自開發</div>
                   <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">PARALLEL DEV</div>
-                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">正常開發。有 API 變更或需要對方配合時，發訊息到 channel。</p>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">正常開發，嚴格遵守角色設定的目錄權限。修改 Model/API/共用檔案時必須 post 通知對方。</p>
                 </div>
                 <div class="timeline-actions">
                   <div class="timeline-step">
-                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">通知 API 變更</span>
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">通知 API 或 Model 變更</span>
                     <a class="tag tool-tag" href="javascript:void(0)">agent_coord</a>
                     <code style="font-size:12px; color:var(--muted); margin-left:8px;">action: post, category: api_change</code>
                   </div>
@@ -1009,7 +1038,7 @@
                 <div class="timeline-header">
                   <div style="font-size:20px; font-weight:800; color:#f59e0b; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">④ 收尾合併</div>
                   <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">MERGE &amp; VERIFY</div>
-                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">雙方完成後標記 done，合併分支或確認無衝突，跑整合測試。</p>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">雙方完成後標記 done，確認無衝突，跑整合測試。</p>
                 </div>
                 <div class="timeline-actions">
                   <div class="timeline-step">
@@ -1030,10 +1059,11 @@
         <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
           <div style="font-size:14px; color:var(--muted); line-height:1.8;">
             <b style="color:var(--text);">💡 使用提示：</b><br>
-            · 省錢策略：其中一邊用 <code>/model sonnet</code> 切換較便宜的模型<br>
-            · 檔案分工：前端只碰 views/js/css，後端只碰 model/controller/ajax，避免衝突<br>
-            · 協調資料存放於 <code>D:\Project\_coordination\{project}\</code>，純 JSON 可人工檢視<br>
-            · 重開聊天室後記得先 poll 看對方有沒有留訊息
+            · <b>省錢</b>：其中一邊用 <code>/model sonnet</code> 切換較便宜的模型<br>
+            · <b>重開聊天</b>：只需一句 <code>agent_coord(action:"role", project:"{project}", agent_id:"agent-a")</code> 即可恢復角色<br>
+            · <b>529 過載</b>：Anthropic 伺服器忙碌，等幾秒重試即可，與工具無關<br>
+            · <b>檔案結構</b>：<code>_coordination/{project}/_config.json</code>（角色設定）、<code>_status.json</code>（任務狀態）、<code>{channel}.json</code>（訊息）<br>
+            · <b>新專案</b>：複製既有的 <code>_config.json</code> 改 project 名和模組清單即可
           </div>
         </section>
       </div><!-- /wf-dual-agent -->

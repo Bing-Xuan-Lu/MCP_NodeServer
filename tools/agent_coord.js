@@ -20,8 +20,8 @@ export const definitions = [
       properties: {
         action: {
           type: "string",
-          enum: ["post", "poll", "status", "list_channels"],
-          description: "post=發訊息, poll=讀新訊息, status=更新任務狀態, list_channels=列出所有 channel",
+          enum: ["post", "poll", "status", "list_channels", "role"],
+          description: "post=發訊息, poll=讀新訊息, status=更新任務狀態, list_channels=列出所有 channel, role=查看/指派角色設定",
         },
         project: {
           type: "string",
@@ -151,6 +151,87 @@ export async function handle(name, args) {
         }
       }
     }
+
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  }
+
+  // ─── role ───
+  if (action === "role") {
+    const configFile = path.join(projDir, "_config.json");
+    const config = await readJson(configFile, null);
+
+    if (!config) {
+      return { content: [{ type: "text", text: `❌ 找不到 ${configFile}\n請先建立 _config.json 定義角色分工。` }] };
+    }
+
+    // 如果指定了 agent_id，顯示該角色的詳細資訊
+    if (agent_id && config.agents && config.agents[agent_id]) {
+      const role = config.agents[agent_id];
+      const statusFile = getStatusFile(project);
+      const statuses = await readJson(statusFile, {});
+      const myTasks = statuses[agent_id] || {};
+
+      const lines = [
+        `🤖 **你是 ${role.name}（${agent_id}）**`,
+        `📁 專案：${config.project}${config.description ? ` — ${config.description}` : ""}`,
+        "",
+        "**負責模組：**",
+        ...role.modules.map(m => `  · ${m}`),
+        "",
+        "**規則：**",
+        ...role.rules.map(r => `  · ${r}`),
+      ];
+
+      if (config.shared) {
+        lines.push("", "**共用資源（修改前須通知對方）：**");
+        lines.push(...config.shared.paths.map(p => `  · ${p}`));
+      }
+
+      if (Object.keys(myTasks).length > 0) {
+        lines.push("", "**目前任務：**");
+        for (const [t, s] of Object.entries(myTasks)) {
+          const icon = { todo: "⬜", doing: "🔄", done: "✅", blocked: "🚫" }[s.status] || "❓";
+          lines.push(`  ${icon} ${t} — ${s.status} (${s.updated_at})`);
+        }
+      }
+
+      // 檢查有沒有未讀訊息
+      const files = await fs.readdir(projDir).catch(() => []);
+      const channelFiles = files.filter(f => f.endsWith(".json") && !f.startsWith("_"));
+      let unreadCount = 0;
+      for (const cf of channelFiles) {
+        const data = await readJson(path.join(projDir, cf), { messages: [] });
+        const others = data.messages.filter(m => m.agent !== agent_id);
+        unreadCount += others.length;
+      }
+      if (unreadCount > 0) {
+        lines.push("", `📬 其他 Agent 共有 ${unreadCount} 則訊息，用 poll 查看`);
+      }
+
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+
+    // 未指定 agent_id，顯示所有角色概覽
+    const lines = [
+      `📋 **${config.project} 角色設定**`,
+      config.description ? `${config.description}` : "",
+      "",
+    ];
+
+    if (config.agents) {
+      for (const [id, role] of Object.entries(config.agents)) {
+        lines.push(`**${id}** — ${role.name}`);
+        lines.push(...role.modules.map(m => `  · ${m}`));
+        lines.push("");
+      }
+    }
+
+    if (config.shared) {
+      lines.push("**共用資源（修改前須通知對方）：**");
+      lines.push(...config.shared.paths.map(p => `  · ${p}`));
+    }
+
+    lines.push("", "💡 用 `agent_id` 指定角色進入身分：如 `agent_id: \"agent-a\"`");
 
     return { content: [{ type: "text", text: lines.join("\n") }] };
   }
