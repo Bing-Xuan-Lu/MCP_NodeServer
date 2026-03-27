@@ -206,6 +206,41 @@ MEMORY.md 行數：{M}
 
 ---
 
+## Step 6（可選）：角色整合建議
+
+> **前置條件**：檢查 `D:\Project\_coordination\{project}\` 是否存在 `_config.json`。不存在 → 跳過整個 Step 6。
+
+如果專案使用 `agent_coord`（多 Agent 協作，`_coordination/{project}/_config.json`），審計時額外檢查：
+
+### 6-A：高頻 feedback → 角色 rules 候選
+
+識別**每次任務都會用到**的 feedback 記憶，建議嵌入角色定義（`_config.json` 的 `rules` 陣列）：
+
+```
+判斷標準：
+- 該規則是角色的「核心行為」而非特殊情境（如 QA 必須比對 XD → 核心行為）
+- 忘記這條規則會導致明顯的品質問題
+- 規則可以用 1-2 句話表達（太長的留在記憶檔）
+```
+
+候選格式：
+```
+建議併入角色 rules 的記憶：
+  - feedback_xxx.md 的「某段規則」→ 建議加入 {agent_id} rules
+  - 理由：{為什麼每次都要用}
+```
+
+### 6-B：_config.json 資料過時
+
+檢查 `_config.json` 中的：
+- `knowledge_base.reports.files` — 引用的報告是否還存在
+- `tasks` — 任務清單是否與 `resume_prompt.md` 一致
+- `modules` — 模組路徑是否反映當前架構
+
+過時項目列入報告，由使用者決定是否更新。
+
+---
+
 ## 注意
 
 - **永遠先產報告、等確認再動手**，不可自動清理
@@ -213,3 +248,4 @@ MEMORY.md 行數：{M}
 - `reference_*` 類檔案通常不合併（各自獨立用途）
 - `_private/` 目錄下的檔案不審計
 - 清理完成後建議執行 `/memory_sync push` 同步回 Git
+- Step 6 角色整合只在使用者同意後才修改 `_config.json`
