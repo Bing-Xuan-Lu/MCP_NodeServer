@@ -23,7 +23,10 @@ import * as fileToPrompt  from "./tools/file_to_prompt.js";
 import * as rag           from "./tools/rag.js";
 import * as git           from "./tools/git.js";
 import * as images        from "./tools/images.js";
-import * as cssCompare    from "./tools/css_compare.js";
+import * as domCompare    from "./tools/dom_compare.js";
+import * as playwrightTools from "./tools/playwright_tools.js";
+import * as imageDiff      from "./tools/image_diff.js";
+import * as agentCoord     from "./tools/agent_coord.js";
 
 // ── Skills 模組 ───────────────────────────────────────────
 import { definitions as skillDefinitions, getPrompt } from "./skills/index.js";
@@ -31,7 +34,7 @@ import { definitions as skillDefinitions, getPrompt } from "./skills/index.js";
 // ============================================
 // 工具模組清單 (新增模組只需在此加一行)
 // ============================================
-const TOOL_MODULES = [filesystem, php, database, excel, bookmarks, skillFactory, sftp, python, word, pptx, pdf, images, fileToPrompt, rag, git, cssCompare];
+const TOOL_MODULES = [filesystem, php, database, excel, bookmarks, skillFactory, sftp, python, word, pptx, pdf, images, fileToPrompt, rag, git, domCompare, playwrightTools, imageDiff, agentCoord];
 
 // ============================================
 // MCP Server 初始化
