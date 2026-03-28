@@ -1,0 +1,22 @@
+# ============================================================
+# Flyway 設定範本 — pure_php_db（本機 MariaDB Docker 容器）
+# 容器：pure_php_db（mariadb:11.8，port 3306）
+# 網路：mysql-network（dev-flyway 容器可直接用容器名連線）
+#
+# 使用方式：
+#   cp pure_php_db.sample.toml pure_php_db.toml
+#   編輯 pure_php_db.toml，填入實際 DB 名稱與密碼
+# ============================================================
+
+[environments.default]
+url      = "jdbc:mariadb://pure_php_db:3306/{your_database}"
+user     = "root"
+password = "{your_password}"
+schemas  = ["{your_database}"]
+
+[flyway]
+environment        = "default"
+locations          = ["filesystem:/flyway/sql/{your_project}"]
+table              = "flyway_schema_history"
+baselineOnMigrate  = false
+outOfOrder         = false

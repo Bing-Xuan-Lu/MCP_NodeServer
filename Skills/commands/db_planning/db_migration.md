@@ -215,6 +215,36 @@ FROM _migrations ORDER BY id DESC LIMIT 20;
 
 ---
 
+---
+
+## 選用擴充：Flyway 整合（需先啟動 dev-flyway 容器）
+
+若專案已導入 Flyway，可在遷移流程中改用以下工具替代手動 `execute_sql`：
+
+| 時機 | 工具 | 說明 |
+| --- | --- | --- |
+| 確認有哪些待執行腳本 | `flyway_info` | 列出 Pending / Success / Failed 狀態 |
+| 執行前預覽（dry run） | `flyway_migrate` + `dry_run: true` | 只顯示 info，不實際跑 |
+| 執行遷移 | `flyway_migrate` | 跑所有 Pending 腳本 |
+| 腳本被修改後驗證 | `flyway_validate` | 檢查 checksum 是否一致 |
+| validate 失敗修復 | `flyway_repair` | 清除 Failed 記錄，重對齊 checksum |
+| 首次將 Flyway 引入現有 DB | `flyway_baseline` | 標記現有狀態為 baseline，避免衝突 |
+
+**Flyway 腳本命名規則**：
+
+```text
+V{版本}__{說明}.sql
+↑ 大寫 V    ↑ 雙底線
+例：V2__add_discount_column.sql
+    V3__create_order_items.sql
+```
+
+腳本放在 `MCP_NodeServer/flyway/sql/{project_folder}/` 下（容器掛載路徑 `/flyway/sql/{project_folder}/`）。
+
+> 使用 Flyway 後，版本追蹤由 `flyway_schema_history` 表管理，無需另建 `_migrations` 表。
+
+---
+
 ## 常見錯誤
 
 | 症狀 | 原因 | 解法 |

@@ -1,0 +1,21 @@
+# ============================================================
+# Flyway 設定模板 — Microsoft SQL Server
+# 複製此檔並改名（如 mssql_staging.toml）再填入實際資訊
+# ============================================================
+
+[environments.default]
+# JDBC URL 格式
+#   標準：     jdbc:sqlserver://{host}:1433;databaseName={database};encrypt=false
+#   Azure SQL：jdbc:sqlserver://{host}.database.windows.net:1433;databaseName={database};encrypt=true
+url      = "jdbc:sqlserver://{host}:1433;databaseName={database};encrypt=false;trustServerCertificate=true"
+user     = "{db_user}"
+password = "{db_password}"
+schemas  = ["dbo"]
+
+[flyway]
+environment        = "default"
+locations          = ["filesystem:/flyway/sql/{project_folder}"]
+table              = "flyway_schema_history"
+defaultSchema      = "dbo"
+baselineOnMigrate  = false
+connectRetries     = 3

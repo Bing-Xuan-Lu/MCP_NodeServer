@@ -31,3 +31,9 @@ memory/_private/
 /screenshot/
 
 reports/
+
+# Flyway 實際連線設定（含帳密，不進版控）
+# *.sample.toml 和 template_*.toml 仍會進版控
+flyway/conf/*.toml
+!flyway/conf/*.sample.toml
+!flyway/conf/template_*.toml

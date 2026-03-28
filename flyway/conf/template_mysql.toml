@@ -1,0 +1,22 @@
+# ============================================================
+# Flyway 設定模板 — MySQL / MariaDB
+# 複製此檔並改名（如 staging.toml、prod.toml）再填入實際資訊
+# ============================================================
+
+[environments.default]
+# JDBC URL 格式
+#   本機 Docker 容器：jdbc:mariadb://{container_name}:3306/{database}
+#   遠端測試機：      jdbc:mysql://{host_ip}:3306/{database}
+#   遠端 SSL：        jdbc:mysql://{host}:3306/{database}?useSSL=true
+url      = "jdbc:mysql://{host}:3306/{database}"
+user     = "{db_user}"
+password = "{db_password}"
+schemas  = ["{database}"]
+
+[flyway]
+environment        = "default"
+locations          = ["filesystem:/flyway/sql/{project_folder}"]
+table              = "flyway_schema_history"
+baselineOnMigrate  = false
+outOfOrder         = false
+connectRetries     = 3

@@ -37,6 +37,7 @@ MCP_NodeServer/
 │   ├── image_diff.js    ← image_diff（設計稿 vs 截圖像素級比對，產生 diff 圖）
 │   ├── agent_coord.js   ← agent_coord（多 Agent 協調：post/poll/status，JSON 檔案持久化）
 │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
+│   ├── flyway.js         ← flyway_info, flyway_migrate, flyway_validate, flyway_repair, flyway_baseline（需 dev-flyway Docker，選用）
 │   └── rag.js            ← rag_index, rag_query, rag_status（需 ChromaDB Docker，選用）
 ├── chromadb/             ← ChromaDB Docker 環境（RAG 選用，docker-compose.yml）
 ├── hooks/               ← Claude Code Session Hooks（全域 ~/.claude/settings.json 設定）
