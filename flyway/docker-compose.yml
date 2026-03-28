@@ -1,0 +1,21 @@
+services:
+  # ============================================
+  # Flyway — 資料庫版本控制工具（選用）
+  # 用途：管理 MySQL/MariaDB/MSSQL schema 版本遷移
+  # 操作方式：透過 MCP 工具 flyway_* 呼叫，或 docker exec 手動執行
+  # ============================================
+  flyway:
+    image: redgate/flyway:11-alpine
+    container_name: dev-flyway
+    entrypoint: ["sh", "-c", "tail -f /dev/null"]
+    volumes:
+      - ./sql:/flyway/sql
+      - ./conf:/flyway/conf
+    networks:
+      - mysql-network
+    mem_limit: 512m
+    restart: unless-stopped
+
+networks:
+  mysql-network:
+    external: true

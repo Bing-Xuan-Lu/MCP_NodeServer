@@ -1,0 +1,25 @@
+# ============================================================
+# Flyway 設定範本 — 測試機（透過 SSH Tunnel 連線）
+#
+# 使用前：
+#   1. 建立 SSH Tunnel：
+#      ssh -L 13306:127.0.0.1:3306 user@testserver -N &
+#   2. cp staging.sample.toml staging.toml
+#   3. 填入實際帳密與 DB 名稱
+# ============================================================
+
+[environments.default]
+# host.docker.internal = Docker 容器連回宿主機的特殊 hostname
+# 13306 = SSH Tunnel 本機端口（對應測試機的 3306）
+url      = "jdbc:mysql://host.docker.internal:13306/{your_database}"
+user     = "{db_user}"
+password = "{db_password}"
+schemas  = ["{your_database}"]
+
+[flyway]
+environment        = "default"
+locations          = ["filesystem:/flyway/sql/{project_folder}"]
+table              = "flyway_schema_history"
+baselineOnMigrate  = false
+outOfOrder         = false
+connectRetries     = 3
