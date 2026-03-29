@@ -37,3 +37,4 @@ reports/
 flyway/conf/*.toml
 !flyway/conf/*.sample.toml
 !flyway/conf/template_*.toml
+config.local.js
