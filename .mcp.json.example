@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "project-migration-assistant-pro": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "D:\\Develop\\MCP_NodeServer\\index.js"
+      ]
+    },
+    "notion": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@notionhq/notion-mcp-server"
+      ],
+      "env": {
+        "OPENAPI_MCP_HEADERS": "{\"Authorization\": \"Bearer YOUR_NOTION_TOKEN\", \"Notion-Version\": \"2022-06-28\"}"
+      }
+    }
+  }
+}

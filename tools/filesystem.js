@@ -125,6 +125,25 @@ export const definitions = [
     },
   },
   {
+    name: "list_files_recursive",
+    description: "遞迴列出目錄樹狀結構（一次 call 取得完整子目錄）。適合規劃批次任務、了解專案結構。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "根目錄路徑" },
+        max_depth: { type: "integer", description: "最大遞迴深度（預設 3，0 = 無限）" },
+        dirs_only: { type: "boolean", description: "只列目錄，不列檔案（預設 false）" },
+        exclude: {
+          type: "array",
+          items: { type: "string" },
+          description: "排除的目錄/副檔名關鍵字（例如 ['node_modules', '.git', '.zip']，預設排除 .zip .rar .exe .apk .mp4 .mov .apk node_modules .git bin obj）",
+        },
+        max_entries: { type: "integer", description: "最大回傳項目數（預設 500，防止過大輸出）" },
+      },
+      required: ["path"],
+    },
+  },
+  {
     name: "apply_diff",
     description: "修改檔案 (Search & Replace 模式)",
     inputSchema: {
@@ -251,6 +270,55 @@ export async function handle(name, args) {
     return {
       content: [{ type: "text", text: `批次建立完成：${okCount}/${args.files.length} 成功\n\n${results.join("\n")}` }],
     };
+  }
+
+  if (name === "list_files_recursive") {
+    const DEFAULT_EXCLUDE = [".zip", ".rar", ".exe", ".apk", ".mp4", ".mov", ".tar", ".gz", "node_modules", ".git", "bin", "obj", ".vs", "packages"];
+    let exclude = args.exclude || DEFAULT_EXCLUDE;
+    if (!Array.isArray(exclude)) exclude = String(exclude).split(",").map(s => s.trim());
+    const maxDepth = args.max_depth ?? 3;
+    const dirsOnly = args.dirs_only || false;
+    const maxEntries = args.max_entries || 500;
+
+    const rootFull = resolveSecurePath(args.path);
+    const lines = [];
+    let count = 0;
+    let truncated = false;
+
+    async function walk(dir, depth, prefix) {
+      if (count >= maxEntries) { truncated = true; return; }
+      let entries;
+      try { entries = await fs.readdir(dir, { withFileTypes: true }); }
+      catch { return; }
+
+      for (let i = 0; i < entries.length; i++) {
+        if (count >= maxEntries) { truncated = true; return; }
+        const e = entries[i];
+        const isLast = i === entries.length - 1;
+        const connector = isLast ? "└── " : "├── ";
+        const childPrefix = prefix + (isLast ? "    " : "│   ");
+
+        // 排除檢查
+        const nameL = e.name.toLowerCase();
+        if (exclude.some(ex => nameL.includes(ex.toLowerCase()))) continue;
+
+        if (e.isDirectory()) {
+          lines.push(`${prefix}${connector}📁 ${e.name}`);
+          count++;
+          if (maxDepth === 0 || depth < maxDepth) {
+            await walk(path.join(dir, e.name), depth + 1, childPrefix);
+          }
+        } else if (!dirsOnly) {
+          lines.push(`${prefix}${connector}${e.name}`);
+          count++;
+        }
+      }
+    }
+
+    await walk(rootFull, 1, "");
+    let header = `📂 ${args.path}（${count} 項，深度 ${maxDepth === 0 ? "無限" : maxDepth}）`;
+    if (truncated) header += `\n⚠️ 已達上限 ${maxEntries} 項，結果被截斷。請縮小範圍或增加 max_entries。`;
+    return { content: [{ type: "text", text: `${header}\n${lines.join("\n")}` }] };
   }
 
   if (name === "apply_diff") {
