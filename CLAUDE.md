@@ -33,7 +33,7 @@ MCP_NodeServer/
 │   ├── images.js        ← read_image, read_images_batch（圖片讀取 + 縮放，支援 PNG/JPG/WebP/GIF/SVG）
 │   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops
 │   ├── dom_compare.js   ← dom_compare（批次比對兩個 URL 的 CSS/HTML/JS 差異，需 Playwright）
-│   ├── playwright_tools.js ← browser_interact, page_audit（自帶 headless 瀏覽器，需 Playwright）
+│   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage（自帶 headless 瀏覽器，需 Playwright）
 │   ├── image_diff.js    ← image_diff（設計稿 vs 截圖像素級比對，產生 diff 圖）
 │   ├── agent_coord.js   ← agent_coord（多 Agent 協調：post/poll/status，JSON 檔案持久化）
 │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview

@@ -1,4 +1,4 @@
-// tools/playwright_tools.js — browser_interact + page_audit
+// tools/playwright_tools.js — browser_interact + page_audit + css_inspect + element_measure + style_snapshot + css_coverage
 // 自帶 headless Chromium，不依賴 Playwright MCP
 
 let playwrightModule = null;
@@ -147,6 +147,153 @@ export const definitions = [
             required: ["name", "value", "domain"],
           },
           description: "選填:注入 cookies(用於需要登入的頁面)",
+        },
+      },
+      required: ["url"],
+    },
+  },
+  {
+    name: "css_inspect",
+    description:
+      "深度檢查指定元素的 CSS 樣式：box model、computed styles、flex/grid 上下文、套用的 CSS 規則（含來源檔案與優先級）、繼承屬性。用於除錯排版問題，一次呼叫取代 DevTools 手動檢查。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "要檢查的頁面 URL" },
+        selector: { type: "string", description: "目標元素的 CSS 選擇器" },
+        pseudoElement: {
+          type: "string",
+          enum: ["::before", "::after", "::first-line", "::first-letter", "::marker", "::placeholder"],
+          description: "選填：檢查偽元素的樣式",
+        },
+        viewport: {
+          type: "object",
+          properties: { width: { type: "number" }, height: { type: "number" } },
+          description: "視窗大小(預設 1920x1080)",
+        },
+        timeout: { type: "number", description: "頁面載入逾時毫秒數(預設 15000)" },
+        cookies: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              value: { type: "string" },
+              domain: { type: "string" },
+              path: { type: "string" },
+            },
+            required: ["name", "value", "domain"],
+          },
+          description: "選填:注入 cookies(用於需要登入的頁面)",
+        },
+      },
+      required: ["url", "selector"],
+    },
+  },
+  {
+    name: "element_measure",
+    description:
+      "測量元素的尺寸/padding/margin，若指定第二個元素則計算兩者間距。等同 F12 量尺工具，一次呼叫取代手動 getBoundingClientRect + 算差值。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "要測量的頁面 URL" },
+        selectorA: { type: "string", description: "第一個元素的 CSS 選擇器" },
+        selectorB: { type: "string", description: "選填：第二個元素（計算兩者間距）" },
+        viewport: {
+          type: "object",
+          properties: { width: { type: "number" }, height: { type: "number" } },
+          description: "視窗大小(預設 1920x1080)",
+        },
+        timeout: { type: "number", description: "頁面載入逾時毫秒數(預設 15000)" },
+        cookies: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              value: { type: "string" },
+              domain: { type: "string" },
+              path: { type: "string" },
+            },
+            required: ["name", "value", "domain"],
+          },
+          description: "選填:注入 cookies",
+        },
+      },
+      required: ["url", "selectorA"],
+    },
+  },
+  {
+    name: "style_snapshot",
+    description:
+      "批次擷取多個元素的指定 CSS 屬性，回傳結構化 JSON。用於 XD/Figma 比對（只比樣式不比內容，避免 image_diff 因文字不同炸紅一片）。對兩個 URL 各跑一次再 diff 即可精確列出差異屬性。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "要擷取的頁面 URL" },
+        selectors: {
+          type: "array",
+          items: { type: "string" },
+          description: "要擷取的 CSS 選擇器列表",
+        },
+        properties: {
+          type: "array",
+          items: { type: "string" },
+          description: "要擷取的 CSS 屬性（camelCase 或 kebab-case 皆可，預設常用 15 個）",
+        },
+        viewport: {
+          type: "object",
+          properties: { width: { type: "number" }, height: { type: "number" } },
+          description: "視窗大小(預設 1920x1080)",
+        },
+        timeout: { type: "number", description: "頁面載入逾時毫秒數(預設 15000)" },
+        cookies: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              value: { type: "string" },
+              domain: { type: "string" },
+              path: { type: "string" },
+            },
+            required: ["name", "value", "domain"],
+          },
+          description: "選填:注入 cookies",
+        },
+      },
+      required: ["url", "selectors"],
+    },
+  },
+  {
+    name: "css_coverage",
+    description:
+      "分析頁面的 CSS 使用率：哪些規則被用到、哪些是死的（deadSelectors）。用於 CSS 檔清理/去重前的安全評估。可指定只分析特定 CSS 檔案。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "要分析的頁面 URL" },
+        cssFile: { type: "string", description: "選填：只分析指定的 CSS 檔案名（URL 包含此字串的 stylesheet）" },
+        viewport: {
+          type: "object",
+          properties: { width: { type: "number" }, height: { type: "number" } },
+          description: "視窗大小(預設 1920x1080)",
+        },
+        timeout: { type: "number", description: "頁面載入逾時毫秒數(預設 30000)" },
+        cookies: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              value: { type: "string" },
+              domain: { type: "string" },
+              path: { type: "string" },
+            },
+            required: ["name", "value", "domain"],
+          },
+          description: "選填:注入 cookies",
         },
       },
       required: ["url"],
@@ -724,12 +871,584 @@ async function handlePageAudit(args) {
 }
 
 // ============================================
+// css_inspect 實作
+// ============================================
+async function handleCssInspect(args) {
+  const {
+    url,
+    selector,
+    pseudoElement,
+    viewport = { width: 1920, height: 1080 },
+    timeout = 15000,
+    cookies = [],
+  } = args;
+
+  const browser = await acquireBrowser();
+  let context = null;
+
+  try {
+    context = await browser.newContext({
+      viewport: { width: viewport.width || 1920, height: viewport.height || 1080 },
+      ignoreHTTPSErrors: true,
+    });
+    if (cookies.length > 0) await context.addCookies(cookies);
+
+    const page = await context.newPage();
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+
+    // 先確認元素存在
+    const elHandle = await page.$(selector);
+    if (!elHandle) {
+      await context.close();
+      return { content: [{ type: "text", text: `❌ 找不到元素: ${selector}` }] };
+    }
+
+    // === 在瀏覽器內蒐集 computed + box + flex/grid 上下文 + 繼承 ===
+    const browserData = await page.evaluate(({ sel, pseudo }) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+
+      const cs = window.getComputedStyle(el, pseudo || null);
+
+      // Box model
+      const rect = el.getBoundingClientRect();
+      const box = {
+        width: Math.round(rect.width * 100) / 100,
+        height: Math.round(rect.height * 100) / 100,
+        padding: cs.padding,
+        margin: cs.margin,
+        border: cs.border,
+        borderRadius: cs.borderRadius,
+      };
+
+      // Key computed styles
+      const computedKeys = [
+        "color", "backgroundColor", "fontSize", "fontWeight", "fontFamily",
+        "lineHeight", "textAlign", "textDecoration", "display", "position",
+        "zIndex", "opacity", "overflow", "visibility", "cursor",
+        "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
+        "top", "right", "bottom", "left",
+        "flexGrow", "flexShrink", "flexBasis", "alignSelf", "justifySelf", "order",
+        "gridColumn", "gridRow",
+        "transform", "transition", "animation",
+        "boxShadow", "textShadow", "whiteSpace", "wordBreak",
+      ];
+      const computed = {};
+      for (const k of computedKeys) {
+        const v = cs.getPropertyValue(
+          k.replace(/[A-Z]/g, m => "-" + m.toLowerCase())
+        );
+        if (v && v !== "none" && v !== "normal" && v !== "auto" && v !== "0px"
+          && v !== "0" && v !== "visible" && v !== "static" && v !== "default"
+          && v !== "start") {
+          computed[k] = v;
+        }
+      }
+      // Always include these even if "default"
+      computed.display = cs.display;
+      computed.position = cs.position;
+
+      // Flex/Grid context (parent)
+      let flexContext = null;
+      const parent = el.parentElement;
+      if (parent) {
+        const pcs = window.getComputedStyle(parent);
+        const pDisplay = pcs.display;
+        if (pDisplay.includes("flex") || pDisplay.includes("grid")) {
+          flexContext = {
+            parentDisplay: pDisplay,
+            parentFlexDirection: pcs.flexDirection,
+            parentJustifyContent: pcs.justifyContent,
+            parentAlignItems: pcs.alignItems,
+            parentGap: pcs.gap,
+            selfAlignSelf: cs.alignSelf,
+            selfJustifySelf: cs.justifySelf,
+            selfFlexGrow: cs.flexGrow,
+            selfFlexShrink: cs.flexShrink,
+            selfFlexBasis: cs.flexBasis,
+            selfOrder: cs.order,
+          };
+          if (pDisplay.includes("grid")) {
+            flexContext.parentGridTemplateColumns = pcs.gridTemplateColumns;
+            flexContext.parentGridTemplateRows = pcs.gridTemplateRows;
+            flexContext.selfGridColumn = cs.gridColumn;
+            flexContext.selfGridRow = cs.gridRow;
+          }
+        }
+      }
+
+      // Inherited properties
+      const inheritKeys = ["fontFamily", "fontSize", "color", "lineHeight", "fontWeight", "textAlign", "visibility", "cursor", "letterSpacing", "wordSpacing"];
+      const inherited = [];
+      let ancestor = el.parentElement;
+      const seen = new Set();
+      while (ancestor) {
+        const acs = window.getComputedStyle(ancestor);
+        for (const k of inheritKeys) {
+          if (seen.has(k)) continue;
+          const prop = k.replace(/[A-Z]/g, m => "-" + m.toLowerCase());
+          const elVal = cs.getPropertyValue(prop);
+          const anVal = acs.getPropertyValue(prop);
+          // Check if this ancestor explicitly sets it (different from its own parent)
+          const grandParent = ancestor.parentElement;
+          if (grandParent) {
+            const gpVal = window.getComputedStyle(grandParent).getPropertyValue(prop);
+            if (anVal !== gpVal && anVal === elVal) {
+              inherited.push({
+                property: k,
+                value: anVal,
+                from: ancestor.tagName.toLowerCase() + (ancestor.className ? "." + ancestor.className.toString().split(" ")[0] : ""),
+              });
+              seen.add(k);
+            }
+          }
+        }
+        ancestor = ancestor.parentElement;
+      }
+
+      // Element tag info
+      const tag = el.tagName.toLowerCase();
+      const classes = el.className ? (typeof el.className === "string" ? el.className : el.className.baseVal || "") : "";
+      const id = el.id ? `#${el.id}` : "";
+      const element = tag + id + (classes ? "." + classes.trim().split(/\s+/).join(".") : "");
+
+      return { element, box, computed, flexContext, inherited };
+    }, { sel: selector, pseudo: pseudoElement || null });
+
+    if (!browserData) {
+      await context.close();
+      return { content: [{ type: "text", text: `❌ 無法取得元素資料: ${selector}` }] };
+    }
+
+    // === CDP: 取得 matched CSS rules（含 stylesheet 來源） ===
+    let appliedRules = [];
+    try {
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("DOM.enable");
+
+      // 收集 stylesheet headers（CSS.enable 時 Chromium 會推送 styleSheetAdded）
+      const sheetHeaders = new Map();
+      cdp.on("CSS.styleSheetAdded", ({ header }) => {
+        sheetHeaders.set(header.styleSheetId, header);
+      });
+      await cdp.send("CSS.enable");
+
+      const { root } = await cdp.send("DOM.getDocument");
+      const { nodeId } = await cdp.send("DOM.querySelector", {
+        nodeId: root.nodeId,
+        selector,
+      });
+
+      if (nodeId) {
+        const { matchedCSSRules = [] } = await cdp.send("CSS.getMatchedStylesForNode", { nodeId });
+
+        for (const entry of matchedCSSRules) {
+          const rule = entry.rule;
+          if (!rule?.selectorList) continue;
+          if (rule.origin === "user-agent") continue;
+
+          const selectorText = rule.selectorList.text;
+          const properties = {};
+
+          for (const prop of (rule.style.cssProperties || [])) {
+            if (prop.text && !prop.text.startsWith("/*") && !prop.disabled) {
+              properties[prop.name] = prop.value;
+            }
+          }
+          if (Object.keys(properties).length === 0) continue;
+
+          // 解析來源
+          let source = rule.origin === "inline" ? "inline" : "";
+          if (rule.origin === "regular" && rule.style.styleSheetId) {
+            const header = sheetHeaders.get(rule.style.styleSheetId);
+            const fileName = header?.sourceURL
+              ? header.sourceURL.split("/").pop().split("?")[0]
+              : header?.title || "";
+            const line = rule.style.range ? rule.style.range.startLine + 1 : null;
+            source = fileName ? (line ? `${fileName}:${line}` : fileName) : (line ? `line:${line}` : "");
+          }
+
+          appliedRules.push({ selector: selectorText, source, properties });
+        }
+
+        // 逆序：後載入 = 高優先，排前面
+        appliedRules.reverse();
+      }
+
+      await cdp.detach().catch(() => {});
+    } catch (cdpErr) {
+      appliedRules = [{ _note: `CDP 取得 CSS 規則失敗: ${cdpErr.message}` }];
+    }
+
+    await context.close();
+
+    const result = {
+      element: browserData.element,
+      box: browserData.box,
+      computed: browserData.computed,
+      ...(browserData.flexContext ? { flexContext: browserData.flexContext } : {}),
+      appliedRules,
+      ...(browserData.inherited.length > 0 ? { inherited: browserData.inherited } : {}),
+    };
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      }],
+    };
+  } catch (err) {
+    if (context) await context.close().catch(() => {});
+    return {
+      content: [{ type: "text", text: `❌ css_inspect 執行失敗：${err.message}` }],
+    };
+  }
+}
+
+// ============================================
+// element_measure 實作
+// ============================================
+async function handleElementMeasure(args) {
+  const {
+    url,
+    selectorA,
+    selectorB,
+    viewport = { width: 1920, height: 1080 },
+    timeout = 15000,
+    cookies = [],
+  } = args;
+
+  const browser = await acquireBrowser();
+  let context = null;
+
+  try {
+    context = await browser.newContext({
+      viewport: { width: viewport.width || 1920, height: viewport.height || 1080 },
+      ignoreHTTPSErrors: true,
+    });
+    if (cookies.length > 0) await context.addCookies(cookies);
+
+    const page = await context.newPage();
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+
+    const result = await page.evaluate(({ selA, selB }) => {
+      const round = (n) => Math.round(n * 100) / 100;
+      const elA = document.querySelector(selA);
+      if (!elA) return { error: `找不到元素: ${selA}` };
+
+      const csA = window.getComputedStyle(elA);
+      const rectA = elA.getBoundingClientRect();
+
+      const parseBox = (cs) => ({
+        top: parseFloat(cs.getPropertyValue("padding-top")) || 0,
+        right: parseFloat(cs.getPropertyValue("padding-right")) || 0,
+        bottom: parseFloat(cs.getPropertyValue("padding-bottom")) || 0,
+        left: parseFloat(cs.getPropertyValue("padding-left")) || 0,
+      });
+      const parseMargin = (cs) => ({
+        top: parseFloat(cs.getPropertyValue("margin-top")) || 0,
+        right: parseFloat(cs.getPropertyValue("margin-right")) || 0,
+        bottom: parseFloat(cs.getPropertyValue("margin-bottom")) || 0,
+        left: parseFloat(cs.getPropertyValue("margin-left")) || 0,
+      });
+
+      const out = {
+        elementA: {
+          selector: selA,
+          width: round(rectA.width),
+          height: round(rectA.height),
+          x: round(rectA.x),
+          y: round(rectA.y),
+          padding: parseBox(csA),
+          margin: parseMargin(csA),
+          borderWidth: {
+            top: parseFloat(csA.borderTopWidth) || 0,
+            right: parseFloat(csA.borderRightWidth) || 0,
+            bottom: parseFloat(csA.borderBottomWidth) || 0,
+            left: parseFloat(csA.borderLeftWidth) || 0,
+          },
+        },
+      };
+
+      if (selB) {
+        const elB = document.querySelector(selB);
+        if (!elB) return { error: `找不到元素: ${selB}` };
+
+        const csB = window.getComputedStyle(elB);
+        const rectB = elB.getBoundingClientRect();
+
+        out.elementB = {
+          selector: selB,
+          width: round(rectB.width),
+          height: round(rectB.height),
+          x: round(rectB.x),
+          y: round(rectB.y),
+          padding: parseBox(csB),
+          margin: parseMargin(csB),
+          borderWidth: {
+            top: parseFloat(csB.borderTopWidth) || 0,
+            right: parseFloat(csB.borderRightWidth) || 0,
+            bottom: parseFloat(csB.borderBottomWidth) || 0,
+            left: parseFloat(csB.borderLeftWidth) || 0,
+          },
+        };
+
+        out.distance = {
+          horizontal: round(rectB.left - rectA.right),
+          vertical: round(rectB.top - rectA.bottom),
+          centerToCenter: {
+            horizontal: round((rectB.left + rectB.width / 2) - (rectA.left + rectA.width / 2)),
+            vertical: round((rectB.top + rectB.height / 2) - (rectA.top + rectA.height / 2)),
+          },
+        };
+      }
+
+      return out;
+    }, { selA: selectorA, selB: selectorB || null });
+
+    await context.close();
+
+    if (result.error) {
+      return { content: [{ type: "text", text: `❌ ${result.error}` }] };
+    }
+
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  } catch (err) {
+    if (context) await context.close().catch(() => {});
+    return { content: [{ type: "text", text: `❌ element_measure 執行失敗：${err.message}` }] };
+  }
+}
+
+// ============================================
+// style_snapshot 實作
+// ============================================
+async function handleStyleSnapshot(args) {
+  const {
+    url,
+    selectors,
+    properties: userProps,
+    viewport = { width: 1920, height: 1080 },
+    timeout = 15000,
+    cookies = [],
+  } = args;
+
+  if (!selectors || selectors.length === 0) {
+    return { content: [{ type: "text", text: "❌ selectors 不可為空" }] };
+  }
+
+  const defaultProps = [
+    "color", "background-color", "font-size", "font-weight", "font-family",
+    "line-height", "text-align", "text-decoration", "display", "padding",
+    "margin", "border", "border-radius", "opacity", "width",
+  ];
+  const props = userProps && userProps.length > 0
+    ? userProps.map(p => p.replace(/[A-Z]/g, m => "-" + m.toLowerCase()))
+    : defaultProps;
+
+  const browser = await acquireBrowser();
+  let context = null;
+
+  try {
+    context = await browser.newContext({
+      viewport: { width: viewport.width || 1920, height: viewport.height || 1080 },
+      ignoreHTTPSErrors: true,
+    });
+    if (cookies.length > 0) await context.addCookies(cookies);
+
+    const page = await context.newPage();
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+
+    const snapshot = await page.evaluate(({ sels, cssProps }) => {
+      const result = {};
+      for (const sel of sels) {
+        const el = document.querySelector(sel);
+        if (!el) {
+          result[sel] = { _error: "元素不存在" };
+          continue;
+        }
+        const cs = window.getComputedStyle(el);
+        const styles = {};
+        for (const prop of cssProps) {
+          styles[prop] = cs.getPropertyValue(prop);
+        }
+        result[sel] = styles;
+      }
+      return result;
+    }, { sels: selectors, cssProps: props });
+
+    await context.close();
+
+    return { content: [{ type: "text", text: JSON.stringify(snapshot, null, 2) }] };
+  } catch (err) {
+    if (context) await context.close().catch(() => {});
+    return { content: [{ type: "text", text: `❌ style_snapshot 執行失敗：${err.message}` }] };
+  }
+}
+
+// ============================================
+// css_coverage 實作
+// ============================================
+async function handleCssCoverage(args) {
+  const {
+    url,
+    cssFile,
+    viewport = { width: 1920, height: 1080 },
+    timeout = 30000,
+    cookies = [],
+  } = args;
+
+  const browser = await acquireBrowser();
+  let context = null;
+
+  try {
+    context = await browser.newContext({
+      viewport: { width: viewport.width || 1920, height: viewport.height || 1080 },
+      ignoreHTTPSErrors: true,
+    });
+    if (cookies.length > 0) await context.addCookies(cookies);
+
+    const page = await context.newPage();
+
+    // 啟動 CSS coverage
+    await page.coverage.startCSSCoverage();
+    await page.goto(url, { waitUntil: "networkidle", timeout });
+
+    // 等一下讓 lazy CSS 載入
+    await page.waitForTimeout(1000);
+
+    const coverageData = await page.coverage.stopCSSCoverage();
+
+    let totalBytes = 0;
+    let usedBytes = 0;
+    const fileResults = [];
+
+    for (const entry of coverageData) {
+      const fileName = entry.url.split("/").pop().split("?")[0] || entry.url;
+
+      // 如果指定了 cssFile，只分析匹配的
+      if (cssFile && !entry.url.includes(cssFile)) continue;
+
+      const fileTotal = entry.text.length;
+      let fileUsed = 0;
+      for (const range of entry.ranges) {
+        fileUsed += range.end - range.start;
+      }
+
+      totalBytes += fileTotal;
+      usedBytes += fileUsed;
+
+      fileResults.push({
+        file: fileName,
+        totalBytes: fileTotal,
+        usedBytes: fileUsed,
+        coverage: fileTotal > 0 ? `${((fileUsed / fileTotal) * 100).toFixed(1)}%` : "0%",
+      });
+    }
+
+    // 用 CDP 取得更精確的 selector 級別分析
+    let usedSelectors = [];
+    let deadSelectors = [];
+
+    try {
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("DOM.enable");
+
+      const sheetHeaders = new Map();
+      cdp.on("CSS.styleSheetAdded", ({ header }) => {
+        sheetHeaders.set(header.styleSheetId, header);
+      });
+      await cdp.send("CSS.enable");
+
+      // 取得所有 stylesheet 的規則
+      for (const [sheetId, header] of sheetHeaders) {
+        // 如果指定了 cssFile，只分析匹配的
+        if (cssFile && !header.sourceURL?.includes(cssFile)) continue;
+        if (header.isInline) continue;
+
+        try {
+          const { ruleUsage } = await cdp.send("CSS.takeCoverageDelta");
+          // ruleUsage 不太穩定，改用 DOM.querySelector 測試
+        } catch {}
+      }
+
+      // 另一種方式：從 coverage 結果提取 selector 文字，用 querySelector 驗證
+      // 更可靠的做法：解析 CSS 文字提取 selectors
+      for (const entry of coverageData) {
+        if (cssFile && !entry.url.includes(cssFile)) continue;
+
+        const cssText = entry.text;
+        // 簡易 CSS selector 提取（非 @media/@keyframes 內的 selector）
+        const selectorRegex = /([^{}@/]+)\s*\{[^}]*\}/g;
+        let match;
+        while ((match = selectorRegex.exec(cssText)) !== null) {
+          const rawSelector = match[1].trim();
+          if (!rawSelector || rawSelector.startsWith("@") || rawSelector.startsWith("/*")) continue;
+
+          // 處理逗號分隔的多選擇器
+          const sels = rawSelector.split(",").map(s => s.trim()).filter(Boolean);
+          for (const sel of sels) {
+            if (sel.startsWith("@") || sel.startsWith("from") || sel.startsWith("to") || /^\d+%$/.test(sel)) continue;
+            try {
+              const found = await page.$(sel);
+              if (found) {
+                if (!usedSelectors.includes(sel)) usedSelectors.push(sel);
+              } else {
+                if (!deadSelectors.includes(sel)) deadSelectors.push(sel);
+              }
+            } catch {
+              // 無效的 CSS selector（如 ::placeholder），跳過
+            }
+          }
+        }
+      }
+
+      await cdp.detach().catch(() => {});
+    } catch {
+      // CDP selector 分析失敗不影響 byte-level coverage
+    }
+
+    await context.close();
+
+    const result = {
+      url,
+      ...(cssFile ? { filter: cssFile } : {}),
+      summary: {
+        totalBytes,
+        usedBytes,
+        unusedBytes: totalBytes - usedBytes,
+        coverage: totalBytes > 0 ? `${((usedBytes / totalBytes) * 100).toFixed(1)}%` : "0%",
+      },
+      files: fileResults,
+      ...(usedSelectors.length > 0 ? {
+        usedSelectors: usedSelectors.length,
+        deadSelectors: deadSelectors.length,
+        deadSelectorsList: deadSelectors.slice(0, 100), // 最多顯示 100 個
+      } : {}),
+    };
+
+    const summary = `CSS Coverage: ${result.summary.coverage} (${result.summary.usedBytes}/${result.summary.totalBytes} bytes)` +
+      (deadSelectors.length > 0 ? `\n${deadSelectors.length} dead selectors found` : "");
+
+    return {
+      content: [{ type: "text", text: summary + "\n\n" + JSON.stringify(result, null, 2) }],
+    };
+  } catch (err) {
+    if (context) await context.close().catch(() => {});
+    return { content: [{ type: "text", text: `❌ css_coverage 執行失敗：${err.message}` }] };
+  }
+}
+
+// ============================================
 // handle 路由
 // ============================================
 export async function handle(name, args) {
   switch (name) {
-    case "browser_interact": return handleBrowserInteract(args);
-    case "page_audit":       return handlePageAudit(args);
-    default:                 return null;
+    case "browser_interact":  return handleBrowserInteract(args);
+    case "page_audit":        return handlePageAudit(args);
+    case "css_inspect":       return handleCssInspect(args);
+    case "element_measure":   return handleElementMeasure(args);
+    case "style_snapshot":    return handleStyleSnapshot(args);
+    case "css_coverage":      return handleCssCoverage(args);
+    default:                  return null;
   }
 }

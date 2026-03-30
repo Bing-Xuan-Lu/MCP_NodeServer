@@ -37,8 +37,14 @@ function findProjectMemoryDir() {
     const rest = parts.slice(1).join('-');
     candidates.push(`${drive}--${rest}`);
 
+    // Claude 可能把底線轉成連字號（PG_dbox3 → PG-dbox3）
+    const restHyphen = rest.replace(/_/g, '-');
+    if (restHyphen !== rest) candidates.push(`${drive}--${restHyphen}`);
+
     // 也嘗試只到第二層
     candidates.push(`${drive}--${parts[1]}`);
+    const p1Hyphen = parts[1].replace(/_/g, '-');
+    if (p1Hyphen !== parts[1]) candidates.push(`${drive}--${p1Hyphen}`);
   }
 
   for (const id of candidates) {
@@ -236,6 +242,33 @@ async function main() {
       } else if (rag.online && rag.project) {
         output.push(`\n[RAG] ChromaDB 在線但此專案未索引。大型專案建議先執行 rag_index { project: "${rag.project}" } 建立索引，可大幅節省後續搜尋 token。`);
       }
+    }
+
+    // 6. Codemap 偵測 — 有 codemap 才能高效除錯，沒有就必須先建
+    const cwd = process.cwd().replace(/\\/g, '/');
+    const codemapCandidates = [
+      path.join(cwd, 'docs', 'CODEMAPS'),
+      path.join(cwd, '.reports', 'codemaps'),
+    ];
+    const codemapDir = codemapCandidates.find(d => fs.existsSync(d));
+    if (codemapDir) {
+      const cmFiles = fs.readdirSync(codemapDir).filter(f => f.endsWith('.md'));
+      if (cmFiles.length > 0) {
+        // 檢查是否過期（超過 7 天未更新）
+        const oldest = Math.min(...cmFiles.map(f => fs.statSync(path.join(codemapDir, f)).mtimeMs));
+        const ageDays = Math.floor((Date.now() - oldest) / (24 * 60 * 60 * 1000));
+        const staleWarning = ageDays > 7 ? ` ⚠️ 最舊 ${ageDays} 天前更新，建議跑 /update_codemaps` : '';
+        output.push(
+          `\n[Codemap] ${path.relative(cwd, codemapDir)}/ 有 ${cmFiles.length} 份（${cmFiles.join(', ')}）${staleWarning}` +
+          `\n⚠️ 除錯/修改前必須先讀 backend.md 查函式行號，禁止盲 Grep 掃描`
+        );
+      }
+    } else {
+      output.push(
+        `\n🛑 [Codemap] 此專案沒有 Codemap！除錯效率會很差。` +
+        `\n  → 必須先執行 /update_codemaps 建立架構文件，再開始任何程式碼修改。` +
+        `\n  → 不要跳過這一步直接開工。`
+      );
     }
 
   } catch (err) {
