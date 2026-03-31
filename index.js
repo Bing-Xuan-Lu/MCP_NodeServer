@@ -7,6 +7,35 @@ import {
   GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
+// ── Global Audit Log ──────────────────────────────────────
+import { appendFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
+
+const _HOME = process.env.USERPROFILE || process.env.HOME || '';
+const _AUDIT_DIR  = join(_HOME, '.claude', 'logs');
+const _AUDIT_FILE = join(_AUDIT_DIR, 'mcp_audit.log');
+
+try { mkdirSync(_AUDIT_DIR, { recursive: true }); } catch (e) {}
+
+const _KEY_PARAMS = ['file_path', 'path', 'remotePath', 'database', 'sql', 'command', 'url', 'query', 'name'];
+function _summarize(args) {
+  if (!args) return '';
+  return _KEY_PARAMS
+    .filter(k => args[k] !== undefined)
+    .map(k => {
+      const v = String(args[k]);
+      return `${k}=${v.length > 80 ? v.slice(0, 80) + '…' : v}`;
+    })
+    .join(', ');
+}
+
+function _auditLog(toolName, args, status) {
+  try {
+    const line = `[${new Date().toISOString()}] ${toolName} | ${_summarize(args)} | ${status}\n`;
+    appendFileSync(_AUDIT_FILE, line, 'utf-8');
+  } catch (e) {}
+}
+
 // ── 工具模組 ──────────────────────────────────────────────
 import * as filesystem    from "./tools/filesystem.js";
 import * as php           from "./tools/php.js";
@@ -61,8 +90,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (isDefined) {
       try {
         const result = await mod.handle(name, args);
+        _auditLog(name, args, result?.isError ? 'error' : 'ok');
         return result;
       } catch (error) {
+        _auditLog(name, args, `throw: ${error.message}`);
         return {
           isError: true,
           content: [{ type: "text", text: `MCP Error: ${error.message}` }],

@@ -119,9 +119,10 @@ rag_query { project: "{ProjectFolder}", query: "自然語言描述" }
 
 | Hook | 事件 | 功能 |
 | ---- | ---- | ---- |
-| `session-start.js` | SessionStart | 對話開場載入 MEMORY.md 摘要、上次 session 快照、24h 內更新的記憶檔、近期踩坑紀錄 |
-| `pre-compact.js` | PreCompact | Context 壓縮前自動存快照到 `~/.claude/sessions/`，偵測重試/失敗模式並存踩坑紀錄 |
-| `write-guard.js` | PreToolUse (Write\|Edit) | 寫入 `.env`、credentials、私鑰等敏感檔案時發出警告（非阻擋式） |
+| `session-start.js` | SessionStart | 對話開場載入 MEMORY.md 摘要、上次 session 快照、24h 內更新的記憶檔、近期踩坑紀錄、CLAUDE.md 老化偵測 |
+| `pre-compact.js` | PreCompact | Context 壓縮前自動存快照到 `~/.claude/sessions/`，偵測重試/失敗/大量修改模式並存踩坑紀錄，GC 清舊紀錄 |
+| `write-guard.js` | PreToolUse (Write\|Edit) | 依 `risk-tiers.json` 分級警告（🔴 高風險 / 🟡 中風險）、敏感檔案保護、Prompt Injection 偵測（非阻擋式） |
+| `llm-judge.js` | PostToolUse (Write\|Edit) | Write/Edit 後依風險層級注入自我審查清單，PHP 非測試檔自動提醒「事故→測試」習慣 |
 
 Hook 腳本存放於 `hooks/` 目錄，設定在全域 `~/.claude/settings.json` 的 `hooks` 欄位。
 
@@ -172,8 +173,9 @@ MCP_NodeServer/
 ├── chromadb/            ← ChromaDB Docker 環境（RAG 選用）
 ├── hooks/               ← Claude Code Session Hooks（全域生效）
 │   ├── session-start.js ← SessionStart：對話開場自動載入記憶與上次摘要
-│   ├── pre-compact.js   ← PreCompact：context 壓縮前存快照 + 踩坑偵測
-│   └── write-guard.js   ← PreToolUse(Write|Edit)：敏感檔案寫入警告 + JS/CSS bump version 提醒
+│   ├── pre-compact.js   ← PreCompact：context 壓縮前存快照 + 踩坑偵測 + GC
+│   ├── write-guard.js   ← PreToolUse(Write|Edit)：risk-tiers 分級警告 + Prompt Injection 偵測
+│   └── llm-judge.js     ← PostToolUse(Write|Edit)：自我審查清單觸發器
 ├── docs/                ← 舊版技能儀表板 (備份)
 ├── dashboard/           ← 新版動態技能儀表板 (index.html / js / style.css)
 ├── setup.ps1            ← 一鍵環境初始化
@@ -217,3 +219,11 @@ MCP_NodeServer/
 | 模型 | 授權 | 用途 |
 |------|------|------|
 | `paraphrase-multilingual-MiniLM-L12-v2` | Apache-2.0 | RAG 多語言向量化（免費、本地執行） |
+
+---
+
+## License
+
+MIT License © 2024 Bing-Xuan Lu
+
+詳見 [LICENSE](LICENSE)。

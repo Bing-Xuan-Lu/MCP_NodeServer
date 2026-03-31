@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "description": "路徑風險分級 — 影響 write-guard 警告強度與 LLM Judge 審查深度。可在專案根目錄放同名檔案覆蓋此全域設定。",
+  "high": [
+    "db/", "database/", "migration/", "migrations/",
+    "config/", ".env", "composer.json", "composer.lock",
+    "*.sql", "schema.", "seed", "install"
+  ],
+  "medium": [
+    "models/", "model/", "controllers/", "controller/",
+    "api/", "auth/", "routes/", "middleware/"
+  ],
+  "low": [
+    "views/", "public/", "assets/", "css/", "js/", "images/", "uploads/"
+  ]
+}
