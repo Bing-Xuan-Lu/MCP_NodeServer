@@ -38,12 +38,14 @@ MCP_NodeServer/
 │   ├── agent_coord.js   ← agent_coord（多 Agent 協調：post/poll/status，JSON 檔案持久化）
 │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
 │   ├── flyway.js         ← flyway_info, flyway_migrate, flyway_validate, flyway_repair, flyway_baseline（需 dev-flyway Docker，選用）
-│   └── rag.js            ← rag_index, rag_query, rag_status（需 ChromaDB Docker，選用）
+│   ├── rag.js            ← rag_index, rag_query, rag_status（需 ChromaDB Docker，選用）
+│   ├── css_tools.js      ← css_specificity_check（靜態 CSS 檔 specificity 分析）, css_computed_winner（活頁面查詢某 property 勝出規則）
+│   └── php_class.js      ← class_method_lookup（PHP class/method 原始碼直接定位，一次到位取代 Grep→Read）
 ├── chromadb/             ← ChromaDB Docker 環境（RAG 選用，docker-compose.yml）
 ├── hooks/               ← Claude Code Session Hooks（全域 ~/.claude/settings.json 設定）
 │   ├── session-start.js ← SessionStart：對話開場載入記憶與上次摘要
 │   ├── pre-compact.js   ← PreCompact：context 壓縮前存快照 + 踩坑偵測
-│   └── write-guard.js   ← PreToolUse(Write|Edit)：敏感檔案寫入警告
+│   └── write-guard.js   ← PreToolUse(Write|Edit)：敏感檔案寫入警告 + JS/CSS 修改時提醒 bump version
 ├── skills/index.js      ← MCP Prompts 路由（注意：小寫 skills，不是 Skills）
 └── Skills/              ← Skill MD 檔
     ├── *_agent.md       ← MCP Prompts 內容

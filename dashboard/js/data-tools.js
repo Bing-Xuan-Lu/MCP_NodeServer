@@ -63,4 +63,9 @@ const TOOLS = {
   'rag_index':              { dept:'系統、Excel、文件、Python 與 Git', title:'RAG 索引建立', desc:'將專案檔案索引至 ChromaDB 向量資料庫，支援增量索引（僅處理變更檔案）。每個專案獨立 collection，可選共用 rag_shared。', usage:'rag_index {project:"PG_dbox3", paths:["PG_dbox3/admin/"]}', tools:['ChromaDB Docker'] },
   'rag_query':              { dept:'系統、Excel、文件、Python 與 Git', title:'RAG 語意搜尋', desc:'用自然語言查詢已索引的程式碼，從 ChromaDB 向量檢索最相關的程式碼片段。', usage:'rag_query {project:"PG_dbox3", query:"訂單折扣邏輯"}', tools:['ChromaDB Docker'] },
   'rag_status':             { dept:'系統、Excel、文件、Python 與 Git', title:'RAG 索引狀態', desc:'查看 ChromaDB 連線狀態、collection 統計、已索引檔案清單與語言分佈。', usage:'rag_status {project:"PG_dbox3"}', tools:['ChromaDB Docker'] },
+
+  'css_specificity_check':  { dept:'CSS 分析', title:'CSS Specificity 分析', desc:'分析 CSS 檔案中所有包含目標 selector 的規則，回傳行號、specificity 分數、屬性清單。覆寫前先確認權重避免反覆迭代。', usage:'css_specificity_check {file:"...", selector:".imgbox"}', tools:[] },
+  'css_computed_winner':    { dept:'CSS 分析', title:'CSS 規則勝出查詢', desc:'對活頁面查詢指定元素的某個 CSS property 最終由哪條規則勝出（類似 DevTools Computed 展開看來源），含所有競爭規則與 specificity。', usage:'css_computed_winner {url:"...", selector:".box", property:"grid-column"}', tools:['Playwright'] },
+
+  'class_method_lookup':    { dept:'PHP 分析', title:'PHP Class/Method 原始碼定位', desc:'給定 class 名稱 + method 名稱（可選），直接回傳函式完整原始碼（含行號），一次到位取代 Grep→Read 兩步。省略 method 則回傳 class 概覽。', usage:'class_method_lookup {project:"...", class_name:"news", method_name:"getAll"}', tools:[] },
 };

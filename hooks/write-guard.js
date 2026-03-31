@@ -26,6 +26,9 @@ const WARN_PATTERNS = [
   { pattern: /^CHANGELOG\.md$/i, msg: '是否真的需要建立 CHANGELOG.md？' },
 ];
 
+// JS/CSS 檔案修改 → 提醒 bump version（避免瀏覽器快取舊版）
+const CACHE_BUST_EXTENSIONS = ['.js', '.css'];
+
 // 允許的路徑（不警告）
 const ALLOWED_PATH_PATTERNS = [
   /\.claude\/commands\//i,
@@ -57,6 +60,14 @@ process.stdin.on('end', () => {
       if (pattern.test(filename)) {
         process.stdout.write(`[Write Guard] 💡 ${msg}\n`);
       }
+    }
+
+    // JS/CSS 修改 → 提醒 bump version
+    const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+    if (CACHE_BUST_EXTENSIONS.includes(ext)) {
+      process.stdout.write(
+        `[Write Guard] 💡 ${filename} modified — remember to bump ?v= in the PHP/HTML file that references it (browser cache)\n`
+      );
     }
 
     process.exit(0); // 允許繼續

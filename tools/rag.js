@@ -172,6 +172,15 @@ export const definitions = [
           type: "string",
           description: "限定程式語言（如 php、js）",
         },
+        filter_class: {
+          type: "string",
+          description: "限定 PHP class 名稱（精確匹配，如 order、news）",
+        },
+        filter_file_type: {
+          type: "string",
+          enum: ["model", "admin", "ajax", "js"],
+          description: "限定檔案類型（model=cls/model, admin=adminControl, ajax=AJAX, js=JavaScript）",
+        },
       },
       required: ["project", "query"],
     },
@@ -218,6 +227,15 @@ export const definitions = [
         filter_language: {
           type: "string",
           description: "限定程式語言（所有查詢共用）",
+        },
+        filter_class: {
+          type: "string",
+          description: "限定 PHP class 名稱（所有查詢共用）",
+        },
+        filter_file_type: {
+          type: "string",
+          enum: ["model", "admin", "ajax", "js"],
+          description: "限定檔案類型（所有查詢共用）",
         },
       },
       required: ["project", "queries"],
@@ -338,12 +356,17 @@ function chunkFile(content, relPath, chunkLinesCount = CHUNK_LINES, chunkOverlap
   const lines = content.split(/\r?\n/);
   const chunks = [];
 
+  // 偵測 PHP function 定義位置（用於 function-level metadata）
+  const funcDefs = detectPhpFunctions(lines);
+
   if (lines.length <= chunkLinesCount) {
     // 小檔案不切片
+    const meta = buildChunkMeta(relPath, 1, lines.length, funcDefs);
     chunks.push({
       text: content,
       startLine: 1,
       endLine: lines.length,
+      ...meta,
     });
     return chunks;
   }
@@ -365,10 +388,12 @@ function chunkFile(content, relPath, chunkLinesCount = CHUNK_LINES, chunkOverlap
     }
 
     const slicedLines = lines.slice(start, end);
+    const meta = buildChunkMeta(relPath, start + 1, end, funcDefs);
     chunks.push({
       text: slicedLines.join("\n"),
       startLine: start + 1,
       endLine: end,
+      ...meta,
     });
 
     // 下一個 chunk 起始點（含重疊）
@@ -379,6 +404,58 @@ function chunkFile(content, relPath, chunkLinesCount = CHUNK_LINES, chunkOverlap
   }
 
   return chunks;
+}
+
+/** 偵測 PHP 檔案中的 class 名稱和 function 定義（行號範圍） */
+function detectPhpFunctions(lines) {
+  let className = "";
+  const funcs = []; // { name, startLine (1-based) }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const classMatch = line.match(/^\s*(?:abstract\s+)?class\s+(\w+)/);
+    if (classMatch) className = classMatch[1];
+
+    const funcMatch = line.match(/^\s*(?:public|protected|private)?\s*(?:static\s+)?function\s+(\w+)\s*\(/);
+    if (funcMatch) {
+      funcs.push({ name: funcMatch[1], startLine: i + 1 });
+    }
+  }
+
+  return { className, funcs };
+}
+
+/** 為 chunk 附加 function-level metadata */
+function buildChunkMeta(relPath, startLine, endLine, funcDefs) {
+  const meta = {};
+
+  // class name
+  if (funcDefs.className) {
+    meta.class_name = funcDefs.className;
+  }
+
+  // 找出此 chunk 包含的 function 名稱
+  const containedFuncs = funcDefs.funcs
+    .filter(f => f.startLine >= startLine && f.startLine <= endLine)
+    .map(f => f.name);
+
+  if (containedFuncs.length > 0) {
+    meta.methods = containedFuncs.join(",");
+  }
+
+  // 檔案類型推斷（admin/model/ajax/frontend）
+  const rp = relPath.replace(/\\/g, "/").toLowerCase();
+  if (rp.includes("admincontrol") || rp.includes("/admin/")) {
+    meta.file_type = "admin";
+  } else if (rp.includes("cls/model") || rp.includes(".class.php")) {
+    meta.file_type = "model";
+  } else if (rp.includes("/ajax/") || rp.includes("_ajax")) {
+    meta.file_type = "ajax";
+  } else if (rp.includes("/js/") || rp.endsWith(".js")) {
+    meta.file_type = "js";
+  }
+
+  return meta;
 }
 
 /** 取得相對於 basePath 的路徑 */
@@ -692,6 +769,9 @@ async function processFile(collection, file, project, chunkLinesCount = CHUNK_LI
         language,
         file_size: size,
         indexed_at: now,
+        ...(c.class_name ? { class_name: c.class_name } : {}),
+        ...(c.methods ? { methods: c.methods } : {}),
+        ...(c.file_type ? { file_type: c.file_type } : {}),
       })),
     });
   }
@@ -709,10 +789,17 @@ async function handleQuery(client, args) {
     try { await embeddingFn.generate(["warmup"]); } catch { /* ignore */ }
   }
 
-  // 構建 where 過濾條件（僅支援精確匹配，路徑過濾改用 post-filter）
-  const where = args.filter_language
-    ? { language: args.filter_language }
-    : undefined;
+  // 構建 where 過濾條件
+  const whereConditions = [];
+  if (args.filter_language) whereConditions.push({ language: args.filter_language });
+  if (args.filter_class) whereConditions.push({ class_name: args.filter_class });
+  if (args.filter_file_type) whereConditions.push({ file_type: args.filter_file_type });
+
+  const where = whereConditions.length > 1
+    ? { $and: whereConditions }
+    : whereConditions.length === 1
+      ? whereConditions[0]
+      : undefined;
 
   // 多取一些結果以供 post-filter 路徑篩選
   const fetchCount = args.filter_path ? nResults * 3 : nResults;
@@ -817,7 +904,15 @@ async function handleQuery(client, args) {
   });
 
   const header = `🔍 查詢: "${args.query}" → ${results.length} 個結果\n`;
-  return { content: [{ type: "text", text: header + parts.join("\n\n") }] };
+
+  // 低信心度警告
+  const bestDistance = results.length > 0 ? results[0].distance : 1;
+  const lowConfidence = bestDistance > 0.45;
+  const warning = lowConfidence
+    ? `\n⚠️ 最佳結果 distance=${bestDistance.toFixed(3)}，語意搜尋信心度低。建議改用 Grep 精確搜尋或 class_method_lookup 直接定位。\n`
+    : "";
+
+  return { content: [{ type: "text", text: header + warning + parts.join("\n\n") }] };
 }
 
 // ── rag_query_batch ────────────────────────────
@@ -830,9 +925,17 @@ async function handleQueryBatch(client, args) {
     try { await embeddingFn.generate(["warmup"]); } catch { /* ignore */ }
   }
 
-  const where = args.filter_language
-    ? { language: args.filter_language }
-    : undefined;
+  // 構建 where 過濾條件
+  const batchWhereConditions = [];
+  if (args.filter_language) batchWhereConditions.push({ language: args.filter_language });
+  if (args.filter_class) batchWhereConditions.push({ class_name: args.filter_class });
+  if (args.filter_file_type) batchWhereConditions.push({ file_type: args.filter_file_type });
+
+  const where = batchWhereConditions.length > 1
+    ? { $and: batchWhereConditions }
+    : batchWhereConditions.length === 1
+      ? batchWhereConditions[0]
+      : undefined;
   const fetchCount = args.filter_path ? nResults * 3 : nResults;
 
   let collection;
@@ -851,6 +954,7 @@ async function handleQueryBatch(client, args) {
   }
 
   const allParts = [];
+  let hasLowConfidence = false;
   for (let qi = 0; qi < args.queries.length; qi++) {
     const query = args.queries[qi];
     let results = [];
@@ -887,6 +991,9 @@ async function handleQueryBatch(client, args) {
       continue;
     }
 
+    // 檢查信心度
+    if (results[0].distance > 0.45) hasLowConfidence = true;
+
     const lines = results.map((r, i) => {
       const m = r.metadata;
       const score = (1 - r.distance).toFixed(3);
@@ -899,7 +1006,10 @@ async function handleQueryBatch(client, args) {
   }
 
   const header = `🔍 批次查詢: ${args.queries.length} 個 → collection ${collectionName}\n\n`;
-  return { content: [{ type: "text", text: header + allParts.join("\n\n") }] };
+  const warning = hasLowConfidence
+    ? `⚠️ 部分查詢最佳結果 distance > 0.45，語意搜尋信心度低。建議改用 Grep 精確搜尋或 class_method_lookup 直接定位。\n\n`
+    : "";
+  return { content: [{ type: "text", text: header + warning + allParts.join("\n\n") }] };
 }
 
 // ── rag_status ─────────────────────────────────

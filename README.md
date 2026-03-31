@@ -163,6 +163,8 @@ MCP_NodeServer/
 │   ├── agent_coord.js   ← agent_coord（多 Agent 協調：post/poll/status，JSON 檔案持久化）
 │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
 │   ├── rag.js           ← rag_index, rag_query, rag_status（選用，需 ChromaDB）
+│   ├── css_tools.js     ← css_specificity_check, css_computed_winner（CSS specificity 分析與活頁面規則勝出查詢）
+│   ├── php_class.js     ← class_method_lookup（PHP class/method 原始碼直接定位）
 │   └── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
 ├── skills/index.js      ← MCP Prompts 路由
 ├── Skills/commands/     ← Skill MD 檔（12 個部門子資料夾）
@@ -171,7 +173,7 @@ MCP_NodeServer/
 ├── hooks/               ← Claude Code Session Hooks（全域生效）
 │   ├── session-start.js ← SessionStart：對話開場自動載入記憶與上次摘要
 │   ├── pre-compact.js   ← PreCompact：context 壓縮前存快照 + 踩坑偵測
-│   └── write-guard.js   ← PreToolUse(Write|Edit)：敏感檔案寫入警告
+│   └── write-guard.js   ← PreToolUse(Write|Edit)：敏感檔案寫入警告 + JS/CSS bump version 提醒
 ├── docs/                ← 舊版技能儀表板 (備份)
 ├── dashboard/           ← 新版動態技能儀表板 (index.html / js / style.css)
 ├── setup.ps1            ← 一鍵環境初始化
