@@ -235,6 +235,7 @@ async function main() {
           `\n[RAG] ${rag.collectionName} 已索引，語意搜尋可用。` +
           `\n⚠️ 搜尋規則（必須遵守）：` +
           `\n  - 不確定功能在哪個檔案 → 必須先用 rag_query，禁止直接 Glob+Grep+Read 掃描` +
+          `\n  - PHP class/method → 用 class_method_lookup 一次到位，禁止 Grep→Read 兩步` +
           `\n  - 知道確切函式名/變數名 → 用 Grep` +
           `\n  - rag_query 回傳的 chunk 已包含程式碼片段，通常不需要再 Read 整個檔案` +
           `\n  - 只有在需要看 chunk 周圍的完整上下文時，才用 Read(offset, limit) 讀取該區段`
@@ -270,6 +271,16 @@ async function main() {
         `\n  → 不要跳過這一步直接開工。`
       );
     }
+
+    // 7. MCP 工具優先提醒（每次對話強制注入）
+    output.push(
+      `\n[MCP Priority] 操作前必查：` +
+      `\n  DB 查詢 → execute_sql（禁止 docker exec mysql，已被 hook 阻擋）` +
+      `\n  PHP 執行 → run_php_script（禁止 docker exec php，已被 hook 阻擋）` +
+      `\n  找函式碼 → class_method_lookup（禁止 Grep→Read 兩步）` +
+      `\n  不確定位置 → rag_query / CODEMAPS（禁止 Glob+Grep 掃描）` +
+      `\n  3+ 檔案 → 查 _batch 版本工具`
+    );
 
   } catch (err) {
     // 靜默失敗，不影響使用者

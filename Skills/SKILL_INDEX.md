@@ -18,6 +18,7 @@
 - `/rwd_scan` — 三斷點截圖掃描，偵測響應式問題
 - `/web_performance` — Playwright 實測載入指標 + PageSpeed 評分
 - `/verify` — 提交前七合一驗證（含 AI 品質稽核），產出 PASS/FAIL 報告
+- `/bug_trace` — 從症狀追蹤 Bug 根因，跨層定位（頁面→Model→SQL→DB）產出分析報告
 
 ## 規格分析部
 
