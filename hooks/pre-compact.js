@@ -167,7 +167,30 @@ function detectPitfalls(parsed) {
     }
   }
 
+  // 訊號 3：大量檔案修改（> 8 個 Write/Edit 目標）→ 提醒逐一確認
+  const editedFiles = parsed.toolCalls
+    .filter(c => ['Edit', 'Write'].includes(c.name) && c.target)
+    .map(c => c.target);
+  const uniqueEdited = new Set(editedFiles);
+  if (uniqueEdited.size > 8) {
+    pitfalls.push({ type: 'mass-change', description: `本次 session 修改了 ${uniqueEdited.size} 個不同檔案，建議逐一確認變更正確性` });
+  }
+
   return pitfalls;
+}
+
+// === 清舊 pitfall 紀錄（只保留 7 天內）===
+function gcOldPitfalls() {
+  if (!fs.existsSync(LEARNED_DIR)) return;
+  try {
+    const now = Date.now();
+    const maxAge = 7 * 24 * 60 * 60 * 1000;
+    fs.readdirSync(LEARNED_DIR)
+      .filter(f => f.startsWith('auto-pitfall-') && f.endsWith('.md'))
+      .map(f => ({ path: path.join(LEARNED_DIR, f), mtime: fs.statSync(path.join(LEARNED_DIR, f)).mtimeMs }))
+      .filter(f => (now - f.mtime) > maxAge)
+      .forEach(f => { try { fs.unlinkSync(f.path); } catch (e) {} });
+  } catch (e) {}
 }
 
 // === 存踩坑紀錄 ===
@@ -237,6 +260,9 @@ ${parsed.filesModified.length > 0 ? parsed.filesModified.map(f => `- ${f}`).join
     // 踩坑偵測
     const pitfalls = detectPitfalls(parsed);
     if (pitfalls.length > 0) savePitfalls(pitfalls);
+
+    // 清舊 pitfall
+    gcOldPitfalls();
 
     // 清理舊快照（只保留最近 20 份）
     try {

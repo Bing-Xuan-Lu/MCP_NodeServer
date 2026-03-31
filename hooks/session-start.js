@@ -191,6 +191,7 @@ async function checkRagStatus() {
 // === 主程式 ===
 async function main() {
   const output = [];
+  const cwd = process.cwd().replace(/\\/g, '/');
 
   try {
     const memDir = findProjectMemoryDir();
@@ -245,8 +246,29 @@ async function main() {
       }
     }
 
-    // 6. Codemap 偵測 — 有 codemap 才能高效除錯，沒有就必須先建
-    const cwd = process.cwd().replace(/\\/g, '/');
+    // 6. 文件老化偵測 — CLAUDE.md > 30 天未更新
+    try {
+      const claudeMdPath = path.join(cwd, 'CLAUDE.md');
+      if (fs.existsSync(claudeMdPath)) {
+        const ageDays = Math.floor((Date.now() - fs.statSync(claudeMdPath).mtimeMs) / (24 * 60 * 60 * 1000));
+        if (ageDays > 30) {
+          output.push(`\n[Guard] ⚠️ CLAUDE.md 已 ${ageDays} 天未更新，建議執行 /revise-claude-md 確認內容仍符合現況`);
+        }
+      }
+    } catch (e) {}
+
+    // 7. risk-tiers 提示 — 專案目錄沒有本地 risk-tiers.json
+    try {
+      const localRisk = path.join(cwd, 'risk-tiers.json');
+      const globalRisk = path.join(HOME, '.claude', 'risk-tiers.json');
+      if (!fs.existsSync(localRisk) && fs.existsSync(globalRisk)) {
+        // 靜默 — 全域設定存在就夠了，不打擾使用者
+      } else if (!fs.existsSync(localRisk) && !fs.existsSync(globalRisk)) {
+        output.push(`\n[Guard] 💡 尚未設定 risk-tiers.json，write-guard 與 llm-judge 將以無分級模式運行。建議建立 ~/.claude/risk-tiers.json`);
+      }
+    } catch (e) {}
+
+    // 8. Codemap 偵測 — 有 codemap 才能高效除錯
     const codemapCandidates = [
       path.join(cwd, 'docs', 'CODEMAPS'),
       path.join(cwd, '.reports', 'codemaps'),
@@ -255,32 +277,14 @@ async function main() {
     if (codemapDir) {
       const cmFiles = fs.readdirSync(codemapDir).filter(f => f.endsWith('.md'));
       if (cmFiles.length > 0) {
-        // 檢查是否過期（超過 7 天未更新）
         const oldest = Math.min(...cmFiles.map(f => fs.statSync(path.join(codemapDir, f)).mtimeMs));
         const ageDays = Math.floor((Date.now() - oldest) / (24 * 60 * 60 * 1000));
         const staleWarning = ageDays > 7 ? ` ⚠️ 最舊 ${ageDays} 天前更新，建議跑 /update_codemaps` : '';
         output.push(
-          `\n[Codemap] ${path.relative(cwd, codemapDir)}/ 有 ${cmFiles.length} 份（${cmFiles.join(', ')}）${staleWarning}` +
-          `\n⚠️ 除錯/修改前必須先讀 backend.md 查函式行號，禁止盲 Grep 掃描`
+          `\n[Codemap] ${path.relative(cwd, codemapDir)}/ 有 ${cmFiles.length} 份（${cmFiles.join(', ')}）${staleWarning}`
         );
       }
-    } else {
-      output.push(
-        `\n🛑 [Codemap] 此專案沒有 Codemap！除錯效率會很差。` +
-        `\n  → 必須先執行 /update_codemaps 建立架構文件，再開始任何程式碼修改。` +
-        `\n  → 不要跳過這一步直接開工。`
-      );
     }
-
-    // 7. MCP 工具優先提醒（每次對話強制注入）
-    output.push(
-      `\n[MCP Priority] 操作前必查：` +
-      `\n  DB 查詢 → execute_sql（禁止 docker exec mysql，已被 hook 阻擋）` +
-      `\n  PHP 執行 → run_php_script（禁止 docker exec php，已被 hook 阻擋）` +
-      `\n  找函式碼 → class_method_lookup（禁止 Grep→Read 兩步）` +
-      `\n  不確定位置 → rag_query / CODEMAPS（禁止 Glob+Grep 掃描）` +
-      `\n  3+ 檔案 → 查 _batch 版本工具`
-    );
 
   } catch (err) {
     // 靜默失敗，不影響使用者

@@ -54,20 +54,27 @@ if ($dockerOk) {
 Write-Host ""
 
 # ---- 4. Deploy Skills ----
-Write-Host "[4/6] Deploying Skills..."
+Write-Host "[4/8] Deploying Skills..."
 & "$PSScriptRoot\deploy-commands.bat"
 Write-Host ""
 
 # ---- 5. Global CLAUDE.md ----
-Write-Host "[5/6] Syncing global CLAUDE.md..."
+Write-Host "[5/8] Syncing global CLAUDE.md..."
 $claudeDir = "$env:USERPROFILE\.claude"
 if (-not (Test-Path $claudeDir)) { New-Item -ItemType Directory -Path $claudeDir | Out-Null }
 Copy-Item "$PSScriptRoot\docs\global-claude.md" "$claudeDir\CLAUDE.md" -Force
 Write-Host "OK: synced to $claudeDir\CLAUDE.md"
-
-# ---- 6. Playwright MCP Permissions ----
 Write-Host ""
-Write-Host "[6/6] Setting up Playwright MCP permissions in settings.json..."
+
+# ---- 6. Deploy Hooks + risk-tiers.json ----
+Write-Host "[6/8] Deploying Hooks and risk-tiers.json..."
+node "$PSScriptRoot\setup-hooks.js"
+if ($LASTEXITCODE -ne 0) { Write-Host "WARN: Hook setup had errors, check output above." }
+Write-Host "OK."
+Write-Host ""
+
+# ---- 7. Playwright MCP Permissions ----
+Write-Host "[7/8] Setting up Playwright MCP permissions in settings.json..."
 $settingsPath = "$claudeDir\settings.json"
 
 # Playwright 工具名稱（不含前綴）
@@ -130,5 +137,18 @@ Write-Host "OK: added $added Playwright permissions to $settingsPath"
 Write-Host "    (Why: Background agents need pre-approved permissions or they auto-reject tool calls)"
 
 Write-Host ""
-Write-Host "Setup complete! Restart Claude Code to apply changes."
+Write-Host "[8/8] Done."
+Write-Host ""
+Write-Host "============================================"
+Write-Host " Setup complete!"
+Write-Host "============================================"
+Write-Host ""
+Write-Host " What was configured:"
+Write-Host "   hooks/     -> ~/.claude/hooks/  (5 hooks)"
+Write-Host "   risk-tiers.json -> ~/.claude/  (path risk classification)"
+Write-Host "   settings.json -> hooks registered (5 events)"
+Write-Host "   settings.json -> Playwright permissions added"
+Write-Host "   Skills -> ~/.claude/commands/"
+Write-Host ""
+Write-Host "Restart Claude Code to apply all changes."
 Read-Host "Press Enter to exit"
