@@ -347,6 +347,20 @@ function getCategoryKey(entry) {
     return `${tool}:${fn}`;
   }
 
+  // image_diff：不同圖片對算不同類（批次比對不是重複）
+  if (tool === 'image_diff') {
+    const a = entry.args?.image_a || '';
+    const b = entry.args?.image_b || '';
+    return `image_diff:${a}:${b}`;
+  }
+
+  // dom_compare：不同 URL 對算不同類
+  if (tool === 'dom_compare') {
+    const a = entry.args?.url_a || '';
+    const b = entry.args?.url_b || '';
+    return `dom_compare:${a}:${b}`;
+  }
+
   // Playwright browser 操作：tool + ref/url 組合
   if (tool.startsWith('browser_')) {
     const ref = entry.args?.ref || entry.args?.url || '';
