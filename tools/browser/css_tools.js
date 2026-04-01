@@ -4,41 +4,12 @@
 
 import fs from "fs/promises";
 import { resolveSecurePath } from "../config.js";
+import { createBrowserPool } from "./_shared/browser_pool.js";
 
 // ============================================
-// Playwright 動態載入（css_computed_winner 用）
+// Browser Pool（跨呼叫複用 browser 進程）
 // ============================================
-let playwrightModule = null;
-async function getPlaywright() {
-  if (!playwrightModule) {
-    playwrightModule = await import("@playwright/test");
-  }
-  return playwrightModule;
-}
-
-let pooledBrowser = null;
-let poolTimer = null;
-const POOL_TTL = 60000;
-
-async function acquireBrowser() {
-  if (pooledBrowser && pooledBrowser.isConnected()) {
-    clearTimeout(poolTimer);
-    poolTimer = setTimeout(releasePool, POOL_TTL);
-    return pooledBrowser;
-  }
-  const { chromium } = await getPlaywright();
-  pooledBrowser = await chromium.launch({ headless: true });
-  poolTimer = setTimeout(releasePool, POOL_TTL);
-  return pooledBrowser;
-}
-
-function releasePool() {
-  if (pooledBrowser) {
-    pooledBrowser.close().catch(() => {});
-    pooledBrowser = null;
-    poolTimer = null;
-  }
-}
+const browserPool = createBrowserPool(60000);
 
 // ============================================
 // 工具定義
@@ -393,7 +364,7 @@ async function handleCssComputedWinner(args) {
     return { content: [{ type: "text", text: "❌ 請指定 property 或 properties 參數" }] };
   }
 
-  const browser = await acquireBrowser();
+  const browser = await browserPool.acquire({ headless: true });
   let context = null;
 
   try {

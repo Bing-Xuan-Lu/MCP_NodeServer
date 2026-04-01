@@ -1,41 +1,12 @@
 // tools/dom_compare.js — 批次比對兩個 URL 上多個選擇器的 CSS / HTML / JS 差異
 // 用途：一次呼叫取代 4-6 次 browser_evaluate，直接回傳差異
 
-// 延遲載入 Playwright（避免啟動時載入）
-let playwrightModule = null;
-async function getPlaywright() {
-  if (!playwrightModule) {
-    playwrightModule = await import("@playwright/test");
-  }
-  return playwrightModule;
-}
+import { createBrowserPool } from "./_shared/browser_pool.js";
 
 // ============================================
 // Browser Pool（跨呼叫複用 browser 進程）
 // ============================================
-let pooledBrowser = null;
-let poolTimer = null;
-const POOL_TTL = 60000; // 60 秒無活動自動關閉
-
-async function acquireBrowser() {
-  if (pooledBrowser && pooledBrowser.isConnected()) {
-    clearTimeout(poolTimer);
-    poolTimer = setTimeout(releasePool, POOL_TTL);
-    return pooledBrowser;
-  }
-  const { chromium } = await getPlaywright();
-  pooledBrowser = await chromium.launch({ headless: true });
-  poolTimer = setTimeout(releasePool, POOL_TTL);
-  return pooledBrowser;
-}
-
-function releasePool() {
-  if (pooledBrowser) {
-    pooledBrowser.close().catch(() => {});
-    pooledBrowser = null;
-    poolTimer = null;
-  }
-}
+const browserPool = createBrowserPool(60000);
 
 // ============================================
 // 工具定義
@@ -359,7 +330,7 @@ export async function handle(name, args) {
   }
 
   const props = userProps && userProps.length > 0 ? userProps : DEFAULT_PROPERTIES;
-  const browser = await acquireBrowser();
+  const browser = await browserPool.acquire({ headless: true });
 
   try {
     // 建立兩個獨立 context（支援不同 cookies）

@@ -36,37 +36,41 @@ function _auditLog(toolName, args, status) {
   } catch (e) {}
 }
 
-// ── 工具模組 ──────────────────────────────────────────────
-import * as filesystem    from "./tools/filesystem.js";
-import * as php           from "./tools/php.js";
-import * as database      from "./tools/database.js";
-import * as excel         from "./tools/excel.js";
-import * as bookmarks     from "./tools/bookmarks.js";
-import * as skillFactory  from "./tools/skill_factory.js";
-import * as sftp          from "./tools/sftp.js";
-import * as python        from "./tools/python.js";
-import * as word          from "./tools/word.js";
-import * as pptx          from "./tools/pptx.js";
-import * as pdf           from "./tools/pdf.js";
-import * as fileToPrompt  from "./tools/file_to_prompt.js";
-import * as rag           from "./tools/rag.js";
-import * as git           from "./tools/git.js";
-import * as images        from "./tools/images.js";
-import * as domCompare    from "./tools/dom_compare.js";
-import * as playwrightTools from "./tools/playwright_tools.js";
-import * as imageDiff      from "./tools/image_diff.js";
-import * as agentCoord     from "./tools/agent_coord.js";
-import * as flyway         from "./tools/flyway.js";
-import * as cssTools       from "./tools/css_tools.js";
-import * as phpClass       from "./tools/php_class.js";
+// ── 動態載入工具模組 ───────────────────────────────────────
+import { globSync } from "glob";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+async function loadToolModules() {
+  // 掃描 tools/ 下的所有 .js 檔（不含 _shared/ 子目錄）
+  // 使用 glob pattern: tools/**/*.js (遞迴載入分類資料夾)
+  const toolFiles = globSync("tools/**/*.js", {
+    cwd: __dirname,
+    ignore: ["tools/_shared/**"]  // 排除 _shared 子目錄（僅供工具互相 import）
+  });
+
+  const modules = [];
+  for (const file of toolFiles) {
+    try {
+      const module = await import(`./${file}`);
+      if (module.definitions && module.handle) {
+        modules.push(module);
+      }
+    } catch (err) {
+      console.error(`⚠️  Failed to load tool module: ${file}`, err.message);
+    }
+  }
+
+  return modules;
+}
+
+const TOOL_MODULES = await loadToolModules();
 
 // ── Skills 模組 ───────────────────────────────────────────
 import { definitions as skillDefinitions, getPrompt } from "./skills/index.js";
-
-// ============================================
-// 工具模組清單 (新增模組只需在此加一行)
-// ============================================
-const TOOL_MODULES = [filesystem, php, database, excel, bookmarks, skillFactory, sftp, python, word, pptx, pdf, images, fileToPrompt, rag, git, domCompare, playwrightTools, imageDiff, agentCoord, flyway, cssTools, phpClass];
 
 // ============================================
 // MCP Server 初始化
