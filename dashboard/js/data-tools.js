@@ -15,12 +15,12 @@ const TOOLS = {
   'get_db_schema_batch':    { dept:'檔案系統 & 資料庫', title:'批次查看多張資料表結構', desc:'一次查看多張表的 Schema，減少 tool call。', usage:'get_db_schema_batch {table_names:["..."]}', tools:[] },
   'execute_sql_batch':      { dept:'檔案系統 & 資料庫', title:'批次執行多組獨立 SQL', desc:'各自獨立連線執行，互不影響，不會因某條失敗而中斷。', usage:'execute_sql_batch {queries:[{sql:"..."}]}', tools:[] },
 
-  'run_php_script':         { dept:'PHP & SFTP 部署', title:'執行 PHP 腳本', desc:'在伺服器上執行 PHP 腳本 (CLI 模式)，並回傳輸出結果。', usage:'run_php_script {path:"..."}', tools:[] },
-  'run_php_test':           { dept:'PHP & SFTP 部署', title:'執行 PHP 測試', desc:'自動建立測試環境 (Session/Config) 並執行 PHP 腳本。', usage:'run_php_test {targetPath:"..."}', tools:[] },
+  'run_php_script':         { dept:'PHP & SFTP 部署', title:'執行 PHP 腳本', desc:'在伺服器上執行 PHP 腳本 (CLI 模式)，並回傳輸出結果。支援 container 參數在 Docker 容器內執行。', usage:'run_php_script {path:"...", container:"dev-php84"}', tools:[] },
+  'run_php_test':           { dept:'PHP & SFTP 部署', title:'執行 PHP 測試', desc:'自動建立測試環境 (Session/Config) 並執行 PHP 腳本。支援 container 參數在 Docker 容器內執行。', usage:'run_php_test {targetPath:"...", container:"dev-php84"}', tools:[] },
   'send_http_request':      { dept:'PHP & SFTP 部署', title:'發送 HTTP 請求', desc:'發送 GET/POST 請求，支援 Multipart 實體檔案上傳。', usage:'send_http_request {url:"...", method:"..."}', tools:[] },
-  'tail_log':               { dept:'PHP & SFTP 部署', title:'讀取 Log 最後 N 行', desc:'讀取檔案最後 N 行 (適用於查看 PHP Error Log)。', usage:'tail_log {path:"..."}', tools:[] },
+  'tail_log':               { dept:'PHP & SFTP 部署', title:'讀取 Log 最後 N 行', desc:'讀取檔案最後 N 行 (適用於查看 PHP Error Log)。支援 container 參數讀取 Docker 容器內的 log。', usage:'tail_log {path:"/var/log/apache2/error.log", container:"dev-php84"}', tools:[] },
   'send_http_requests_batch':{ dept:'PHP & SFTP 部署', title:'批次發送 HTTP 請求', desc:'並行發送多個請求，減少 tool call 延遲。', usage:'send_http_requests_batch {requests:[...]}', tools:[] },
-  'run_php_script_batch':   { dept:'PHP & SFTP 部署', title:'批次執行多個 PHP 腳本', desc:'循序執行多支 PHP 腳本，適合測試、migration 批次跑。', usage:'run_php_script_batch {scripts:[{path:"..."}]}', tools:[] },
+  'run_php_script_batch':   { dept:'PHP & SFTP 部署', title:'批次執行多個 PHP 腳本', desc:'循序執行多支 PHP 腳本，適合測試、migration 批次跑。支援 container 參數在 Docker 容器內執行。', usage:'run_php_script_batch {container:"dev-php84", scripts:[{path:"..."}]}', tools:[] },
 
   'sftp_connect':           { dept:'PHP & SFTP 部署', title:'設定 SFTP 連線', desc:'設定後同一次對話內的所有操作都會使用此連線。', usage:'sftp_connect {host:"...", user:"..."}', tools:[] },
   'sftp_upload':            { dept:'PHP & SFTP 部署', title:'上傳檔案/目錄', desc:'上傳本機檔案或整個目錄到遠端伺服器。', usage:'sftp_upload {local_path:"...", remote_path:"..."}', tools:[] },
@@ -52,10 +52,10 @@ const TOOLS = {
   'read_pdf_file':          { dept:'系統、Excel、文件、Python 與 Git', title:'讀取 PDF 文件', desc:'逐頁提取 PDF 文字內容，支援指定頁碼範圍（如 "1-5" 或 "3,7,10-12"）。', usage:'read_pdf_file {path:"...", pages:"1-5"}', tools:[] },
   'read_pdf_files_batch':   { dept:'系統、Excel、文件、Python 與 Git', title:'批次讀取 PDF 文件', desc:'一次讀取多個 PDF 檔案，回傳文字摘要。', usage:'read_pdf_files_batch {paths:["..."]}', tools:[] },
   
-  'git_status':             { dept:'系統、Excel、Python 與 Git', title:'Git 狀態檢查', desc:'查看目前 Git 工作目錄狀態 (git status)，包含未暫存與未追蹤檔案。', usage:'git_status {}', tools:[] },
-  'git_diff':               { dept:'系統、Excel、Python 與 Git', title:'Git 改動比對', desc:'查看檔案改動內容 (git diff)，支援 staged 模式。', usage:'git_diff {file_path:"...", staged:true}', tools:[] },
-  'git_log':                { dept:'系統、Excel、Python 與 Git', title:'Git 提交歷史', desc:'查看最近的 Commit 歷史 (git log)，預設顯示 5 筆一列。', usage:'git_log {limit:5}', tools:[] },
-  'git_stash_ops':          { dept:'系統、Excel、Python 與 Git', title:'Git Stash 操作', desc:'執行 Git Stash 相關操作 (push, pop, list)，用於暫存臨時工作。', usage:'git_stash_ops {action:"push", message:"..."}', tools:[] },
+  'git_status':             { dept:'系統、Excel、Python 與 Git', title:'Git 狀態檢查', desc:'查看目前 Git 工作目錄狀態 (git status)。支援 container 參數在 Docker 容器內執行。', usage:'git_status {container:"dev-php84"}', tools:[] },
+  'git_diff':               { dept:'系統、Excel、Python 與 Git', title:'Git 改動比對', desc:'查看檔案改動內容 (git diff)，支援 staged 模式。支援 container 參數在 Docker 容器內執行。', usage:'git_diff {file_path:"...", staged:true, container:"dev-php84"}', tools:[] },
+  'git_log':                { dept:'系統、Excel、Python 與 Git', title:'Git 提交歷史', desc:'查看最近的 Commit 歷史 (git log)，預設顯示 5 筆一列。支援 container 參數在 Docker 容器內執行。', usage:'git_log {limit:5, container:"dev-php84"}', tools:[] },
+  'git_stash_ops':          { dept:'系統、Excel、Python 與 Git', title:'Git Stash 操作', desc:'執行 Git Stash 相關操作 (push, pop, list)，用於暫存臨時工作。支援 container 參數在 Docker 容器內執行。', usage:'git_stash_ops {action:"push", message:"...", container:"dev-php84"}', tools:[] },
 
   'file_to_prompt':         { dept:'系統、Excel、文件、Python 與 Git', title:'檔案打包成 Prompt', desc:'將多個檔案內容打包成結構化 prompt（支援 glob pattern），免手動逐檔指定。輸出 XML/Markdown/Plain 格式。', usage:'file_to_prompt {glob:"project/**/*.php", format:"xml"}', tools:[] },
   'file_to_prompt_preview': { dept:'系統、Excel、文件、Python 與 Git', title:'預覽檔案匹配結果', desc:'預覽 file_to_prompt 會匹配哪些檔案（不讀取內容，僅列清單與大小），確認範圍正確後再執行。', usage:'file_to_prompt_preview {glob:"project/**/*.php"}', tools:[] },

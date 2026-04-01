@@ -19,6 +19,36 @@ const LOG_DIR = path.join(os.tmpdir(), 'claude_tool_logs');
 const MAX_LOG_AGE_MS = 2 * 60 * 60 * 1000; // 2 小時後自動清除
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.tif', '.avif', '.svg']);
 
+// 內網 IP 範圍（這些 host 的 sftp/ssh 操作跳過重複偵測）
+const INTERNAL_IP_PATTERNS = [
+  /^192\.168\./,
+  /^10\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^127\./,
+  /^localhost$/i,
+];
+
+// 需要判斷內網才放行的工具（非連線工具本身）
+const NETWORK_TOOLS = new Set([
+  'ssh_exec',
+  'sftp_upload', 'sftp_download', 'sftp_list', 'sftp_delete',
+  'sftp_upload_batch', 'sftp_download_batch', 'sftp_list_batch', 'sftp_delete_batch',
+]);
+
+/** 判斷 host 是否為內網 */
+function isInternalHost(host) {
+  if (!host) return false;
+  return INTERNAL_IP_PATTERNS.some(re => re.test(host));
+}
+
+/** 從 session log 讀取最近一次 sftp_connect 的 host */
+function getSessionHost(history) {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i]._sftpHost) return history[i]._sftpHost;
+  }
+  return null;
+}
+
 // ── 記憶強制注入（Scatter Search 觸發時載入）──────
 
 const HOME = process.env.HOME || process.env.USERPROFILE;
@@ -288,6 +318,39 @@ function getCategoryKey(entry) {
     const offset = entry.args?.offset || 0;
     const limit = entry.args?.limit || 'full';
     return `${tool}:${filePath}:${offset}:${limit}`;
+  }
+
+  // Grep：path + pattern 組合算不同類（不同搜尋目標不是重複）
+  if (tool === 'Grep') {
+    const grepPath = entry.args?.path || 'cwd';
+    const pattern = entry.args?.pattern || '';
+    return `Grep:${grepPath}:${pattern}`;
+  }
+
+  // Edit：file_path + old_string 前 80 字組合算不同類
+  if (tool === 'Edit') {
+    const filePath = entry.args?.file_path || '';
+    const oldStr = (entry.args?.old_string || '').slice(0, 80);
+    return `Edit:${filePath}:${oldStr}`;
+  }
+
+  // HTTP request：URL + method 組合算不同類（不同 endpoint 不是重複）
+  if (tool === 'send_http_request') {
+    const url = entry.args?.url || '';
+    const method = entry.args?.method || 'GET';
+    return `send_http_request:${method}:${url}`;
+  }
+
+  // browser_evaluate / browser_run_code：function 前 100 字算不同類
+  if (tool === 'browser_evaluate' || tool === 'browser_run_code') {
+    const fn = (entry.args?.function || entry.args?.code || '').slice(0, 100);
+    return `${tool}:${fn}`;
+  }
+
+  // Playwright browser 操作：tool + ref/url 組合
+  if (tool.startsWith('browser_')) {
+    const ref = entry.args?.ref || entry.args?.url || '';
+    return `${tool}:${ref}`;
   }
 
   // 其他檔案工具：用副檔名分類
@@ -572,8 +635,31 @@ process.stdin.on('end', () => {
     const toolName = data.tool_name || '';
     const toolInput = data.tool_input || {};
 
+    const shortToolName = shortName(toolName);
     const logPath = getLogPath(sessionId);
     const history = readLog(logPath);
+
+    // sftp_connect：記錄 host 到 session log，然後放行
+    if (shortToolName === 'sftp_connect') {
+      const host = toolInput.host || '';
+      const entry = { tool: toolName, _sftpHost: host, ts: Date.now() };
+      history.push(entry);
+      if (history.length > 50) history.splice(0, history.length - 50);
+      writeLog(logPath, history);
+      process.stderr.write(`[repetition-detector] pass: sftp_connect → ${host}\n`);
+      process.exit(0);
+    }
+
+    // sftp/ssh 操作：內網放行，外網照常偵測
+    if (NETWORK_TOOLS.has(shortToolName)) {
+      const host = getSessionHost(history);
+      if (isInternalHost(host)) {
+        // 內網 → 直接放行，不偵測也不記錄
+        process.stderr.write(`[repetition-detector] pass: ${shortToolName} (internal: ${host})\n`);
+        process.exit(0);
+      }
+      // 外網 → 繼續走正常偵測流程
+    }
 
     // 建立當前 entry，Bash 命令額外提取簽名
     const bashCommand = toolName === 'Bash' ? (toolInput.command || '') : '';
@@ -630,8 +716,10 @@ process.stdin.on('end', () => {
 
     if (Math.random() < 0.1) cleanOldLogs();
 
+    process.stderr.write(`[repetition-detector] pass: ${shortToolName}\n`);
     process.exit(0);
   } catch (e) {
+    process.stderr.write(`[repetition-detector] pass (error ignored)\n`);
     process.exit(0);
   }
 });

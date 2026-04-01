@@ -20,7 +20,7 @@ MCP_NodeServer/
 │   └── user/            ← 使用者偏好與設定
 ├── tools/               ← MCP 工具模組（各自匯出 definitions + handle）
 │   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, read_files_batch, list_files_batch, create_file_batch（PROTECTED_PATTERNS 阻擋寫入 *.test.* / tests/ / _mcp_audit.log）
-│   ├── php.js           ← run_php_script, run_php_test, send_http_request（含 cookie_jar session）, tail_log, send_http_requests_batch, run_php_script_batch
+│   ├── php.js           ← run_php_script, run_php_test, send_http_request（含 cookie_jar session）, tail_log, send_http_requests_batch, run_php_script_batch（PHP 執行 + tail_log 支援 container 參數走 Docker）
 │   ├── database.js      ← set_database, load_db_connection, get_current_db, get_db_schema, execute_sql（危險語句攔截 + confirm 參數 + audit log）, get_db_schema_batch, execute_sql_batch（同上）
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   ├── bookmarks.js     ← Chrome 書籤管理（12 個工具）
@@ -31,7 +31,7 @@ MCP_NodeServer/
 │   ├── pptx.js          ← read_pptx_file, read_pptx_files_batch (.pptx → Markdown/Text + 圖片)
 │   ├── pdf.js           ← read_pdf_file, read_pdf_files_batch (.pdf → Markdown/Text)
 │   ├── images.js        ← read_image, read_images_batch（圖片讀取 + 縮放，支援 PNG/JPG/WebP/GIF/SVG）
-│   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops
+│   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops（支援 container 參數走 Docker）
 │   ├── dom_compare.js   ← dom_compare（批次比對兩個 URL 的 CSS/HTML/JS 差異，需 Playwright）
 │   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage（自帶 headless 瀏覽器，需 Playwright）
 │   ├── image_diff.js    ← image_diff（設計稿 vs 截圖像素級比對，產生 diff 圖）

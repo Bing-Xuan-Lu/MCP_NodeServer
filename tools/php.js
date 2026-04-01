@@ -2,9 +2,44 @@ import fs from "fs/promises";
 import path from "path";
 import { exec } from "child_process";
 import util from "util";
-import { resolveSecurePath } from "../config.js";
+import { resolveSecurePath, CONFIG } from "../config.js";
 
 const execPromise = util.promisify(exec);
+
+// Docker 容器內的掛載路徑（D:\Project → /var/www/html）
+const DOCKER_MOUNT = "/var/www/html";
+
+/** 將本機 Windows 路徑轉為 Docker 容器內路徑 */
+function toContainerPath(windowsPath) {
+  const basePath = CONFIG.basePath.replace(/[\\/]+$/, "");
+  const normalized = windowsPath.replace(/\\/g, "/");
+  const baseNormalized = basePath.replace(/\\/g, "/");
+  if (normalized.toLowerCase().startsWith(baseNormalized.toLowerCase())) {
+    const relative = normalized.slice(baseNormalized.length);
+    return `${DOCKER_MOUNT}${relative}`;
+  }
+  // 不在 basePath 內，原樣傳遞（可能是容器內絕對路徑）
+  return normalized;
+}
+
+/** 檢查 Docker 容器是否在線 */
+async function checkContainer(container) {
+  try {
+    const { stdout } = await execPromise(
+      `docker inspect --format="{{.State.Running}}" ${container}`
+    );
+    if (!stdout.trim().includes("true")) throw new Error("not running");
+    return null; // OK
+  } catch {
+    return {
+      isError: true,
+      content: [{
+        type: "text",
+        text: `容器 ${container} 不存在或未啟動。\n建議動作：\n  • docker start ${container}\n  • 或確認容器名稱是否正確`,
+      }],
+    };
+  }
+}
 
 // 記憶體 Cookie Jar（對話期間有效，MCP Server 重啟清空）
 const cookieJars = new Map(); // jarName -> { cookieName: cookieValue }
@@ -38,12 +73,13 @@ function buildCookieHeader(jarName) {
 export const definitions = [
   {
     name: "run_php_script",
-    description: "在伺服器上執行 PHP 腳本 (CLI 模式)，並回傳輸出結果 (Stdout/Stderr)",
+    description: "在伺服器上執行 PHP 腳本 (CLI 模式)，並回傳輸出結果 (Stdout/Stderr)。可指定 Docker 容器執行。",
     inputSchema: {
       type: "object",
       properties: {
         path: { type: "string", description: "PHP 檔案路徑 (例如: test_case.php)" },
         args: { type: "string", description: "選填：傳遞給腳本的參數 (例如: id=1)" },
+        container: { type: "string", description: "選填：Docker 容器名稱（如 dev-php84），有值時在容器內執行" },
       },
       required: ["path"],
     },
@@ -80,19 +116,20 @@ export const definitions = [
   },
   {
     name: "tail_log",
-    description: "讀取檔案最後 N 行 (適用於查看 PHP Error Log)",
+    description: "讀取檔案最後 N 行 (適用於查看 PHP Error Log)。可指定 Docker 容器內的 log 路徑。",
     inputSchema: {
       type: "object",
       properties: {
-        path: { type: "string", description: "Log 檔案路徑" },
+        path: { type: "string", description: "Log 檔案路徑（容器模式下為容器內絕對路徑，如 /var/log/apache2/error.log）" },
         lines: { type: "number", description: "要讀取的行數 (預設 50)", default: 50 },
+        container: { type: "string", description: "選填：Docker 容器名稱（如 dev-php84），有值時讀取容器內的 log" },
       },
       required: ["path"],
     },
   },
   {
     name: "run_php_test",
-    description: "自動建立測試環境 (Session/Config) 並執行 PHP 腳本",
+    description: "自動建立測試環境 (Session/Config) 並執行 PHP 腳本。可指定 Docker 容器執行。",
     inputSchema: {
       type: "object",
       properties: {
@@ -100,16 +137,18 @@ export const definitions = [
         configPath: { type: "string", description: "設定檔路徑 (例如 config.php)" },
         sessionData: { type: "string", description: "模擬 $_SESSION 的 JSON 資料" },
         postData: { type: "string", description: "模擬 $_POST 的 JSON 資料" },
+        container: { type: "string", description: "選填：Docker 容器名稱（如 dev-php84），有值時在容器內執行" },
       },
       required: ["targetPath"],
     },
   },
   {
     name: "run_php_script_batch",
-    description: "批次執行多個 PHP 腳本（循序執行，減少 tool call 來回）",
+    description: "批次執行多個 PHP 腳本（循序執行，減少 tool call 來回）。可指定 Docker 容器執行。",
     inputSchema: {
       type: "object",
       properties: {
+        container: { type: "string", description: "選填：Docker 容器名稱（如 dev-php84），有值時所有腳本在容器內執行" },
         scripts: {
           type: "array",
           items: {
@@ -164,13 +203,23 @@ export async function handle(name, args) {
     if (!fullPath.endsWith(".php")) throw new Error("安全限制：只能執行 .php 檔案");
 
     try {
-      const cmd = `php "${fullPath}" ${args.args || ""}`;
-      const { stdout, stderr } = await execPromise(cmd);
+      let cmd;
+      let label = "";
+      if (args.container) {
+        const err = await checkContainer(args.container);
+        if (err) return err;
+        const containerPath = toContainerPath(fullPath);
+        cmd = `docker exec ${args.container} php "${containerPath}" ${args.args || ""}`;
+        label = ` [${args.container}]`;
+      } else {
+        cmd = `php "${fullPath}" ${args.args || ""}`;
+      }
+      const { stdout, stderr } = await execPromise(cmd, { timeout: 30000 });
       return {
         content: [
           {
             type: "text",
-            text: `📝 PHP 執行結果：\n${stdout}\n${stderr ? `⚠️ 錯誤輸出：\n${stderr}` : ""}`,
+            text: `📝 PHP 執行結果${label}：\n${stdout}\n${stderr ? `⚠️ 錯誤輸出：\n${stderr}` : ""}`,
           },
         ],
       };
@@ -259,16 +308,39 @@ export async function handle(name, args) {
   }
 
   if (name === "tail_log") {
+    const lineCount = args.lines || 50;
+
+    if (args.container) {
+      // Docker 模式：直接用容器內路徑，不走 resolveSecurePath
+      const err = await checkContainer(args.container);
+      if (err) return err;
+      try {
+        const cmd = `docker exec ${args.container} tail -n ${lineCount} "${args.path}"`;
+        const { stdout, stderr } = await execPromise(cmd, { timeout: 10000 });
+        return { content: [{ type: "text", text: `📋 [${args.container}] ${args.path} (last ${lineCount} lines):\n${stdout}${stderr ? `\n⚠️ ${stderr}` : ""}` }] };
+      } catch (error) {
+        return { isError: true, content: [{ type: "text", text: `讀取失敗 [${args.container}]: ${error.message}` }] };
+      }
+    }
+
+    // 本機模式
     const fullPath = resolveSecurePath(args.path);
     const content = await fs.readFile(fullPath, "utf-8");
     const lines = content.split(/\r?\n/);
-    const lastLines = lines.slice(-(args.lines || 50)).join("\n");
+    const lastLines = lines.slice(-lineCount).join("\n");
     return { content: [{ type: "text", text: lastLines }] };
   }
 
   if (name === "run_php_test") {
     const targetPath = resolveSecurePath(args.targetPath);
     const configPath = args.configPath ? resolveSecurePath(args.configPath) : null;
+    const useDocker = !!args.container;
+
+    // Docker 模式下 wrapper 內的路徑要用容器路徑
+    const targetInCode = useDocker ? toContainerPath(targetPath) : targetPath.replace(/\\/g, "/");
+    const configInCode = configPath
+      ? (useDocker ? toContainerPath(configPath) : configPath.replace(/\\/g, "/"))
+      : null;
 
     let wrapperCode = "<?php\n";
     if (args.sessionData) {
@@ -278,21 +350,31 @@ export async function handle(name, args) {
     if (args.postData) {
       wrapperCode += `$_POST = json_decode('${args.postData.replace(/'/g, "\\'")}', true);\n`;
     }
-    if (configPath) {
-      wrapperCode += `require_once '${configPath.replace(/\\/g, "/")}';\n`;
+    if (configInCode) {
+      wrapperCode += `require_once '${configInCode}';\n`;
     }
-    wrapperCode += `require '${targetPath.replace(/\\/g, "/")}';\n`;
+    wrapperCode += `require '${targetInCode}';\n`;
 
     const tempFile = path.join(path.dirname(targetPath), `_mcp_runner_${Date.now()}.php`);
     await fs.writeFile(tempFile, wrapperCode);
 
     try {
-      const { stdout, stderr } = await execPromise(`php "${tempFile}"`);
+      let cmd;
+      let label = "";
+      if (useDocker) {
+        const err = await checkContainer(args.container);
+        if (err) return err;
+        cmd = `docker exec ${args.container} php "${toContainerPath(tempFile)}"`;
+        label = ` [${args.container}]`;
+      } else {
+        cmd = `php "${tempFile}"`;
+      }
+      const { stdout, stderr } = await execPromise(cmd, { timeout: 30000 });
       return {
         content: [
           {
             type: "text",
-            text: `📝 測試結果：\n${stdout}\n${stderr ? `⚠️ 錯誤：\n${stderr}` : ""}`,
+            text: `📝 測試結果${label}：\n${stdout}\n${stderr ? `⚠️ 錯誤：\n${stderr}` : ""}`,
           },
         ],
       };
@@ -305,6 +387,12 @@ export async function handle(name, args) {
     if (!args.scripts || args.scripts.length === 0) {
       return { isError: true, content: [{ type: "text", text: "scripts 陣列不可為空。" }] };
     }
+    const useDocker = !!args.container;
+    if (useDocker) {
+      const err = await checkContainer(args.container);
+      if (err) return err;
+    }
+    const envLabel = useDocker ? ` [${args.container}]` : "";
     const results = [];
     let okCount = 0;
     for (let i = 0; i < args.scripts.length; i++) {
@@ -316,8 +404,13 @@ export async function handle(name, args) {
           results.push(`[${i + 1}] ${label} ❌ 安全限制：只能執行 .php 檔案`);
           continue;
         }
-        const cmd = `php "${fullPath}" ${s.args || ""}`;
-        const { stdout, stderr } = await execPromise(cmd);
+        let cmd;
+        if (useDocker) {
+          cmd = `docker exec ${args.container} php "${toContainerPath(fullPath)}" ${s.args || ""}`;
+        } else {
+          cmd = `php "${fullPath}" ${s.args || ""}`;
+        }
+        const { stdout, stderr } = await execPromise(cmd, { timeout: 30000 });
         const output = stdout + (stderr ? `\n⚠️ stderr: ${stderr}` : "");
         results.push(`[${i + 1}] ${label} ✅ ${s.path}\n${output.substring(0, 1500)}${output.length > 1500 ? "\n... (截斷)" : ""}`);
         okCount++;
@@ -328,7 +421,7 @@ export async function handle(name, args) {
     return {
       content: [{
         type: "text",
-        text: `批次 PHP 執行（${args.scripts.length} 個，✅${okCount} ❌${args.scripts.length - okCount}）：\n\n${results.join("\n\n---\n\n")}`,
+        text: `批次 PHP 執行${envLabel}（${args.scripts.length} 個，✅${okCount} ❌${args.scripts.length - okCount}）：\n\n${results.join("\n\n---\n\n")}`,
       }],
     };
   }
