@@ -29,8 +29,12 @@ for /r "Skills\commands" %%F in (*.md) do (
   )
 )
 
-:: ---- Step 2: Remove stale files from Claude dir ----
+:: ---- Step 2: Remove stale files (skip if VALID_LIST is empty/missing) ----
 set stale=0
+if not exist "%VALID_LIST%" goto skip_stale
+for /f %%A in ('type "%VALID_LIST%" ^| find /c /v ""') do set VALID_COUNT=%%A
+if "%VALID_COUNT%"=="0" goto skip_stale
+
 for %%F in ("%CLAUDE_DIR%\*.md") do (
   findstr /I /X /C:"%%~nxF" "%VALID_LIST%" > nul 2>&1
   if errorlevel 1 (
@@ -47,6 +51,7 @@ for %%F in ("%GEMINI_DIR%\*.md") do (
     del "%%F"
   )
 )
+:skip_stale
 
 :: ---- Step 4: Deploy valid skills ----
 set count=0
