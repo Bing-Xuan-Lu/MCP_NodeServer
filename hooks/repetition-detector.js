@@ -13,11 +13,17 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execSync } from 'child_process';
 
 // ── 設定 ──────────────────────────────────────────
 const LOG_DIR = path.join(os.tmpdir(), 'claude_tool_logs');
 const MAX_LOG_AGE_MS = 2 * 60 * 60 * 1000; // 2 小時後自動清除
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.tif', '.avif', '.svg']);
+
+// 環境變數配置
+const DEBUG_MODE = process.env.CLAUDE_HOOK_DEBUG === '1';
+const SLACK_WEBHOOK = process.env.CLAUDE_SLACK_WEBHOOK || '';
+const NOTIFY_ON_BLOCK = process.env.CLAUDE_NOTIFY_ON_BLOCK === '1';
 
 // 內網 IP 範圍（這些 host 的 sftp/ssh 操作跳過重複偵測）
 const INTERNAL_IP_PATTERNS = [
@@ -40,6 +46,176 @@ function isInternalHost(host) {
   if (!host) return false;
   return INTERNAL_IP_PATTERNS.some(re => re.test(host));
 }
+
+/** 檢查 git 未 commit 的檔案數 */
+function checkUncommittedFiles() {
+  try {
+    const status = execSync('git status --porcelain 2>/dev/null', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+      timeout: 2000,
+    });
+    const files = status.trim().split('\n').filter(l => l.length > 0);
+    return files.length;
+  } catch {
+    return 0;
+  }
+}
+
+/** 粗略估算 input token 數 (字數 / 4) */
+function estimateInputTokens(args) {
+  if (!args) return 0;
+  const str = JSON.stringify(args);
+  return Math.ceil(str.length / 4);
+}
+
+/** 估算 tool call 的總 token 消耗 */
+function estimateToolTokens(tool, args) {
+  const shortTool = shortName(tool);
+  const inputTokens = estimateInputTokens(args);
+
+  // 根據 tool 類型估算 output token
+  const outputEstimates = {
+    'Bash': 500,           // Bash 輸出通常較大
+    'Read': 1000,          // Read 檔案內容
+    'Grep': 400,           // Grep 結果
+    'send_http_request': 600,
+    'execute_sql': 500,
+    'rag_query': 800,
+    'browser_interact': 1200,  // 包含截圖等
+  };
+
+  const estimated = outputEstimates[shortTool] || 300;
+  return inputTokens + estimated;
+}
+
+/** 識別低效操作並計算可節省的 token */
+function identifyTokenWaste(entry, history) {
+  const tool = shortName(entry.tool);
+  const args = entry.args || {};
+
+  // 同檔案連讀多次
+  if (tool === 'Read') {
+    const filePath = args.file_path || '';
+    const sameFileReads = history.filter(h =>
+      shortName(h.tool) === 'Read' &&
+      (h.args?.file_path || '') === filePath
+    ).length + 1;
+
+    if (sameFileReads >= 2) {
+      const wastedTokens = estimateToolTokens(entry.tool, args) * (sameFileReads - 1);
+      return {
+        issue: `重複讀同檔案 ${sameFileReads} 次`,
+        wasted: wastedTokens,
+        suggestion: '用 Read 的 offset/limit 一次讀完，或改用 read_files_batch',
+      };
+    }
+  }
+
+  // Bash 逐行讀檔
+  if (tool === 'Bash') {
+    const cmd = args.command || '';
+    if (/^\s*(cat|head|tail|grep|wc)\s+/i.test(cmd)) {
+      const wastedTokens = estimateToolTokens(entry.tool, args) * 2;
+      return {
+        issue: 'Bash 做了內建工具的事',
+        wasted: wastedTokens,
+        suggestion: '用 Read / Grep 工具替代（省 token）',
+      };
+    }
+  }
+
+  return null;
+}
+
+/** Slack 通知（異步，不阻擋 hook） */
+function notifySlack(message, isBlocked = false) {
+  if (!SLACK_WEBHOOK || (!isBlocked && !NOTIFY_ON_BLOCK)) return;
+
+  const payload = {
+    text: isBlocked ? '🛑 Claude Code Block' : '⚠️ Claude Code Warning',
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: message,
+        },
+      },
+    ],
+  };
+
+  // 非阻擋執行，防止 hook 超時
+  setTimeout(() => {
+    try {
+      execSync(`curl -X POST -H 'Content-type: application/json' --data '${JSON.stringify(payload).replace(/'/g, "'\\\\''")}' ${SLACK_WEBHOOK}`, {
+        stdio: 'ignore',
+        timeout: 5000,
+      });
+    } catch {
+      // 忽略 Slack 通知失敗
+    }
+  }, 0);
+}
+
+/** Debug 日誌輸出 */
+function debugLog(message) {
+  if (DEBUG_MODE) {
+    process.stderr.write(`[hook-debug] ${message}\n`);
+  }
+}
+
+/** 記憶注入內容智能截斷（只取前 500 字） */
+function smartTruncateMemory(content, maxChars = 500) {
+  if (content.length <= maxChars) return content;
+  const truncated = content.substring(0, maxChars);
+  const lastNewline = truncated.lastIndexOf('\n');
+  return lastNewline > 0 ? truncated.substring(0, lastNewline) : truncated;
+}
+
+/** 生成自動修復建議（Bash sed → Edit 工具） */
+function generateAutoFixSuggestion(entry) {
+  const tool = shortName(entry.tool);
+  if (tool !== 'Bash') return null;
+
+  const cmd = entry.args?.command || '';
+
+  // 偵測常見 sed 模式：sed 's/old/new/' file 或 sed -i 's/old/new/' file
+  const sedMatch = cmd.match(/sed\s+(?:-i\s+)?['"]s\/([^/]+)\/([^/]*)\/['"].*(['"])(\S+)(['"])?/);
+  if (sedMatch) {
+    const oldStr = sedMatch[1];
+    const newStr = sedMatch[2];
+    const filePath = sedMatch[4];
+
+    return {
+      issue: 'Bash sed 修改檔案',
+      suggestion: `改用 Edit 工具（更安全、可 review）：\n` +
+                  `  Edit(file_path="${filePath}", old_string="${oldStr}", new_string="${newStr}")`,
+    };
+  }
+
+  // 偵測 awk 模式
+  if (cmd.match(/awk\s+/i)) {
+    return {
+      issue: 'Bash awk 文字處理',
+      suggestion: '改用 Read 工具讀檔，用 JavaScript 在 browser_evaluate 或 Run Python 處理（更可控）',
+    };
+  }
+
+  return null;
+}
+
+/** 新增自動修復建議的 Pattern */
+const AUTO_FIX_PATTERN = {
+  id: 'auto_fix_suggestion',
+  detect: (entry, history) => {
+    const suggestion = generateAutoFixSuggestion(entry);
+    if (!suggestion) return null;
+
+    return `[Auto-Fix Suggestion] ✨ 偵測到可自動化的操作：${suggestion.issue}\n` +
+           `  💡 建議：${suggestion.suggestion}\n`;
+  },
+};
 
 /** 從 session log 讀取最近一次 sftp_connect 的 host */
 function getSessionHost(history) {
@@ -100,7 +276,7 @@ function detectCodemaps() {
   return null;
 }
 
-/** 組裝記憶注入文字（Scatter Search 觸發時呼叫） */
+/** 組裝記憶注入文字（Scatter Search 觸發時呼叫），智能截斷以節省 token */
 function buildMemoryInjection(grepCount) {
   const memDir = findProjectMemoryDir();
   const codemaps = detectCodemaps();
@@ -108,22 +284,25 @@ function buildMemoryInjection(grepCount) {
 
   lines.push(`\n[Memory Injection] 🧠 偵測到 Grep 散搜模式（已搜 ${grepCount} 個不同路徑），強制載入搜尋策略記憶：\n`);
 
-  // 1. 注入搜尋策略記憶
+  // 1. 注入搜尋策略記憶（截斷）
   const searchStrategy = loadMemoryFile(memDir, 'feedback/general/feedback_search_strategy.md');
   if (searchStrategy) {
-    // 只取 frontmatter 之後的內容
     const body = searchStrategy.replace(/^---[\s\S]*?---\s*/, '');
+    const truncated = smartTruncateMemory(body, 400);
     lines.push('── feedback_search_strategy ──');
-    lines.push(body);
+    lines.push(truncated);
+    if (truncated.length < body.length) lines.push('（已截斷，詳細見記憶檔）');
     lines.push('');
   }
 
-  // 2. 注入重複行為記憶
+  // 2. 注入重複行為記憶（截斷）
   const repetition = loadMemoryFile(memDir, 'feedback/general/feedback_repetition_awareness.md');
   if (repetition) {
     const body = repetition.replace(/^---[\s\S]*?---\s*/, '');
+    const truncated = smartTruncateMemory(body, 300);
     lines.push('── feedback_repetition_awareness ──');
-    lines.push(body);
+    lines.push(truncated);
+    if (truncated.length < body.length) lines.push('（已截斷，詳細見記憶檔）');
     lines.push('');
   }
 
@@ -189,7 +368,7 @@ const BASH_PATTERNS = [
     signature: 'bash:docker-php',
     hint: 'run_php_script / run_php_script_batch（MCP 工具）',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     regex: /docker\s+exec\s+\S+\s+python/i,
@@ -203,7 +382,7 @@ const BASH_PATTERNS = [
     signature: 'bash:direct-mysql',
     hint: 'set_database + execute_sql / execute_sql_batch（MCP 工具）',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     regex: /\b(cat|head|tail)\s+/i,
@@ -228,6 +407,27 @@ const BASH_PATTERNS = [
     signature: 'bash:sed-awk',
     hint: 'Edit 工具（內建，精確替換 + 可 review，不需 Bash）',
     warnOnFirst: true,
+  },
+  {
+    regex: /git\s+(reset|checkout|clean)\s+--hard/i,
+    signature: 'bash:git-destructive',
+    hint: '禁用危險操作：可能丟失未 commit 的改動。請先用 git diff / git status 確認狀態，或改用 git restore --staged（安全取消暫存）。',
+    warnOnFirst: true,
+    block: true,
+  },
+  {
+    regex: /git\s+push\s+--force/i,
+    signature: 'bash:git-force-push',
+    hint: '禁用 force push：可能覆蓋遠端歷史。除非確定遠端沒人用此分支，應改用 git push --force-with-lease（更安全）。',
+    warnOnFirst: true,
+    block: true,
+  },
+  {
+    regex: /rm\s+-rf\s+/i,
+    signature: 'bash:rm-recursive',
+    hint: '禁用 rm -rf：易誤刪。改用 git clean -fd（只刪 untracked），或手動驗證後再刪。',
+    warnOnFirst: true,
+    block: true,
   },
   {
     regex: /\bcurl\s+/i,
@@ -539,8 +739,8 @@ const PATTERNS = [
       const batchHint = lookupBatchHint(entry);
       const displayName = shortName(entry.tool);
 
-      // 7 次以上 → 阻擋
-      if (count >= 7) {
+      // 10 次以上 → 阻擋
+      if (count >= 10) {
         const lines = [`[Repetition Detector] ❌ BLOCKED：${displayName} 同類操作已達 ${count} 次，強制暫停。`];
         if (batchHint) {
           lines.push(`  → 必須改用 batch 工具：${batchHint}`);
@@ -586,13 +786,50 @@ const PATTERNS = [
       const count = history.filter(h =>
         JSON.stringify({ tool: h.tool, args: h.args }) === entryStr
       ).length + 1;
-      if (count < 3) return null;
+      if (count < 5) return null;
       return {
         block: true,
         message: `[Repetition Detector] ❌ BLOCKED：完全相同的工具呼叫已達 ${count} 次。停下來重新評估策略。\n`,
       };
     },
   },
+  {
+    // Layer 4: Post-Tool-Use 提前檢測 — 在執行 Edit/Write 後累積超過 15+ 未 commit 檔案
+    id: 'uncommitted_accumulation',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'Edit' && tool !== 'Write') return null;
+
+      // 只在最近有 Edit/Write 且累積超過 15 個檔案時檢查
+      const recentEdits = history.slice(-20).filter(h => {
+        const t = shortName(h.tool);
+        return t === 'Edit' || t === 'Write';
+      });
+      if (recentEdits.length < 5) return null;
+
+      const uncommittedCount = checkUncommittedFiles();
+      if (uncommittedCount >= 15) {
+        return `[Post-Tool-Use] ℹ️ 已修改 ${uncommittedCount} 個檔案未 commit。若預期這次改動是原子性的，建議稍後執行 git commit。\n`;
+      }
+      return null;
+    },
+  },
+  {
+    // Layer 5: 成本追蹤 — 識別低效操作並估算 token 浪費
+    id: 'token_waste_detection',
+    detect: (entry, history) => {
+      const waste = identifyTokenWaste(entry, history);
+      if (!waste) return null;
+
+      const lines = [
+        `[Token Accounting] 💰 偵測到低效操作：${waste.issue}`,
+        `  估計浪費 ~${waste.wasted} tokens`,
+        `  💡 建議：${waste.suggestion}`,
+      ];
+      return lines.join('\n') + '\n';
+    },
+  },
+  AUTO_FIX_PATTERN,
 ];
 
 // ── Log 管理 ──────────────────────────────────────
@@ -640,6 +877,8 @@ function cleanOldLogs() {
 }
 
 // ── 主程式 ────────────────────────────────────────
+const hookStartTime = Date.now();
+
 let input = '';
 process.stdin.on('data', chunk => { input += chunk; });
 process.stdin.on('end', () => {
@@ -687,13 +926,18 @@ process.stdin.on('end', () => {
     };
 
     // 檢查所有模式
+    debugLog(`PreToolUse: tool=${shortToolName}, args keys=${Object.keys(toolInput || {}).join(',')}`);
     const warnings = [];
     let shouldBlock = false;
+    let blockMessage = '';
+
     for (const pat of PATTERNS) {
       const result = pat.detect(currentEntry, history);
       if (result) {
+        debugLog(`Pattern matched: ${pat.id}`);
         if (typeof result === 'object' && result.block) {
           shouldBlock = true;
+          blockMessage = result.message;
           warnings.push(result.message);
         } else {
           warnings.push(result);
@@ -705,8 +949,9 @@ process.stdin.on('end', () => {
       process.stdout.write(warnings.join('\n'));
     }
 
-    // 被阻擋時不記錄（因為工具呼叫不會實際執行），直接 exit 2
+    // 被阻擋時發送 Slack 通知，然後 exit 2
     if (shouldBlock) {
+      notifySlack(blockMessage, true);
       process.exit(2);
     }
 
@@ -730,10 +975,19 @@ process.stdin.on('end', () => {
 
     if (Math.random() < 0.1) cleanOldLogs();
 
+    // Hook 效能監控
+    const hookMs = Date.now() - hookStartTime;
+    if (hookMs > 100) {
+      process.stderr.write(`[repetition-detector] slow: ${shortToolName} took ${hookMs}ms\n`);
+    } else {
+      debugLog(`Hook completed in ${hookMs}ms`);
+    }
+
     process.stderr.write(`[repetition-detector] pass: ${shortToolName}\n`);
     process.exit(0);
   } catch (e) {
-    process.stderr.write(`[repetition-detector] pass (error ignored)\n`);
+    const hookMs = Date.now() - hookStartTime;
+    process.stderr.write(`[repetition-detector] pass (error ignored, took ${hookMs}ms)\n`);
     process.exit(0);
   }
 });
