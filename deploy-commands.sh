@@ -21,26 +21,30 @@ find Skills/commands -type f -name "*.md" | while read -r file; do
   fi
 done
 
-# ---- Step 2: Remove stale files from Claude dir ----
+# ---- Step 2: Remove stale files (skip if VALID_LIST is empty/missing) ----
 stale=0
-for f in "$CLAUDE_DIR"/*.md; do
-  [ -f "$f" ] || continue
-  filename=$(basename "$f")
-  if ! grep -qxF "$filename" "$VALID_LIST" 2>/dev/null; then
-    rm "$f"
-    echo "  removed stale: $filename"
-    ((stale++))
-  fi
-done
+if [ -s "$VALID_LIST" ]; then
+  for f in "$CLAUDE_DIR"/*.md; do
+    [ -f "$f" ] || continue
+    filename=$(basename "$f")
+    if ! grep -qxF "$filename" "$VALID_LIST" 2>/dev/null; then
+      rm "$f"
+      echo "  removed stale: $filename"
+      ((stale++))
+    fi
+  done
 
-# ---- Step 3: Remove stale files from Gemini dir ----
-for f in "$GEMINI_DIR"/*.md; do
-  [ -f "$f" ] || continue
-  filename=$(basename "$f")
-  if ! grep -qxF "$filename" "$VALID_LIST" 2>/dev/null; then
-    rm "$f"
-  fi
-done
+  # ---- Step 3: Remove stale files from Gemini dir ----
+  for f in "$GEMINI_DIR"/*.md; do
+    [ -f "$f" ] || continue
+    filename=$(basename "$f")
+    if ! grep -qxF "$filename" "$VALID_LIST" 2>/dev/null; then
+      rm "$f"
+    fi
+  done
+else
+  echo "  WARNING: valid list is empty, skipping stale cleanup"
+fi
 
 # ---- Step 4: Deploy valid skills ----
 count=0
