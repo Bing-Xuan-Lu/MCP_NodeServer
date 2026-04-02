@@ -32,6 +32,7 @@ const HOOK_FILES = [
   'write-guard.js',
   'llm-judge.js',
   'user-prompt-guard.js',
+  'skill-router.js',
 ];
 
 let copied = 0;
@@ -47,12 +48,17 @@ for (const f of HOOK_FILES) {
   }
 }
 
-// ── 3. 複製 risk-tiers.json ──────────────────────────────
-const riskSrc = path.join(__dirname, 'risk-tiers.json');
-const riskDst = path.join(CLAUDE, 'risk-tiers.json');
-if (fs.existsSync(riskSrc)) {
-  fs.copyFileSync(riskSrc, riskDst);
-  console.log(`  [config] OK: risk-tiers.json`);
+// ── 3. 複製 config JSON ──────────────────────────────────
+const CONFIG_FILES = [
+  { src: 'risk-tiers.json',    dst: path.join(CLAUDE, 'risk-tiers.json') },
+  { src: path.join('hooks', 'skill-keywords.json'), dst: path.join(HOOKS_DST, 'skill-keywords.json') },
+];
+for (const { src, dst } of CONFIG_FILES) {
+  const srcPath = path.join(__dirname, src);
+  if (fs.existsSync(srcPath)) {
+    fs.copyFileSync(srcPath, dst);
+    console.log(`  [config] OK: ${path.basename(src)}`);
+  }
 }
 
 // ── 4. 登記 hooks 到 settings.json ──────────────────────
@@ -77,18 +83,33 @@ const HOOK_REGISTRY = {
     { matcher: 'Write|Edit', hooks: [{ type: 'command', command: `node "${H}/llm-judge.js"` }] }
   ],
   UserPromptSubmit: [
-    { hooks: [{ type: 'command', command: `node "${H}/user-prompt-guard.js"` }] }
+    { hooks: [{ type: 'command', command: `node "${H}/user-prompt-guard.js"` }] },
+    { hooks: [{ type: 'command', command: `node "${H}/skill-router.js"`, timeout: 5 }] },
   ],
 };
 
 let registered = 0;
-for (const [event, config] of Object.entries(HOOK_REGISTRY)) {
+for (const [event, entries] of Object.entries(HOOK_REGISTRY)) {
   if (!settings.hooks[event]) {
-    settings.hooks[event] = config;
-    registered++;
-    console.log(`  [settings] Registered: ${event}`);
+    settings.hooks[event] = entries;
+    registered += entries.length;
+    console.log(`  [settings] Registered: ${event} (${entries.length} hooks)`);
   } else {
-    console.log(`  [settings] Already exists (skip): ${event}`);
+    // 逐條比對 command，只補缺少的
+    const existing = settings.hooks[event];
+    const existingCmds = new Set(
+      existing.flatMap(e => (e.hooks || []).map(h => h.command))
+    );
+    for (const entry of entries) {
+      const cmd = entry.hooks?.[0]?.command;
+      if (cmd && !existingCmds.has(cmd)) {
+        existing.push(entry);
+        registered++;
+        console.log(`  [settings] Added to ${event}: ${path.basename(cmd)}`);
+      } else {
+        console.log(`  [settings] Already exists (skip): ${path.basename(cmd || event)}`);
+      }
+    }
   }
 }
 
