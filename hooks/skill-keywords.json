@@ -1,0 +1,124 @@
+{
+  "version": "1.0",
+  "config": {
+    "minScore": 3,
+    "maxSkillsToShow": 3
+  },
+  "scoring": {
+    "keyword": 2,
+    "pattern": 3,
+    "intent": 4
+  },
+  "skills": {
+    "tdd": {
+      "keywords": ["tdd", "測試驅動", "red green", "red-green", "先寫測試", "test first"],
+      "patterns": ["先寫.*測試", "測試.*再.*實作", "unit test.*before"],
+      "intents": ["我想用 tdd", "tdd 開發", "測試驅動開發"]
+    },
+    "bug_context": {
+      "keywords": ["除錯", "debug", "bug", "跑版", "樣式跑掉", "css 壞了", "畫面不對", "報錯"],
+      "patterns": ["怎麼.*壞了", "為什麼.*不對", "修.*bug", "fix.*bug", "版面.*問題"],
+      "intents": ["幫我除錯", "debug 一下", "怎麼修這個 bug"]
+    },
+    "debug_session": {
+      "keywords": ["除錯工作階段", "debug session", "debug_session", "繼續上次的 bug", "上次的除錯", "版本化除錯"],
+      "patterns": ["繼續.*debug", "接著.*除錯", "debug.*v\\d+"],
+      "intents": ["繼續除錯", "接著上次"]
+    },
+    "checkpoint": {
+      "keywords": ["安全點", "checkpoint", "存檔", "快照", "回溯", "git stash"],
+      "patterns": ["建立.*存檔", "儲存.*進度", "怕.*回不去"],
+      "intents": ["建立安全點", "存一個 checkpoint"]
+    },
+    "sadd": {
+      "keywords": ["sadd", "規格書驅動", "逐任務", "demo-able", "按規格開發"],
+      "patterns": ["依.*規格.*開發", "規格.*派遣", "規格書.*開始開發"],
+      "intents": ["按規格開發", "sadd 開始"]
+    },
+    "sprint_plan": {
+      "keywords": ["sprint", "開發計畫", "排期", "tier", "依賴層", "優先序"],
+      "patterns": ["規劃.*開發.*順序", "哪個.*先做", "模組.*依賴"],
+      "intents": ["幫我排 sprint", "規劃開發計畫"]
+    },
+    "verify": {
+      "keywords": ["verify", "驗證", "提交前", "pre-commit", "合併前", "pre-pr", "品質確認"],
+      "patterns": ["提交.*前.*確認", "push.*前", "merge.*前.*check"],
+      "intents": ["提交前跑驗證", "合併前確認", "跑 verify"]
+    },
+    "retro": {
+      "keywords": ["retro", "回顧", "收割", "總結", "對話結束", "session 結束"],
+      "patterns": ["這次.*學到", "今天.*整理", "把.*存到.*記憶"],
+      "intents": ["做個回顧", "session 結束了", "跑 retro"]
+    },
+    "git_commit": {
+      "keywords": ["commit", "提交", "git commit", "寫 commit", "commit message"],
+      "patterns": ["幫.*寫.*commit", "產生.*commit.*訊息", "commit.*中文"],
+      "intents": ["幫我 commit", "寫 commit message"]
+    },
+    "sftp_deploy": {
+      "keywords": ["部署", "deploy", "上傳", "sftp", "推到", "測試機"],
+      "patterns": ["上傳.*遠端", "部署.*測試機", "推.*到.*server"],
+      "intents": ["部署到測試機", "把程式推上去"]
+    },
+    "full_deploy": {
+      "keywords": ["全部署", "full deploy", "程式跟資料庫", "整合部署", "四階段"],
+      "patterns": ["程式.*資料庫.*一起", "完整.*部署", "code.*db.*一起推"],
+      "intents": ["全部署", "code 跟 db 一起推"]
+    },
+    "remote_diff": {
+      "keywords": ["remote diff", "遠端有沒有改", "部署前檢查", "遠端差異"],
+      "patterns": ["遠端.*被改", "有人.*改了.*測試機", "同事.*直接改"],
+      "intents": ["看遠端有沒有被改過", "部署前先 diff"]
+    },
+    "db_migration": {
+      "keywords": ["migration", "schema 變更", "alter table", "資料庫遷移", "db 遷移"],
+      "patterns": ["加.*欄位", "改.*表格", "schema.*差異"],
+      "intents": ["跑 db migration", "產生 migration 腳本"]
+    },
+    "db_schema_designer": {
+      "keywords": ["設計資料表", "schema 設計", "db 設計", "資料表規劃", "create table"],
+      "patterns": ["設計.*資料表", "規劃.*db", "需要.*哪些.*欄位"],
+      "intents": ["幫我設計資料表", "規劃 db schema"]
+    },
+    "php_crud_generator": {
+      "keywords": ["crud", "產生模組", "php 後台", "crud generator", "新增模組"],
+      "patterns": ["產生.*crud", "建立.*後台.*模組", "新增.*php.*功能"],
+      "intents": ["產生 crud 模組", "建新功能"]
+    },
+    "project_qc": {
+      "keywords": ["全站 qc", "網站校稿", "品保", "qc", "驗收", "系統整合測試"],
+      "patterns": ["整站.*測試", "全站.*確認", "做.*qc"],
+      "intents": ["做全站 qc", "幫我跑 qc"]
+    },
+    "playwright_ui_test": {
+      "keywords": ["playwright", "ui 測試", "自動化測試", "前台測試", "截圖測試"],
+      "patterns": ["用.*playwright.*測試", "自動.*點擊.*測試", "ui.*automation"],
+      "intents": ["跑 playwright 測試", "ui 自動化"]
+    },
+    "sftp_ops": {
+      "keywords": ["看 log", "tail log", "遠端 log", "測試機錯誤", "查遠端"],
+      "patterns": ["看.*error.*log", "查.*測試機.*報錯", "遠端.*設定檔"],
+      "intents": ["看測試機 log", "查遠端錯誤"]
+    },
+    "logic_trace": {
+      "keywords": ["logic trace", "邏輯文件", "模組邏輯", "追蹤程式流程", "前後台流程"],
+      "patterns": ["這個.*模組.*怎麼運作", "追蹤.*流程", "前台.*後台.*連動"],
+      "intents": ["幫我看這個模組的邏輯", "跑 logic trace"]
+    },
+    "memory_audit": {
+      "keywords": ["記憶審計", "memory audit", "清記憶", "整理記憶"],
+      "patterns": ["記憶.*過時", "清理.*memory", "記憶.*重複"],
+      "intents": ["跑 memory audit", "整理一下記憶"]
+    },
+    "skill_audit": {
+      "keywords": ["skill audit", "skill 太多", "整理 skill", "audit skill"],
+      "patterns": ["skill.*重複", "哪些.*skill.*可以合併", "skill.*審計"],
+      "intents": ["跑 skill audit", "整理 skill"]
+    },
+    "mcp_pull_sync": {
+      "keywords": ["git pull 後", "mcp pull sync", "pull 後同步", "拉了 pull"],
+      "patterns": ["git pull.*之後", "pull.*後.*要做什麼", "同步.*設定"],
+      "intents": ["git pull 完了", "跑 mcp_pull_sync"]
+    }
+  }
+}

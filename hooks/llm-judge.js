@@ -6,6 +6,8 @@
  *   HIGH   → 完整安全 + 架構審查清單
  *   MEDIUM → 邏輯 + 相容性審查
  *   PHP 非測試檔 → 提醒「事故→測試」習慣
+ *   PHP 檔案    → docker php -l 語法驗證（靜默失敗不阻斷）
+ *   JS/CSS 檔案 → 提醒 bump version（write-guard 未攔截時補一層）
  *
  * 輸入（stdin JSON）：
  *   { session_id, tool_name, tool_input: { file_path, ... }, tool_response: {...} }
@@ -16,6 +18,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 
 const HOME = process.env.HOME || process.env.USERPROFILE;
 const GLOBAL_RISK_TIERS = path.join(HOME, '.claude', 'risk-tiers.json');
@@ -83,10 +86,34 @@ process.stdin.on('end', () => {
       );
     }
 
-    // PHP 非測試檔 → 「事故→測試」提醒
-    if (ext === '.php' && !isTestFile(filePath) && !isHigh) {
+    // PHP 非測試檔 → 「事故→測試」提醒 + docker php -l 語法驗證
+    if (ext === '.php' && !isTestFile(filePath)) {
+      if (!isHigh) {
+        messages.push(
+          `[LLM Judge] 💡 ${basename} 已修改 — 若此改動修復了 bug，記得同步新增測試案例（事故→測試習慣）`
+        );
+      }
+      // PHP 語法驗證（需要 docker php container）
+      try {
+        const winPath = filePath.replace(/\//g, '\\');
+        const result = execSync(
+          `docker exec php_runner php -l "${winPath}" 2>&1`,
+          { timeout: 8000, encoding: 'utf-8' }
+        );
+        if (result.includes('No syntax errors')) {
+          messages.push(`[LLM Judge] ✅ PHP 語法驗證通過：${basename}`);
+        } else {
+          messages.push(`[LLM Judge] ❌ PHP 語法錯誤：\n${result.trim()}`);
+        }
+      } catch (phpErr) {
+        // docker 未啟動或其他錯誤 → 靜默跳過
+      }
+    }
+
+    // JS / CSS 修改 → 提醒 bump version
+    if (['.js', '.css'].includes(ext) && !isTestFile(filePath)) {
       messages.push(
-        `[LLM Judge] 💡 ${basename} 已修改 — 若此改動修復了 bug，記得同步新增測試案例（事故→測試習慣）`
+        `[LLM Judge] 🔢 ${basename} 已修改 — 記得確認是否需要 bump version（避免瀏覽器 cache 舊版）`
       );
     }
 
