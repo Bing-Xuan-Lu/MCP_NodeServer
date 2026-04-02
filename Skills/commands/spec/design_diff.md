@@ -1,6 +1,6 @@
 ---
 name: design_diff
-description: "設計稿比對、UI 比對、design diff、Figma 比對、XD 比對"
+description: "設計稿與實作截圖像素級比對。當使用者說「跟設計稿比」「UI 對不對」「design diff」時使用。"
 ---
 
 # /design_diff — 設計稿 vs 實際網站截圖比對

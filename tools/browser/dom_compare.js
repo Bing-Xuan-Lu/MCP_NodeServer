@@ -1,7 +1,7 @@
 // tools/dom_compare.js — 批次比對兩個 URL 上多個選擇器的 CSS / HTML / JS 差異
 // 用途：一次呼叫取代 4-6 次 browser_evaluate，直接回傳差異
 
-import { createBrowserPool } from "./_shared/browser_pool.js";
+import { createBrowserPool } from "../_shared/browser_pool.js";
 
 // ============================================
 // Browser Pool（跨呼叫複用 browser 進程）

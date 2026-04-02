@@ -16,7 +16,9 @@ import os from 'os';
 import { execSync } from 'child_process';
 
 // ── 設定 ──────────────────────────────────────────
+const HOME = process.env.HOME || process.env.USERPROFILE;
 const LOG_DIR = path.join(os.tmpdir(), 'claude_tool_logs');
+const COMPLAINTS_PATH = path.join(HOME, '.claude', 'hook-complaints.jsonl');
 const MAX_LOG_AGE_MS = 2 * 60 * 60 * 1000; // 2 小時後自動清除
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.tif', '.avif', '.svg']);
 
@@ -156,6 +158,26 @@ function notifySlack(message, isBlocked = false) {
       // 忽略 Slack 通知失敗
     }
   }, 0);
+}
+
+/** 寫入投訴紀錄（讓其他專案的 session 可向 MCP_Server 反映 hook 太嚴格） */
+function fileComplaint(toolName, patternId, message) {
+  try {
+    const cwd = process.cwd().replace(/\\/g, '/');
+    const project = cwd.split('/').filter(Boolean).pop() || 'unknown';
+    const entry = {
+      ts: new Date().toISOString(),
+      project,
+      cwd,
+      tool: toolName,
+      pattern: patternId,
+      message: message.replace(/\n/g, ' ').slice(0, 300),
+      status: 'pending',
+    };
+    fs.appendFileSync(COMPLAINTS_PATH, JSON.stringify(entry) + '\n', 'utf-8');
+  } catch {
+    // 投訴寫入失敗不影響 hook 執行
+  }
 }
 
 /** Debug 日誌輸出 */
@@ -491,9 +513,11 @@ function matchBashPattern(command) {
 function getCategoryKey(entry) {
   const tool = shortName(entry.tool);
 
-  // Bash 命令：用簽名分類
-  if (tool === 'Bash' && entry.bashSig) {
-    return entry.bashSig;
+  // Bash 命令：有簽名用簽名，沒有則用命令前 80 字元分類（不同命令不互相累積）
+  if (tool === 'Bash') {
+    if (entry.bashSig) return entry.bashSig;
+    const cmd = (entry.args?.command || '').trim().slice(0, 80);
+    return cmd ? `Bash:${cmd}` : 'Bash';
   }
 
   // ToolSearch：不同工具/query 算不同類
@@ -930,6 +954,7 @@ process.stdin.on('end', () => {
     const warnings = [];
     let shouldBlock = false;
     let blockMessage = '';
+    let blockPatternId = '';
 
     for (const pat of PATTERNS) {
       const result = pat.detect(currentEntry, history);
@@ -938,6 +963,7 @@ process.stdin.on('end', () => {
         if (typeof result === 'object' && result.block) {
           shouldBlock = true;
           blockMessage = result.message;
+          blockPatternId = pat.id;
           warnings.push(result.message);
         } else {
           warnings.push(result);
@@ -949,8 +975,12 @@ process.stdin.on('end', () => {
       process.stdout.write(warnings.join('\n'));
     }
 
-    // 被阻擋時發送 Slack 通知，然後 exit 2
+    // 被阻擋時：寫投訴 → Slack 通知 → exit 2
     if (shouldBlock) {
+      process.stderr.write(`[repetition-detector] BLOCKED: ${shortToolName} — ${blockMessage}\n`);
+      fileComplaint(shortToolName, blockPatternId, blockMessage);
+      // 在 stdout 追加投訴提示，讓被擋的 session 知道已記錄
+      process.stdout.write('\n📢 此阻擋已自動記錄到投訴系統。若認為不合理，請告知使用者到 MCP_Server 專案執行 /hook_complaints 審查。\n');
       notifySlack(blockMessage, true);
       process.exit(2);
     }
@@ -987,7 +1017,7 @@ process.stdin.on('end', () => {
     process.exit(0);
   } catch (e) {
     const hookMs = Date.now() - hookStartTime;
-    process.stderr.write(`[repetition-detector] pass (error ignored, took ${hookMs}ms)\n`);
+    process.stderr.write(`[repetition-detector] error (ignored, took ${hookMs}ms): ${e.message}\n`);
     process.exit(0);
   }
 });

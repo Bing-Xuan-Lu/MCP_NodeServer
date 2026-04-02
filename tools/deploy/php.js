@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import { exec } from "child_process";
 import util from "util";
-import { resolveSecurePath, CONFIG } from "../config.js";
+import { resolveSecurePath, CONFIG } from "../../config.js";
 
 const execPromise = util.promisify(exec);
 

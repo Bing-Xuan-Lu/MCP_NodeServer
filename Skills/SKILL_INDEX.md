@@ -67,6 +67,7 @@
 - `/memory_sync` — 同步 Git memory/ 與本機 Claude 記憶（pull/push/status）
 - `/memory_audit` — 審計與整理 Claude 記憶系統（死連結、孤兒、重複、過時偵測）
 - `/settings_cleanup` — 掃描並整理 settings.json 權限規則，合併重複、移除垃圾
+- `/hook_complaints` — 查閱與處理其他專案 session 回報的 hook 誤擋紀錄
 - `/mcp_pull_sync` — git pull 後同步設定（npm install、Skill 部署、Hook 檢查、重啟提示）
 
 ## 研究部

@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { resolveSecurePath } from "../config.js";
+import { resolveSecurePath } from "../../config.js";
 
 // 防 Reward Hacking：保護測試相關檔案，防止 Claude 為了讓測試通過而修改測試本身
 const PROTECTED_PATTERNS = [

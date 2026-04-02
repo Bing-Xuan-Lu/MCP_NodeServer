@@ -1,6 +1,6 @@
 ---
 name: frontend_qc
-description: "前台逐頁測試、逐頁 QC、Bug 清單、frontend_qc"
+description: "逐頁測試前台頁面並產出 Bug 清單。當使用者說「前台 QC」「逐頁測」「掃一遍前台」時使用。"
 ---
 
 # /frontend_qc — 前台逐頁品質檢查，產出結構化 Bug 清單

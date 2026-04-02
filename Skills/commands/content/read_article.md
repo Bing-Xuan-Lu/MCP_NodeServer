@@ -1,6 +1,6 @@
 ---
 name: read_article
-description: "讀一下、摘要、幫我看這篇、這篇說什麼"
+description: "閱讀並摘要網頁文章內容。當使用者說「幫我看這篇」「摘要一下」「這篇說什麼」時使用。"
 ---
 
 # /read_article — 快速閱讀網頁文章並提供結構化摘要

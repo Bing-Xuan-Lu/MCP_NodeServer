@@ -53,6 +53,7 @@ async function loadToolModules() {
   });
 
   const modules = [];
+  const failed = [];
   for (const file of toolFiles) {
     try {
       const module = await import(`./${file}`);
@@ -60,8 +61,15 @@ async function loadToolModules() {
         modules.push(module);
       }
     } catch (err) {
+      failed.push({ file, error: err.message.split('\n')[0] });
       console.error(`⚠️  Failed to load tool module: ${file}`, err.message);
     }
+  }
+
+  if (failed.length > 0) {
+    console.error(`\n🔴 ${failed.length} tool module(s) failed to load:`);
+    for (const f of failed) console.error(`   ✗ ${f.file}: ${f.error}`);
+    console.error(`   → Check import paths after restructuring tools/\n`);
   }
 
   return modules;

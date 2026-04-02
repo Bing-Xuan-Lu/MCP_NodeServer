@@ -725,7 +725,52 @@
                 </div>
               </div>
             </li>
+            <li>
+              <div class="timeline-card">
+                <div class="timeline-header">
+                  <span class="timeline-number">5</span>
+                  <h3>Hook 投訴處理</h3>
+                </div>
+                <div class="timeline-body">
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">查閱其他專案 session 回報的 hook 誤擋紀錄，分析並調整 hook 規則。</p>
+                </div>
+                <div class="timeline-actions">
+                  <div class="timeline-step">
+                    <span style="font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--muted);">投訴審查</span>
+                    <a class="tag" href="javascript:void(0)">/hook_complaints</a>
+                  </div>
+                </div>
+              </div>
+            </li>
           </ul>
+        </section>
+
+        <!-- Hook 投訴系統流程圖 -->
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px; margin-top:8px;">
+          <h3 style="color:var(--orange); font-size:20px; margin-bottom:16px; letter-spacing:-0.02em;">Hook 投訴系統 · Complaint Pipeline</h3>
+          <div style="font-size:14px; color:var(--text); line-height:2; font-family:var(--font-mono);">
+            <b style="color:var(--orange);">1. 自動記錄</b><br>
+            &nbsp;&nbsp;任何專案被 <code>repetition-detector</code> block<br>
+            &nbsp;&nbsp;→ 自動寫入 <code>~/.claude/hook-complaints.jsonl</code><br>
+            &nbsp;&nbsp;→ stderr 顯示阻擋原因（使用者可見）<br>
+            &nbsp;&nbsp;→ stdout 提示「已記錄，到 MCP_Server 用 <code>/hook_complaints</code> 審查」<br>
+            <br>
+            <b style="color:var(--orange);">2. 開機提醒</b><br>
+            &nbsp;&nbsp;任何專案 session-start 偵測到 pending 投訴<br>
+            &nbsp;&nbsp;→ MCP_Server 專案：顯示最近 5 筆詳情表格<br>
+            &nbsp;&nbsp;→ 其他專案：簡短提醒「有 N 筆投訴待處理」<br>
+            <br>
+            <b style="color:var(--orange);">3. 審查處理</b><br>
+            &nbsp;&nbsp;在 MCP_Server 執行 <code>/hook_complaints</code><br>
+            &nbsp;&nbsp;→ 列出所有 pending 投訴，分析重複模式<br>
+            &nbsp;&nbsp;→ 建議調整（放寬閾值 / 新增 pattern / 合理阻擋）<br>
+            &nbsp;&nbsp;→ 修改 hook 規則 + 標記 resolved<br>
+            <br>
+            <span style="color:var(--muted); font-size:13px;">
+              投訴紀錄格式：每行一筆 JSON（ts, project, tool, pattern, message, status）<br>
+              status: pending → resolved | dismissed
+            </span>
+          </div>
         </section>
       </div><!-- /wf-mcp -->
 

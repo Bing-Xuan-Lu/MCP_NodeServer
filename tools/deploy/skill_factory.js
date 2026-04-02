@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { fileURLToPath } from "url";
-import { CONFIG, EXTRA_ALLOWED_PATHS } from "../config.js";
+import { CONFIG, EXTRA_ALLOWED_PATHS } from "../../config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = path.join(__dirname, "..", "Skills", "commands");

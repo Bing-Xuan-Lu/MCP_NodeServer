@@ -1,6 +1,6 @@
 ---
 name: project_qc
-description: "全站 QC、網站校稿、品保測試、校稿單、系統整合測試、做驗收"
+description: "全站品保測試，對照規格書逐頁驗收。當使用者說「做驗收」「全站 QC」「校稿」「品保」時使用。"
 ---
 
 # /project_qc — 雙 Agent 全站品質稽核並產出網站校稿單

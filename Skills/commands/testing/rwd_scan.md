@@ -1,6 +1,6 @@
 ---
 name: rwd_scan
-description: "RWD 測試、響應式檢查、手機版截圖、三斷點"
+description: "三斷點 RWD 響應式截圖比對。當使用者說「手機版對不對」「RWD 測試」「響應式檢查」時使用。"
 ---
 
 # /rwd_scan — RWD 三斷點截圖掃描

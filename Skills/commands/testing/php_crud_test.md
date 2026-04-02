@@ -1,6 +1,6 @@
 ---
 name: php_crud_test
-description: "測試、跑測試、test、CRUD 驗證"
+description: "執行 PHP 後台 CRUD 功能自動測試。當使用者說「跑測試」「測一下 CRUD」「驗證功能」時使用。"
 ---
 
 # /php_crud_test — PHP CRUD 模組整合測試

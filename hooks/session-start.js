@@ -246,7 +246,38 @@ async function main() {
       }
     }
 
-    // 6. 文件老化偵測 — CLAUDE.md > 30 天未更新
+    // 6. Hook 投訴偵測（所有專案都提醒，MCP_Server 顯示詳情）
+    try {
+      const complaintsPath = path.join(HOME, '.claude', 'hook-complaints.jsonl');
+      if (fs.existsSync(complaintsPath)) {
+        const lines = fs.readFileSync(complaintsPath, 'utf-8').trim().split('\n').filter(Boolean);
+        const pending = lines.filter(l => {
+          try { return JSON.parse(l).status === 'pending'; } catch { return false; }
+        });
+        if (pending.length > 0) {
+          const isMcpProject = cwd.toLowerCase().includes('mcp') && cwd.toLowerCase().includes('server');
+          if (isMcpProject) {
+            // MCP_Server：顯示詳情
+            const recent = pending.slice(-5).map(l => {
+              const e = JSON.parse(l);
+              return `  ${e.ts.slice(0, 16)} | ${e.project} | ${e.tool} | ${e.pattern}`;
+            });
+            output.push(
+              `\n[Hook Complaints] 📢 有 ${pending.length} 筆未處理的 hook 投訴：\n` +
+              recent.join('\n') +
+              `\n  → 執行 /hook_complaints 查看詳情並處理`
+            );
+          } else {
+            // 其他專案：簡短提醒
+            output.push(
+              `\n[Hook Complaints] 📢 有 ${pending.length} 筆 hook 投訴待處理。請到 MCP_Server 專案執行 /hook_complaints 審查。`
+            );
+          }
+        }
+      }
+    } catch (e) {}
+
+    // 7. 文件老化偵測 — CLAUDE.md > 30 天未更新
     try {
       const claudeMdPath = path.join(cwd, 'CLAUDE.md');
       if (fs.existsSync(claudeMdPath)) {
@@ -257,7 +288,7 @@ async function main() {
       }
     } catch (e) {}
 
-    // 7. risk-tiers 提示 — 專案目錄沒有本地 risk-tiers.json
+    // 8. risk-tiers 提示 — 專案目錄沒有本地 risk-tiers.json
     try {
       const localRisk = path.join(cwd, 'risk-tiers.json');
       const globalRisk = path.join(HOME, '.claude', 'risk-tiers.json');
@@ -268,7 +299,7 @@ async function main() {
       }
     } catch (e) {}
 
-    // 8. Codemap 偵測 — 有 codemap 才能高效除錯
+    // 9. Codemap 偵測 — 有 codemap 才能高效除錯
     const codemapCandidates = [
       path.join(cwd, 'docs', 'CODEMAPS'),
       path.join(cwd, '.reports', 'codemaps'),
@@ -287,7 +318,7 @@ async function main() {
     }
 
   } catch (err) {
-    // 靜默失敗，不影響使用者
+    process.stderr.write(`[session-start] error: ${err.message}\n`);
   }
 
   if (output.length > 0) {

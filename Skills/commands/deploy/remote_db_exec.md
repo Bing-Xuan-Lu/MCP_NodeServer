@@ -1,6 +1,6 @@
 ---
 name: remote_db_exec
-description: "遠端執行 SQL、準測試機跑 SQL、沒辦法直連 DB、remote db"
+description: "透過 SSH 在遠端測試機上執行 SQL。當本機無法直連遠端 DB、需要在測試機跑 SQL 時使用。"
 ---
 
 # /remote_db_exec — 透過 SFTP + PHP 間接執行遠端 SQL

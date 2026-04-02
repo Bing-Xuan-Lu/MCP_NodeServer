@@ -1,6 +1,6 @@
 ---
 name: web_performance
-description: "網頁很慢、效能測試、performance、lighthouse、跑分"
+description: "網頁效能測試與 Lighthouse 跑分。當使用者說「網頁很慢」「效能測試」「跑分」時使用。"
 ---
 
 # /web_performance — 網站前端效能檢測與優化建議

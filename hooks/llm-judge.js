@@ -96,6 +96,7 @@ process.stdin.on('end', () => {
 
     process.exit(0);
   } catch (e) {
+    process.stderr.write(`[llm-judge] error: ${e.message}\n`);
     process.exit(0);
   }
 });

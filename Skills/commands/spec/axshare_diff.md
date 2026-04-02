@@ -1,6 +1,6 @@
 ---
 name: axshare_diff
-description: "比對規格、規格差異、axshare、模組校閱、全面校閱"
+description: "比對 AxShare 規格書與實作的差異。當使用者說「比對規格」「校閱模組」「規格有沒有改」時使用。"
 ---
 
 # /axshare_diff — AxShare 規格書 vs 測試網站差異比對（支援全站 / 單一單元 / 日期註記掃描 / 模組校閱）
