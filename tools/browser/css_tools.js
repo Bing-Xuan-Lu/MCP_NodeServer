@@ -3,8 +3,8 @@
 // css_computed_winner: 活頁面 CDP 查詢某 property 由哪條規則勝出
 
 import fs from "fs/promises";
-import { resolveSecurePath } from "../config.js";
-import { createBrowserPool } from "./_shared/browser_pool.js";
+import { resolveSecurePath } from "../../config.js";
+import { createBrowserPool } from "../_shared/browser_pool.js";
 
 // ============================================
 // Browser Pool（跨呼叫複用 browser 進程）

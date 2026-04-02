@@ -1,6 +1,6 @@
 ---
 name: db_index_analyzer
-description: "查詢很慢、SQL 效能差、index 優化、資料庫慢"
+description: "分析 MySQL 慢查詢並建議 index 優化方案。當使用者說「查詢很慢」「SQL 效能差」「要加 index」時使用。"
 ---
 
 # /db_index_analyzer — 分析 MySQL 查詢效能並建議索引優化

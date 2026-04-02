@@ -1,6 +1,6 @@
 ---
 name: sftp_pull
-description: "拉取、從測試機下載、sync 遠端、取回測試機的改動"
+description: "從遠端測試機拉取程式回本機。當使用者說「拉回來」「從測試機下載」「sync 遠端」時使用。"
 ---
 
 # /sftp_pull — 從遠端測試機拉取程式到本機

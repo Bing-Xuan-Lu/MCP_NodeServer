@@ -2,7 +2,7 @@ import SftpClient from "ssh2-sftp-client";
 import { Client as SSH2Client } from "ssh2";
 import fs from "fs";
 import path from "path";
-import { resolveSecurePath } from "../config.js";
+import { resolveSecurePath } from "../../config.js";
 
 // ============================================
 // SSH 指令安全檢查

@@ -1,6 +1,6 @@
 ---
 name: remote_diff
-description: "遠端有人改過嗎、diff 遠端、remote diff、部署前檢查"
+description: "比對本機與遠端的程式差異。當使用者說「遠端有人改過嗎」「部署前先 diff」「跟測試機比」時使用。"
 ---
 
 # /remote_diff — 比對本機 vs 遠端 SFTP 檔案差異

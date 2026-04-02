@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import mammoth from "mammoth";
 import TurndownService from "turndown";
-import { resolveSecurePath } from "../config.js";
+import { resolveSecurePath } from "../../config.js";
 
 // ============================================
 // 工具定義

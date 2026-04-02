@@ -11,7 +11,7 @@ import {
   getCollection,
   chromaUnavailable,
   logProgress,
-} from "./_shared/_rag_common.js";
+} from "../_shared/_rag_common.js";
 
 // ============================================
 // 工具定義

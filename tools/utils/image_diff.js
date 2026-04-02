@@ -3,7 +3,7 @@
 
 import fs from "fs/promises";
 import path from "path";
-import { resolveSecurePath } from "../config.js";
+import { resolveSecurePath } from "../../config.js";
 
 // 延遲載入
 let sharpModule = null;

@@ -4,7 +4,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { glob } from "glob";
-import { resolveSecurePath, CONFIG } from "../config.js";
+import { resolveSecurePath, CONFIG } from "../../config.js";
 
 // ============================================
 // 工具定義

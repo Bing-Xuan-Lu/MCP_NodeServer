@@ -1,6 +1,6 @@
 ---
 name: debug_session
-description: "除錯、debug session、bug 搞不定、繼續上次的 bug"
+description: "開啟系統化除錯流程，適合反覆碰壁的 bug。當使用者說「搞不定」「debug 卡住了」「繼續上次的 bug」時使用。"
 ---
 
 # /debug_session — 管理版本化除錯工作階段

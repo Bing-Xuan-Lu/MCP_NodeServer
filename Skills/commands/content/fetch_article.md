@@ -1,6 +1,6 @@
 ---
 name: fetch_article
-description: "把這篇存下來、下載文章、抓到本機、archive"
+description: "下載網頁文章存到本機。當使用者說「把這篇存下來」「下載文章」「archive」時使用。"
 ---
 
 # /fetch_article — 從網頁 URL 擷取並儲存純文字文章

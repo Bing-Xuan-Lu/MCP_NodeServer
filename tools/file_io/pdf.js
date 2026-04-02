@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { resolveSecurePath } from "../config.js";
+import { resolveSecurePath } from "../../config.js";
 
 // 動態 import pdfjs-dist legacy build（Node.js 環境必須用 legacy）
 let pdfjsLib = null;

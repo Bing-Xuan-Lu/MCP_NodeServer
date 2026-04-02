@@ -1,6 +1,6 @@
 ---
 name: sftp_deploy
-description: "部署、deploy、上傳到測試機、推到遠端"
+description: "將修改好的程式部署上傳到遠端測試機。當使用者說「部署」「推上去」「上傳」「deploy」時使用，僅推程式不含 DB。"
 ---
 
 # /sftp_deploy — 將本機 PHP 專案部署到遠端測試機

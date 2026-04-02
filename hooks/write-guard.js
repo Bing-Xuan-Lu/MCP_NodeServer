@@ -147,6 +147,7 @@ process.stdin.on('end', () => {
 
     process.exit(0);
   } catch (e) {
+    process.stderr.write(`[write-guard] error: ${e.message}\n`);
     process.exit(0);
   }
 });

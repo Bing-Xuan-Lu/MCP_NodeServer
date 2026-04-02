@@ -8,7 +8,7 @@
 
 import fs from "fs/promises";
 import path from "path";
-import { resolveSecurePath, CONFIG } from "../config.js";
+import { resolveSecurePath, CONFIG } from "../../config.js";
 import {
   CHROMA_URL,
   EMBEDDING_MODEL,
@@ -38,7 +38,7 @@ import {
   detectLanguage,
   runWithConcurrency,
   withTimeout,
-} from "./_shared/_rag_common.js";
+} from "../_shared/_rag_common.js";
 
 // ============================================
 // 工具定義

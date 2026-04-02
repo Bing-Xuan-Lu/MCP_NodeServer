@@ -118,6 +118,7 @@ process.stdin.on('end', () => {
     process.stdout.write(msg + '\n');
     process.exit(0);
   } catch (e) {
+    process.stderr.write(`[user-prompt-guard] error: ${e.message}\n`);
     process.exit(0);
   }
 });

@@ -1,6 +1,6 @@
 ---
 name: full_deploy
-description: "全部署、full deploy、程式跟資料庫一起推、完整部署"
+description: "程式碼與資料庫一起完整部署到遠端。當使用者說「全部推」「完整部署」「程式加 DB 一起」時使用。"
 ---
 
 # /full_deploy — 整合部署：程式碼 + 資料庫 + 安全檢查

@@ -1,5 +1,5 @@
 import { createRequire } from "module";
-import { resolveSecurePath } from "../config.js";
+import { resolveSecurePath } from "../../config.js";
 
 const require = createRequire(import.meta.url);
 const XLSX = require("xlsx");

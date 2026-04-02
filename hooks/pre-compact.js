@@ -274,7 +274,7 @@ ${parsed.filesModified.length > 0 ? parsed.filesModified.map(f => `- ${f}`).join
     } catch (e) {}
 
   } catch (err) {
-    // 靜默失敗
+    process.stderr.write(`[pre-compact] error: ${err.message}\n`);
   }
 }
 
