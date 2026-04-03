@@ -3,6 +3,7 @@ import path from "path";
 import os from "os";
 import { fileURLToPath } from "url";
 import { CONFIG, EXTRA_ALLOWED_PATHS } from "../../config.js";
+import { validateArgs } from "../_shared/utils.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = path.join(__dirname, "..", "Skills", "commands");
@@ -109,6 +110,9 @@ export const definitions = [
 // 工具處理
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   if (name === "save_claude_skill")   return saveSkill(args);
   if (name === "list_claude_skills")  return listSkills();
   if (name === "delete_claude_skill") return deleteSkill(args);

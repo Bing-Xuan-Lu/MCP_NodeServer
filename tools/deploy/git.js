@@ -1,5 +1,6 @@
 import { exec } from "child_process";
 import util from "util";
+import { validateArgs } from "../_shared/utils.js";
 
 const execPromise = util.promisify(exec);
 
@@ -63,6 +64,9 @@ export const definitions = [
 // 工具處理
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   const container = args.container || null;
 
   if (name === "git_status") return runGit("git status", container);

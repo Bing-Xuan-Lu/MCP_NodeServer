@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { createRequire } from "module";
+import { validateArgs } from "../_shared/utils.js";
 
 const require = createRequire(import.meta.url);
 const crypto = require("crypto");
@@ -230,6 +231,9 @@ export const definitions = [
 // 工具邏輯
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   if (name === "create_bookmark_folder") {
     const { data, path: filePath } = await loadBookmarks(args.profilePath);
     const parentNode = findNodeByPath(data.roots, args.parentPath);

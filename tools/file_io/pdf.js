@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { resolveSecurePath } from "../../config.js";
+import { validateArgs } from "../_shared/utils.js";
 
 // 動態 import pdfjs-dist legacy build（Node.js 環境必須用 legacy）
 let pdfjsLib = null;
@@ -160,6 +161,9 @@ async function convertPdf(filePath, format = "markdown", pagesStr = null) {
 // Handle
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   if (name === "read_pdf_file") {
     const format = args.format || "markdown";
     const { content, totalPages, readPages } = await convertPdf(args.path, format, args.pages);

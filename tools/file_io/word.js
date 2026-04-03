@@ -3,6 +3,7 @@ import path from "path";
 import mammoth from "mammoth";
 import TurndownService from "turndown";
 import { resolveSecurePath } from "../../config.js";
+import { validateArgs } from "../_shared/utils.js";
 
 // ============================================
 // 工具定義
@@ -232,6 +233,9 @@ async function convertWord(filePath, format = "markdown", extractImages = true) 
 // Handle
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   if (name === "read_word_file") {
     const format = args.format || "markdown";
     const extractImages = args.extract_images !== false;

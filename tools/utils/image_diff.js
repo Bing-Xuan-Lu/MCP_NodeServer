@@ -3,6 +3,7 @@
 
 import fs from "fs/promises";
 import path from "path";
+import { validateArgs } from "../_shared/utils.js";
 import { resolveSecurePath } from "../../config.js";
 
 // 延遲載入
@@ -95,6 +96,7 @@ async function loadImageRGBA(filePath) {
 
 export async function handle(name, args) {
   if (name !== "image_diff") return undefined;
+  args = validateArgs(definitions[0].inputSchema, args);
 
   const {
     image_a,

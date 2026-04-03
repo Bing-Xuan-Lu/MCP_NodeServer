@@ -4,6 +4,7 @@
 
 import fs from "fs/promises";
 import path from "path";
+import { validateArgs } from "../_shared/utils.js";
 
 const COORD_ROOT = "D:\\Project\\_coordination";
 
@@ -108,12 +109,9 @@ function timestamp() {
 
 export async function handle(name, args) {
   if (name !== "agent_coord") return undefined;
+  args = validateArgs(definitions[0].inputSchema, args);
 
   const { action, project, channel, agent_id, message, category = "info", task, task_status, after_id } = args;
-
-  if (!project) {
-    return { content: [{ type: "text", text: "❌ 必須指定 project 名稱" }] };
-  }
 
   const projDir = getProjectDir(project);
   await ensureDir(projDir);

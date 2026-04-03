@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import { glob } from "glob";
 import { resolveSecurePath, CONFIG } from "../../config.js";
+import { validateArgs } from "../_shared/utils.js";
 
 // ============================================
 // 工具定義
@@ -196,6 +197,9 @@ function formatFile(relPath, content, format) {
 // 工具邏輯
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   if (name === "file_to_prompt_preview") {
     const files = await collectFiles(args);
 

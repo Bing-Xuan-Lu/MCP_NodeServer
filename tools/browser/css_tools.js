@@ -4,6 +4,7 @@
 
 import fs from "fs/promises";
 import { resolveSecurePath } from "../../config.js";
+import { validateArgs } from "../_shared/utils.js";
 import { createBrowserPool } from "../_shared/browser_pool.js";
 
 // ============================================
@@ -534,6 +535,9 @@ async function handleCssComputedWinner(args) {
 // handle 路由
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   switch (name) {
     case "css_specificity_check":  return handleCssSpecificityCheck(args);
     case "css_computed_winner":    return handleCssComputedWinner(args);

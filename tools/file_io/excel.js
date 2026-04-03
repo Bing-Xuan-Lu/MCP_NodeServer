@@ -1,5 +1,6 @@
 import { createRequire } from "module";
 import { resolveSecurePath } from "../../config.js";
+import { validateArgs } from "../_shared/utils.js";
 
 const require = createRequire(import.meta.url);
 const XLSX = require("xlsx");
@@ -94,6 +95,9 @@ export const definitions = [
 // 工具邏輯
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   if (name === "get_excel_values_batch") {
     const fullPath = resolveSecurePath(args.path);
     const workbook = XLSX.readFile(fullPath);

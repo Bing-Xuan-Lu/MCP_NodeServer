@@ -2,6 +2,7 @@ import mysql from "mysql2/promise";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import { validateArgs } from "../_shared/utils.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_CONFIG_FILE = path.join(__dirname, "..", ".mcp_db_config.json");
@@ -70,9 +71,9 @@ export const definitions = [
     inputSchema: {
       type: "object",
       properties: {
-        host: { type: "string", description: "資料庫主機 (預設 127.0.0.1)" },
-        port: { type: "number", description: "埠號 (預設 3306)" },
-        user: { type: "string", description: "使用者名稱 (預設 root)" },
+        host: { type: "string", description: "資料庫主機", default: "127.0.0.1" },
+        port: { type: "number", description: "埠號", default: 3306 },
+        user: { type: "string", description: "使用者名稱", default: "root" },
         password: { type: "string", description: "密碼" },
         database: { type: "string", description: "資料庫名稱" },
         remember: { type: "boolean", description: "是否記住此連線設定（密碼除外）供下次自動載入" },
@@ -306,12 +307,15 @@ function formatRows(rows) {
 // 工具邏輯
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   // ── set_database ──
   if (name === "set_database") {
     const dbConfig = {
-      host: args.host || "127.0.0.1",
-      port: args.port || 3306,
-      user: args.user || "root",
+      host: args.host,
+      port: args.port,
+      user: args.user,
       password: args.password || "",
       database: args.database,
     };

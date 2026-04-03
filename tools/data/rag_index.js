@@ -9,6 +9,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { resolveSecurePath, CONFIG } from "../../config.js";
+import { validateArgs } from "../_shared/utils.js";
 import {
   CHROMA_URL,
   EMBEDDING_MODEL,
@@ -97,6 +98,7 @@ export const definitions = [
 // ============================================
 export async function handle(name, args) {
   if (name !== "rag_index") return;
+  args = validateArgs(definitions[0].inputSchema, args);
 
   const client = await getChromaClient();
   if (!client) return chromaUnavailable();
