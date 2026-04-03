@@ -1,6 +1,8 @@
 // tools/playwright_tools.js — browser_interact + page_audit + css_inspect + element_measure + style_snapshot + css_coverage
 // 自帶 headless Chromium，不依賴 Playwright MCP
 
+import { validateArgs } from "../_shared/utils.js";
+
 let playwrightModule = null;
 async function getPlaywright() {
   if (!playwrightModule) {
@@ -1442,6 +1444,9 @@ async function handleCssCoverage(args) {
 // handle 路由
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   switch (name) {
     case "browser_interact":  return handleBrowserInteract(args);
     case "page_audit":        return handlePageAudit(args);

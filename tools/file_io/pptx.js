@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import JSZip from "jszip";
 import { resolveSecurePath } from "../../config.js";
+import { validateArgs } from "../_shared/utils.js";
 
 // ============================================
 // 工具定義
@@ -217,6 +218,9 @@ async function convertPptx(filePath, format = "markdown", extractImages = true) 
 // Handle
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   if (name === "read_pptx_file") {
     const format = args.format || "markdown";
     const extractImages = args.extract_images !== false;

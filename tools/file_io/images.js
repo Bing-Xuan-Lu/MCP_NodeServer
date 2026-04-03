@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { resolveSecurePath } from "../../config.js";
+import { validateArgs } from "../_shared/utils.js";
 
 // 延遲載入 sharp（有 native binding，避免啟動時就載入）
 let sharpModule = null;
@@ -164,6 +165,9 @@ async function getImageMeta(filePath) {
 // Handle
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   if (name === "read_image") {
     const { data, mimeType } = await processImage(args.path, {
       max_width: args.max_width,

@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { resolveSecurePath } from "../../config.js";
+import { validateArgs } from "../_shared/utils.js";
 
 // 防 Reward Hacking：保護測試相關檔案，防止 Claude 為了讓測試通過而修改測試本身
 const PROTECTED_PATTERNS = [
@@ -162,6 +163,9 @@ export const definitions = [
 // 工具邏輯
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   if (name === "list_files") {
     const fullPath = resolveSecurePath(args.path || ".");
     const entries = await fs.readdir(fullPath, { withFileTypes: true });

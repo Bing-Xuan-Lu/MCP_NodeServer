@@ -3,6 +3,7 @@
 
 import fs from "fs/promises";
 import path from "path";
+import { validateArgs } from "../_shared/utils.js";
 import { glob } from "glob";
 import { resolveSecurePath, CONFIG } from "../../config.js";
 
@@ -288,6 +289,9 @@ function escapeRegex(str) {
 // handle 路由
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   if (name === "class_method_lookup") return handleClassMethodLookup(args);
   return null;
 }

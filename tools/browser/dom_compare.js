@@ -2,6 +2,7 @@
 // 用途：一次呼叫取代 4-6 次 browser_evaluate，直接回傳差異
 
 import { createBrowserPool } from "../_shared/browser_pool.js";
+import { validateArgs } from "../_shared/utils.js";
 
 // ============================================
 // Browser Pool（跨呼叫複用 browser 進程）
@@ -292,6 +293,7 @@ async function compareJs(pageA, pageB, expressions) {
 // ============================================
 export async function handle(name, args) {
   if (name !== "dom_compare") return null;
+  args = validateArgs(definitions[0].inputSchema, args);
 
   const {
     url_a,

@@ -1,4 +1,5 @@
 import { execSync } from "child_process";
+import { validateArgs } from "../_shared/utils.js";
 
 // ============================================
 // Flyway — 資料庫 Migration 版本控制工具
@@ -123,6 +124,9 @@ export const definitions = [
 // 工具處理器
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   const configPath = resolveConfig(args.config);
 
   // 先確認容器是否運行

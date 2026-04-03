@@ -3,6 +3,7 @@ import { Client as SSH2Client } from "ssh2";
 import fs from "fs";
 import path from "path";
 import { resolveSecurePath } from "../../config.js";
+import { validateArgs } from "../_shared/utils.js";
 
 // ============================================
 // SSH 指令安全檢查
@@ -64,7 +65,7 @@ export const definitions = [
       type: "object",
       properties: {
         host:             { type: "string", description: "遠端主機 IP 或網域" },
-        port:             { type: "number", description: "連接埠 (預設 22)" },
+        port:             { type: "number", description: "連接埠", default: 22 },
         user:             { type: "string", description: "使用者名稱" },
         password:         { type: "string", description: "密碼（與 private_key_path 擇一）" },
         private_key_path: { type: "string", description: "私鑰絕對路徑（與 password 擇一）" },
@@ -281,12 +282,14 @@ async function createClient(config) {
 // 工具邏輯
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
 
   // ── sftp_connect ──
   if (name === "sftp_connect") {
     const config = {
       host:     args.host,
-      port:     args.port || 22,
+      port:     args.port,
       user:     args.user,
       password: args.password || "",
     };

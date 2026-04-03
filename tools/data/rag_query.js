@@ -12,6 +12,7 @@ import {
   chromaUnavailable,
   logProgress,
 } from "../_shared/_rag_common.js";
+import { validateArgs } from "../_shared/utils.js";
 
 // ============================================
 // 工具定義
@@ -124,6 +125,9 @@ export const definitions = [
 // 工具邏輯
 // ============================================
 export async function handle(name, args) {
+  const def = definitions.find(d => d.name === name);
+  if (def) args = validateArgs(def.inputSchema, args);
+
   const client = await getChromaClient();
   if (!client) return chromaUnavailable();
 
