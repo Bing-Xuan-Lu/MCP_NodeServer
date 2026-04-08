@@ -99,7 +99,7 @@ $ARGUMENTS
 
 ---
 
-### 步驟 2：逐頁五維度檢查
+### 步驟 2：逐頁六維度檢查
 
 對每個頁面執行以下 5 個維度的檢查：
 
@@ -251,7 +251,30 @@ browser_snapshot → 取得實際 DOM 結構
 5. 狀態文字是否正確（上架/下架、付款/未付款）
 ```
 
-#### 2e. RWD 快速檢查（Responsive Quick Check）
+#### 2e. 後台欄位 → 前台串接檢查（Backend-to-Frontend Field Mapping）
+
+```
+1. 從規格書或後台管理頁面找出該頁面對應的後台可編輯欄位清單
+   （如：Banner 圖片、標題文字、公告內容、商品描述、SEO 欄位等）
+2. 逐欄位檢查前台是否正確串接：
+   - 後台有欄位但前台未顯示         → [MAPPING-MISSING]（後台白寫）
+   - 前台顯示但寫死（非後台取值）     → [MAPPING-HARDCODE]（改後台無效）
+   - 後台清空後前台仍顯示舊內容       → [MAPPING-CACHE]（快取未清）
+   - 後台 HTML 編輯器內容前台未正確渲染 → [MAPPING-RENDER]
+
+驗證方法（擇一）：
+   a. browser_evaluate 檢查 DOM 中資料是否與 DB/API 回傳一致
+   b. 對照後台欄位清單與前台 DOM 元素逐一比對
+   c. 若有 API：send_http_request 取得 JSON 與頁面顯示比對
+```
+
+差異分類：
+- `[MAPPING-MISSING]`：後台有欄位但前台完全未串接（HIGH）
+- `[MAPPING-HARDCODE]`：前台寫死內容，後台修改無效（HIGH）
+- `[MAPPING-CACHE]`：快取導致前台未即時更新（MED）
+- `[MAPPING-RENDER]`：HTML/圖片渲染問題（MED）
+
+#### 2f. RWD 快速檢查（Responsive Quick Check）
 
 ```
 1. browser_resize(width=390, height=844)  → 手機版
