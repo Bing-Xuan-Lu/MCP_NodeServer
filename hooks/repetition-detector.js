@@ -248,7 +248,6 @@ function getSessionHost(history) {
 
 // ── 記憶強制注入（Scatter Search 觸發時載入）──────
 
-const HOME = process.env.HOME || process.env.USERPROFILE;
 const PROJECTS_DIR = path.join(HOME, '.claude', 'projects');
 
 /** 從 CWD 推算專案的 memory 目錄 */

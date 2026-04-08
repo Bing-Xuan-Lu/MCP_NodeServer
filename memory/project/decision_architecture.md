@@ -1,6 +1,6 @@
 ---
 name: MCP Server 架構決策記錄
-description: 關鍵架構選擇的原因與應用邊界，避免未來重複踩坑或誤改設計（RAG 已移除，改用 AST 符號索引）
+description: 關鍵架構選擇的原因與應用邊界，避免未來重複踩坑或誤改設計
 type: project
 ---
 
@@ -14,31 +14,13 @@ type: project
 
 ---
 
-## RAG 已移除，改用 AST 符號索引（2026-04-08）
-
-ChromaDB RAG 因精準度不足（中文 PHP 混合語境 embedding 差、chunk 切割破壞語意）而移除。
-取代方案：`symbol_index` + `find_usages` + `find_hierarchy` + `find_dependencies`（基於 php-parser AST，純 JS，零 Docker 依賴）。
-
-**Why:** AST 是確定性分析，精準度遠高於 embedding 向量搜尋；零 token 成本、零 Docker 依賴、零維護成本。
-
-**How to apply:** PHP class/method 關係型查詢用 `find_*` 系列；純文字定位用 Grep。
-
----
-
-## _internal 資料夾隔離（冷儲存）
+## _internal 資料夾隔離
 
 客戶專屬 Skill 統一放 `Skills/commands/_internal/`，整個資料夾被 `.gitignore` 排除。
 
-**自 2026-03-26 起，_internal 一律為冷儲存（Cold Storage）**：不部署到 `~/.claude/commands/`，不出現在 system-reminder skill 清單中。需要時由 Claude 直接 Read MD 檔載入。
+**Why:** 公開 Skill 可能進版控並分享給其他人，不能含客戶真實資訊（域名、資料表、模組名）。`_internal` 是唯一的合法例外區。
 
-**Why:**
-1. 公開 Skill 不能含客戶真實資訊，`_internal` 是唯一合法例外區。
-2. internal skills 僅在特定專案工作時使用，常駐部署浪費每次對話的 system-reminder token。冷儲存 = 按需載入 = 省 token。
-
-**How to apply:**
-- 含客戶名稱/URL/密碼的 Skill 一律放 `_internal/`
-- `deploy-commands-internal.bat` 已改為清理用途（移除殘留），不再部署
-- 使用 internal skill：直接 `Read Skills/commands/_internal/{project}/{skill}.md`
+**How to apply:** 含客戶名稱/URL/密碼的 Skill 一律放 `_internal/`；公開 Skill 用 `{ProjectFolder}` 等佔位符。
 
 ---
 
