@@ -27,7 +27,6 @@ MCP_NodeServer/
 │   ├── php.js           ← send_http_request (含 cookie_jar), run_php_script_batch
 │   ├── database.js      ← execute_sql_batch, get_db_schema_batch
 │   ├── sftp.js          ← sftp_*_batch (list/upload/download/delete)
-│   └── rag.js           ← ChromaDB 1.5.5 向量索引與語義搜尋 (RAG)
 ├── hooks/               ← Session 鉤子：session-start (載入), pre-compact (快照), write-guard (防護)
 ├── skills/index.js      ← MCP Prompts 路由
 └── Skills/              ← Skill MD 檔
@@ -37,7 +36,6 @@ MCP_NodeServer/
 
 ## 🧠 技能調用與管理 (Expert Skill Usage)
 本專案擁有強大的專家技能庫 (`Skills/commands/`)。任務涉及以下領域時，**必須**先讀取對應文件：
-- **RAG & 語義搜尋**：優先使用 `rag_query` 尋找邏輯片段。距離 > 0.5 時應改用 `Grep`。
 - **PHP 開發 & 測試**：`php_dev/` (CRUD 生成)；使用 `send_http_request` 的 `cookie_jar` 維持登入態進行 E2E 測試。
 - **自動化測試**：`testing/` (Playwright UI 測試、`project_qc` 協議、`e2e_golden_path`)。
 - **技能維護**：執行 `/skill_audit` 審查冗餘技能。新增 Skill 後**必須同步更新 `docs/dashboard.html`**。
@@ -50,19 +48,10 @@ MCP_NodeServer/
 
 ## 🛠️ 開發與驗證流程 (Lifecycle & Validation)
 1. **研究 (Research)**：
-   - 熟悉專案：執行 `rag_index` 進行**增量索引**，再以 `rag_query` 檢索。
    - 邏輯理解：使用 `file_to_prompt` 打包關鍵目錄，或用 `task_map` 標記進度。
 2. **策略 (Strategy)**：提出計畫，註明調用的 Skills 部門，優先考慮批次 (Batch) 工具。
-3. **執行 (Act)**：遵循目錄結構進行開發。修改後必須執行 `rag_index` 同步向量庫。
+3. **執行 (Act)**：遵循目錄結構進行開發。
 4. **驗證與 Dashboard (Validate)**：修改後執行 `project_qc` 或相關測試。
-
-## 🧩 RAG & ChromaDB 規範
-- **手冊**：Docker 與 RAG 的完整環境架設請詳閱 [`docs/docker_rag_setup.md`](docs/docker_rag_setup.md)。
-- **版本**：鎖定使用 `1.5.5`，持久化路徑 `D:/Project/ChromaDB`。
-
-- **版本**：鎖定使用 `1.5.5`，持久化路徑 `D:/Project/ChromaDB`。
-- **策略**：索引前先跑 `rag_status` 評估範圍，排除低價值目錄（CSS、第三方套件）。
-- **增量**：開發結束後、測試開始前，必須執行增量索引。
 
 ## 🌐 Playwright & Browser MCP 初始化標準 (SOP)
 ### Gemini CLI 環境 (Standalone Browser 模式)

@@ -60,12 +60,16 @@ const TOOLS = {
   'file_to_prompt':         { dept:'系統、Excel、文件、Python 與 Git', title:'檔案打包成 Prompt', desc:'將多個檔案內容打包成結構化 prompt（支援 glob pattern），免手動逐檔指定。輸出 XML/Markdown/Plain 格式。', usage:'file_to_prompt {glob:"project/**/*.php", format:"xml"}', tools:[] },
   'file_to_prompt_preview': { dept:'系統、Excel、文件、Python 與 Git', title:'預覽檔案匹配結果', desc:'預覽 file_to_prompt 會匹配哪些檔案（不讀取內容，僅列清單與大小），確認範圍正確後再執行。', usage:'file_to_prompt_preview {glob:"project/**/*.php"}', tools:[] },
 
-  'rag_index':              { dept:'系統、Excel、文件、Python 與 Git', title:'RAG 索引建立', desc:'將專案檔案索引至 ChromaDB 向量資料庫，支援增量索引（僅處理變更檔案）。每個專案獨立 collection，可選共用 rag_shared。', usage:'rag_index {project:"PG_dbox3", paths:["PG_dbox3/admin/"]}', tools:['ChromaDB Docker'] },
-  'rag_query':              { dept:'系統、Excel、文件、Python 與 Git', title:'RAG 語意搜尋', desc:'用自然語言查詢已索引的程式碼，從 ChromaDB 向量檢索最相關的程式碼片段。', usage:'rag_query {project:"PG_dbox3", query:"訂單折扣邏輯"}', tools:['ChromaDB Docker'] },
-  'rag_status':             { dept:'系統、Excel、文件、Python 與 Git', title:'RAG 索引狀態', desc:'查看 ChromaDB 連線狀態、collection 統計、已索引檔案清單與語言分佈。', usage:'rag_status {project:"PG_dbox3"}', tools:['ChromaDB Docker'] },
 
   'css_specificity_check':  { dept:'CSS 分析', title:'CSS Specificity 分析', desc:'分析 CSS 檔案中所有包含目標 selector 的規則，回傳行號、specificity 分數、屬性清單。覆寫前先確認權重避免反覆迭代。', usage:'css_specificity_check {file:"...", selector:".imgbox"}', tools:[] },
   'css_computed_winner':    { dept:'CSS 分析', title:'CSS 規則勝出查詢', desc:'對活頁面查詢指定元素的某個 CSS property 最終由哪條規則勝出（類似 DevTools Computed 展開看來源），含所有競爭規則與 specificity。', usage:'css_computed_winner {url:"...", selector:".box", property:"grid-column"}', tools:['Playwright'] },
 
   'class_method_lookup':    { dept:'PHP 分析', title:'PHP Class/Method 原始碼定位', desc:'給定 class 名稱 + method 名稱（可選），直接回傳函式完整原始碼（含行號），一次到位取代 Grep→Read 兩步。省略 method 則回傳 class 概覽。', usage:'class_method_lookup {project:"...", class_name:"news", method_name:"getAll"}', tools:[] },
+
+  'symbol_index':           { dept:'PHP 分析', title:'PHP 符號索引建立', desc:'掃描 PHP 專案建立 AST 符號索引（class、method、function），快取 10 分鐘，供 find_usages / find_hierarchy / find_dependencies 使用。', usage:'symbol_index {project:"..."}', tools:[] },
+  'find_usages':            { dept:'PHP 分析', title:'找出所有引用位置', desc:'找出指定 class 或 method 在專案中所有被呼叫、繼承、實作的位置。基於 AST 精確分析，非文字搜尋。', usage:'find_usages {project:"...", class_name:"Order", method_name:"getList"}', tools:[] },
+  'find_hierarchy':         { dept:'PHP 分析', title:'Class 繼承鏈查詢', desc:'列出指定 class 的完整繼承鏈：父類別、子類別、實作的 interface，以樹狀圖呈現。', usage:'find_hierarchy {project:"...", class_name:"BaseModel"}', tools:[] },
+  'find_dependencies':      { dept:'PHP 分析', title:'檔案 include/require 依賴', desc:'列出指定檔案的 include/require 依賴關係（它引用了誰、誰引用了它）。', usage:'find_dependencies {project:"...", file:"admin/model/order.php"}', tools:[] },
+
+  'image_transform':        { dept:'圖片處理', title:'圖片轉換與合成', desc:'resize、加背景色、圓形裁切、多圖合成、格式轉換、旋轉翻轉。一次呼叫可串聯多個操作。', usage:'image_transform {input:"...", operations:[{type:"resize", width:200}]}', tools:[] },
 };

@@ -14,11 +14,10 @@
 1. `get_db_schema_batch` → 讀取所有相關資料表的欄位定義
 2. `read_files_batch` → 讀取後台 add.php / update.php / list.php 原始碼
 
-> **RAG 輔助（搜尋策略）**：
-> - **模糊定位**（不確定功能在哪個檔案）→ `rag_query(project="{ProjectFolder}", query="模組名+功能描述")`
+> **搜尋策略**：
+> - **PHP class/method 引用** → `find_usages`（AST 精確，零 token）
 > - **精確定位**（知道函式名/變數名/SQL 關鍵字）→ `Grep` 正則搜尋
 > - **後台 CRUD**（結構可預測）→ 直接 Read `adminControl/{module}/list.php`
-> - **Fallback**：RAG 結果不相關時（distance > 0.5），改用 Grep
 
 3. 產出 `reports/field_map.md`，格式如下：
 

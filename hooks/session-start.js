@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 /**
- * SessionStart Hook — 對話開場記憶載入 + RAG 狀態偵測
+ * SessionStart Hook — 對話開場記憶載入
  * 1. 自動偵測當前專案對應的 memory 目錄
  * 2. 載入上次 session 摘要（7 天內）
  * 3. 顯示 MEMORY.md 摘要（前 40 行）
  * 4. 顯示 24h 內更新的記憶檔
  * 5. 提醒近期踩坑紀錄（3 天內）
- * 6. 偵測 ChromaDB + 當前專案 RAG 索引狀態
  *
  * stdout 內容會被 Claude 看到（注入 context）
  * 靜默失敗：任何錯誤都不影響正常使用
@@ -14,7 +13,6 @@
 
 import fs from 'fs';
 import path from 'path';
-import http from 'http';
 
 const HOME = process.env.HOME || process.env.USERPROFILE;
 const SESSIONS_DIR = path.join(HOME, '.claude', 'sessions');
@@ -132,62 +130,6 @@ function findRecentPitfalls() {
   return files.length > 0 ? files[0] : null;
 }
 
-// === RAG 狀態偵測（ChromaDB） ===
-const CHROMA_URL = 'http://localhost:8010';
-const CHROMA_TIMEOUT = 1500; // ms，避免拖慢啟動
-
-/** 從 CWD 推算專案名稱（D:\Project\PG_dbox3 → PG_dbox3） */
-function guessProjectName() {
-  const cwd = process.cwd().replace(/\\/g, '/').replace(/\/$/, '');
-  const parts = cwd.split('/').filter(Boolean);
-  // 取最後一層目錄名作為專案名
-  return parts[parts.length - 1] || null;
-}
-
-/** HTTP GET with timeout, returns Promise<string|null> */
-function httpGet(url, timeout) {
-  return new Promise((resolve) => {
-    const req = http.get(url, { timeout }, (res) => {
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => resolve(chunks.join('')));
-    });
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
-  });
-}
-
-/** 偵測 ChromaDB 狀態 + 當前專案索引 */
-async function checkRagStatus() {
-  // 1. heartbeat
-  const hb = await httpGet(`${CHROMA_URL}/api/v2/heartbeat`, CHROMA_TIMEOUT);
-  if (!hb) return null; // ChromaDB not running
-
-  // 2. list collections
-  const raw = await httpGet(
-    `${CHROMA_URL}/api/v2/tenants/default_tenant/databases/default_database/collections`,
-    CHROMA_TIMEOUT
-  );
-  if (!raw) return { online: true, collections: [], project: null };
-
-  let collections;
-  try { collections = JSON.parse(raw); } catch { return { online: true, collections: [], project: null }; }
-
-  const projectName = guessProjectName();
-  const collectionName = projectName ? `rag_${projectName}` : null;
-  const matched = collectionName
-    ? collections.find(c => c.name === collectionName)
-    : null;
-
-  return {
-    online: true,
-    collections: collections.map(c => c.name),
-    project: projectName,
-    hasIndex: !!matched,
-    collectionName,
-  };
-}
-
 // === 主程式 ===
 async function main() {
   const output = [];
@@ -228,25 +170,7 @@ async function main() {
       output.push(`\n[Learn] 近期踩坑紀錄：\n${brief}`);
     }
 
-    // 5. RAG 狀態偵測
-    const rag = await checkRagStatus();
-    if (rag) {
-      if (rag.hasIndex) {
-        output.push(
-          `\n[RAG] ${rag.collectionName} 已索引，語意搜尋可用。` +
-          `\n⚠️ 搜尋規則（必須遵守）：` +
-          `\n  - 不確定功能在哪個檔案 → 必須先用 rag_query，禁止直接 Glob+Grep+Read 掃描` +
-          `\n  - PHP class/method → 用 class_method_lookup 一次到位，禁止 Grep→Read 兩步` +
-          `\n  - 知道確切函式名/變數名 → 用 Grep` +
-          `\n  - rag_query 回傳的 chunk 已包含程式碼片段，通常不需要再 Read 整個檔案` +
-          `\n  - 只有在需要看 chunk 周圍的完整上下文時，才用 Read(offset, limit) 讀取該區段`
-        );
-      } else if (rag.online && rag.project) {
-        output.push(`\n[RAG] ChromaDB 在線但此專案未索引。大型專案建議先執行 rag_index { project: "${rag.project}" } 建立索引，可大幅節省後續搜尋 token。`);
-      }
-    }
-
-    // 6. Hook 投訴偵測（所有專案都提醒，MCP_Server 顯示詳情）
+    // 5. Hook 投訴偵測（所有專案都提醒，MCP_Server 顯示詳情）
     try {
       const complaintsPath = path.join(HOME, '.claude', 'hook-complaints.jsonl');
       if (fs.existsSync(complaintsPath)) {

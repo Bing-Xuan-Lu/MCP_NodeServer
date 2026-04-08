@@ -1,6 +1,6 @@
 ---
 name: MCP Server 架構決策記錄
-description: 關鍵架構選擇的原因與應用邊界，避免未來重複踩坑或誤改設計
+description: 關鍵架構選擇的原因與應用邊界，避免未來重複踩坑或誤改設計（RAG 已移除，改用 AST 符號索引）
 type: project
 ---
 
@@ -14,13 +14,14 @@ type: project
 
 ---
 
-## RAG 設計為選用元件
+## RAG 已移除，改用 AST 符號索引（2026-04-08）
 
-ChromaDB 容器未啟動時，`rag_*` 工具靜默失敗，其他所有工具完全不受影響。
+ChromaDB RAG 因精準度不足（中文 PHP 混合語境 embedding 差、chunk 切割破壞語意）而移除。
+取代方案：`symbol_index` + `find_usages` + `find_hierarchy` + `find_dependencies`（基於 php-parser AST，純 JS，零 Docker 依賴）。
 
-**Why:** 避免單一依賴影響整體可用性。ChromaDB 是重量級容器，日常輕量工作不需要它；大型專案搜尋才啟動。
+**Why:** AST 是確定性分析，精準度遠高於 embedding 向量搜尋；零 token 成本、零 Docker 依賴、零維護成本。
 
-**How to apply:** 進入測試/開發流程前，先確認 ChromaDB 是否需要啟動；若 RAG 回傳錯誤直接跳過，改用 Grep。
+**How to apply:** PHP class/method 關係型查詢用 `find_*` 系列；純文字定位用 Grep。
 
 ---
 

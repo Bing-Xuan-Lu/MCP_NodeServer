@@ -42,7 +42,7 @@ $ARGUMENTS
 | `Grep` | 在規格書中搜尋功能說明段落 |
 | `Read` | 讀取規格書段落、codemap 或特定檔案片段 |
 | `class_method_lookup` | 直接取得 class+method 原始碼（**優先使用**） |
-| `rag_query` | 不確定在哪個檔案時語意搜尋定位 |
+| `find_usages` | 不確定在哪個檔案時 AST 精確搜尋引用位置 |
 | `execute_sql` | 驗證 DB 資料是否正常 |
 | `get_db_schema` | 查表結構（欄位/型別/預設值） |
 | `run_php_script` | 執行 PHP 片段驗證行為 |
@@ -102,7 +102,7 @@ $ARGUMENTS
 ### 步驟 3：呼叫鏈追蹤（最多 4 層）
 
 若專案有 codemap（`docs/CODEMAPS/backend.md`），先讀 codemap 定位函式行號。
-若無 codemap，用 `class_method_lookup` 或 `rag_query` 定位。
+若無 codemap，用 `class_method_lookup` 或 `find_usages` 定位。
 
 從入口層開始，沿呼叫鏈逐層追蹤：
 

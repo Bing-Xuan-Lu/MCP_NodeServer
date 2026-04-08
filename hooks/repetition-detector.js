@@ -4,7 +4,7 @@
  *
  * 三層防線：
  * Layer 1 — Wrong Tool（首次即攔）：Bash 做了有專用工具的事，不需歷史紀錄
- * Layer 2 — Scatter Search（累計偵測）：Grep 散搜多檔案時強制注入記憶，提醒用 CODEMAPS / RAG / MCP 工具
+ * Layer 2 — Scatter Search（累計偵測）：Grep 散搜多檔案時強制注入記憶，提醒用 CODEMAPS / MCP 工具
  * Layer 3 — Repetition（累計偵測）：同類操作重複時建議 batch 或策略調整
  *
  * 非阻擋式：只輸出提醒，不取消操作（exit 0）。
@@ -83,7 +83,6 @@ function estimateToolTokens(tool, args) {
     'Grep': 400,           // Grep 結果
     'send_http_request': 600,
     'execute_sql': 500,
-    'rag_query': 800,
     'browser_interact': 1200,  // 包含截圖等
   };
 
@@ -341,7 +340,7 @@ function buildMemoryInjection(grepCount) {
   // 4. MCP 工具提醒
   lines.push('── MCP 工具優先規則 ──');
   lines.push('  找函式碼 → class_method_lookup（一次到位，禁止 Grep→Read 兩步）');
-  lines.push('  不確定位置 → rag_query（語意搜尋）或先讀 CODEMAPS');
+  lines.push('  不確定位置 → find_usages（AST 精確搜尋）或先讀 CODEMAPS');
   lines.push('  知道函式名 → Grep OK，但不要散搜多個檔案');
   lines.push('  3+ 檔案 → 查 _batch 版本工具');
   lines.push('');
@@ -673,9 +672,38 @@ const PATTERNS = [
     },
   },
   {
+    // Layer 2.4: Grep PHP Symbol — Grep 搜尋 PHP class/method 時提醒用 AST 工具
+    id: 'grep_php_symbol',
+    detect: (entry, _history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'Grep') return null;
+
+      const pattern = entry.args?.pattern || '';
+      const filePath = entry.args?.path || '';
+      const glob = entry.args?.glob || '';
+
+      // 偵測搜尋 PHP class/method 的 pattern
+      const isPhpContext = /\.php/i.test(glob) || /\.php/i.test(filePath) ||
+        /admin|model|controller|cls\b/i.test(filePath);
+      if (!isPhpContext) return null;
+
+      // 搜尋 class 名稱、method 呼叫、extends/implements
+      const isSymbolSearch = /(::|->|extends|implements|new\s+|class\s+|function\s+)/i.test(pattern) ||
+        /^[A-Z][a-zA-Z]+$/.test(pattern); // PascalCase = likely class name
+      if (!isSymbolSearch) return null;
+
+      return `[PHP Symbol] 💡 偵測到用 Grep 搜尋 PHP class/method「${pattern.substring(0, 40)}」。\n` +
+             `  PHP 關係型查詢請改用 MCP AST 工具（精確、零 token）：\n` +
+             `  → find_usages：找「誰呼叫了這個 method」「哪裡用到這個 class」\n` +
+             `  → find_hierarchy：找繼承鏈（extends / implements）\n` +
+             `  → class_method_lookup：直接取得 method 原始碼\n` +
+             `  Grep 只適合搜「變數名」「字串常數」等純文字定位。\n`;
+    },
+  },
+  {
     // Layer 2.5: Scatter Search — Grep 搜不同路徑 ≥ 2 次，強制注入記憶
     //   偵測「不確定功能在哪 → 到處 Grep」的低效模式
-    //   觸發時讀取 memory 檔案內容直接注入 context，強制 Claude 想起 CODEMAPS / RAG / MCP 工具
+    //   觸發時讀取 memory 檔案內容直接注入 context，強制 Claude 想起 CODEMAPS / MCP 工具
     id: 'grep_scatter_search',
     detect: (entry, history) => {
       const tool = shortName(entry.tool);
@@ -728,7 +756,7 @@ const PATTERNS = [
       return `[Scatter Search] ⚠️ 偵測到 Grep↔Read 交替搜尋模式（${alternations} 次切換）。\n` +
              `  這是低效的「順藤摸瓜」模式，請改用：\n` +
              `  → class_method_lookup：PHP 函式一次到位取得原始碼\n` +
-             `  → rag_query：語意搜尋直接定位功能所在檔案\n` +
+             `  → find_usages：AST 精確搜尋 class/method 引用位置\n` +
              `  → CODEMAPS：查函式行號後 Read(offset, limit) 精準讀取\n`;
     },
   },

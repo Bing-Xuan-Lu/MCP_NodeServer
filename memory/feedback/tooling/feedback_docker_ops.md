@@ -4,9 +4,9 @@ description: Docker image 版本必須鎖定具體號碼；升版前必須查證
 type: feedback
 ---
 
-docker-compose.yml 的 image tag 一律指定具體版本號（如 `chromadb/chroma:1.5.5`），禁止用 `:latest`。
+docker-compose.yml 的 image tag 一律指定具體版本號，禁止用 `:latest`。
 
-**Why:** ChromaDB 升版時持久化路徑從 `/chroma/chroma` 改成 `/data`，volume mount 沒跟著改導致 `docker compose up -d` 後資料全部消失。
+**Why:** 曾因升版時持久化路徑變更，volume mount 沒跟著改導致資料消失。
 
 **How to apply:**
 - 升版前必須查證：持久化路徑、API endpoint 變更、環境變數變更（查官方文件 / GitHub release notes / `docker logs`）

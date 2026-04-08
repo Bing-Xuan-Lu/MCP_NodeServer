@@ -21,8 +21,7 @@ MCP_NodeServer/
 ├── tools/               ← MCP 工具模組（分類分層，動態載入自 index.js glob pattern：tools/**/*.js）
 │   ├── _shared/         ← 共用模組（工具間共享的常數、函式、資源池，不對外暴露）
 │   │   ├── browser_pool.js ← Playwright browser pool factory（browser/* 共用）
-│   │   ├── utils.js     ← 驗證函式、錯誤處理、async 工具（全工具可用）
-│   │   └── _rag_common.js ← RAG 共用常數、ChromaDB、檔案掃描、切片（data/rag_* 共用）
+│   │   └── utils.js     ← 驗證函式、錯誤處理、async 工具（全工具可用）
 │   ├── file_io/         ← 檔案讀寫與文件轉換（通用 I/O）
 │   │   ├── filesystem.js ← list_files, read_file, create_file, apply_diff, read_files_batch, list_files_batch, create_file_batch
 │   │   ├── excel.js     ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
@@ -30,10 +29,8 @@ MCP_NodeServer/
 │   │   ├── pptx.js      ← read_pptx_file, read_pptx_files_batch (.pptx → Markdown/Text + 圖片)
 │   │   ├── pdf.js       ← read_pdf_file, read_pdf_files_batch (.pdf → Markdown/Text)
 │   │   └── images.js    ← read_image, read_images_batch（圖片讀取 + 縮放，支援 PNG/JPG/WebP/GIF/SVG）
-│   ├── data/            ← 資料庫與資料索引（DB、RAG）
-│   │   ├── database.js  ← set_database, load_db_connection, get_current_db, get_db_schema, execute_sql, get_db_schema_batch, execute_sql_batch
-│   │   ├── rag_index.js ← rag_index（檔案索引、切片、embedding；需 ChromaDB Docker，選用）
-│   │   └── rag_query.js ← rag_query, rag_query_batch, rag_status（語意搜尋、批次查詢；需 ChromaDB Docker，選用）
+│   ├── data/            ← 資料庫（DB）
+│   │   └── database.js  ← set_database, load_db_connection, get_current_db, get_db_schema, execute_sql, get_db_schema_batch, execute_sql_batch
 │   ├── deploy/          ← 部署與版控工具（遠端操作、DB migration）
 │   │   ├── sftp.js      ← sftp_connect, sftp_upload, sftp_download, sftp_list, sftp_delete, sftp_*_batch
 │   │   ├── php.js       ← run_php_script, run_php_test, send_http_request, tail_log, send_http_requests_batch, run_php_script_batch
@@ -49,10 +46,11 @@ MCP_NodeServer/
 │   │   ├── bookmarks.js ← Chrome 書籤管理（12 個工具）
 │   │   ├── agent_coord.js ← agent_coord（多 Agent 協調：post/poll/status）
 │   │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
-│   │   └── php_class.js ← class_method_lookup（PHP 原始碼直接定位）
+│   │   ├── php_class.js ← class_method_lookup（PHP 原始碼直接定位）
+│   │   └── php_symbol.js ← symbol_index, find_usages, find_hierarchy, find_dependencies（PHP AST 符號索引）
 │   └── utils/           ← 通用工具與比對
-│       └── image_diff.js ← image_diff（設計稿 vs 截圖像素級比對）
-├── chromadb/             ← ChromaDB Docker 環境（RAG 選用，docker-compose.yml）
+│       ├── image_diff.js ← image_diff（設計稿 vs 截圖像素級比對）
+│       └── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
 ├── hooks/               ← Claude Code Session Hooks（全域 ~/.claude/settings.json 設定）
 │   ├── session-start.js ← SessionStart：對話開場載入記憶與上次摘要
 │   ├── repetition-detector.js ← PreToolUse：5層偵測（錯誤工具、散搜、低效、重複、自動修復），支援成本追蹤、Slack通知、debug模式
@@ -91,29 +89,9 @@ MCP_NodeServer/
 
 ## Docker 選用元件
 
-不啟用時其他工具完全不受影響。設定細節見 [`docs/docker_rag_setup.md`](docs/docker_rag_setup.md)。
+不啟用時其他工具完全不受影響。
 
 - **Python**：容器名 `python_runner`，`restart: unless-stopped`
-- **RAG**：ChromaDB port 8010，Admin UI port 3100
-
-### RAG 使用規則
-
-**索引時機**：開發/調整結束後、執行測試 Skill 前（`/php_crud_test`、`/project_qc`、`/playwright_ui_test` 等）主動呼叫。ChromaDB 未啟動則跳過，不報錯、不阻斷。
-
-**索引範圍**（必須遵守，不可整個根目錄一把抓）：
-
-1. `paths` 精確指定子目錄，不可省略專案名前綴
-2. 先跑 `rag_status` 確認 collection 乾淨
-3. 高價值：Model、AJAX、JS、spec；低價值不索引：CRUD 模板、CSS、上傳目錄、第三方套件
-4. PHP legacy 專案建議 `chunk_lines: 120`（預設 60 太碎）
-
-**搜尋策略**：
-
-| 場景 | 工具 |
-|------|------|
-| 不確定功能在哪個檔案 | `rag_query`（distance > 0.5 = 不相關，改 Grep） |
-| 知道函式名/變數名 | `Grep` |
-| 後台 CRUD 頁面 | 直接 `Read` |
 
 ---
 

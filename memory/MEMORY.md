@@ -12,7 +12,6 @@
 | --- | --- |
 | [project/project_mcp_server.md](project/project_mcp_server.md) | 專案基本資訊與路徑設定 |
 | [project/decision_architecture.md](project/decision_architecture.md) | 架構決策記錄：batch 工具、RAG 選用、_internal 隔離、basePath、單一 server、Skill 上限 |
-| [project/project_rag_chromadb.md](project/project_rag_chromadb.md) | ChromaDB RAG 技術細節：embedding model、persistence path、Docker 設定 |
 | [project/project_deploy_pipeline.md](project/project_deploy_pipeline.md) | 部署流水線架構：remote_diff → sftp → DB migration → smoke test |
 
 ### Reference
