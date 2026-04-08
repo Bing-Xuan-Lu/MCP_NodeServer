@@ -90,7 +90,9 @@ Glob pattern="~/.claude/projects/*/memory/MEMORY.md"
 
 #### C — Tool 面向
 
-掃描對話中是否有 MCP 工具的問題或改善機會：
+掃描對話中是否有 MCP 工具或 Hook 的問題或改善機會：
+
+**MCP 工具：**
 
 | 類型 | 觸發條件 |
 |------|---------|
@@ -100,11 +102,23 @@ Glob pattern="~/.claude/projects/*/memory/MEMORY.md"
 | 效能問題 | 工具執行太慢或佔用過多資源 |
 | **手動替代** | 用 Bash 暫時完成了本可由工具做的事（即興腳本、手刻 SQL 分析等） |
 
+**Hook：**
+
+| 類型 | 觸發條件 |
+|------|---------|
+| 誤判 / 誤攔 | Hook 阻擋了不該阻擋的操作，或放行了不該放行的 |
+| 觸發條件過寬/過窄 | matcher 太廣造成雜訊，或漏掉應偵測的情境 |
+| 邏輯缺陷 | Hook 輸出資訊不準確、計數錯誤、建議不合適 |
+| 缺少 Hook | 發現某個時機點（PreToolUse / PostToolUse / Stop / SessionStart）應有 hook 但沒有 |
+| 新增 Hook 需求 | 對話中出現重複的人工提醒，適合自動化成 hook |
+
 **主動詢問（每次 retro 必問）**：
 
 > 「這次有沒有某個手動步驟，讓你覺得『如果有個工具就好了』？例如用 Bash 寫了臨時腳本、複製貼上做了三次相同的操作、或 Claude 提示說『目前沒有工具可以直接做這件事』？」
+>
+> 「這次有沒有 hook 行為不符預期？例如誤攔、誤報、或某個時機點應該有提醒但沒有？」
 
-→ 有 → 列為 Tool 面向「新增工具」候選，寫入報告並詢問是否加入 improvements_backlog.md
+→ 有 → 列為 Tool 面向候選，寫入報告並詢問是否加入 improvements_backlog.md
 
 #### D — MCP Backlog 面向
 

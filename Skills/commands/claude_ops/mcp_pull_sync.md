@@ -6,12 +6,13 @@
 
 ## 背景
 
-MCP_NodeServer 更新後，通常有四類後續工作需要處理：
+MCP_NodeServer 更新後，通常有五類後續工作需要處理：
 
 1. 新 npm 套件安裝
 2. 新 Skill MD 部署到 `~/.claude/commands/`
-3. 新 Hook 登記到 `settings.json`
-4. MCP Server 重啟（tools / index.js 有變動時）
+3. Hook 檔案複製到 `~/.claude/hooks/`
+4. Hook 登記到 `settings.json`（自動寫入）
+5. MCP Server 重啟（tools / index.js 有變動時）
 
 ---
 
@@ -22,7 +23,6 @@ MCP_NodeServer 更新後，通常有四類後續工作需要處理：
 Git pull 後會自動記錄 `ORIG_HEAD`，優先用這個取得完整的 pull 範圍：
 
 ```bash
-# 確認 ORIG_HEAD 存在（pull 後自動設定）
 git rev-parse ORIG_HEAD 2>/dev/null && \
   git log --oneline ORIG_HEAD..HEAD && \
   git diff ORIG_HEAD HEAD --name-only
@@ -31,14 +31,17 @@ git rev-parse ORIG_HEAD 2>/dev/null && \
 - 若 `ORIG_HEAD` 存在 → 用 `git diff ORIG_HEAD HEAD --name-only` 取得所有本次 pull 的變更
 - 若 `ORIG_HEAD` 不存在（首次或已被清除） → 詢問使用者：「這次 pull 了幾個 commit？」，或請使用者提供起始 commit hash
 
-取得變更檔案清單後，分類到以下 4 個桶：
+取得變更檔案清單後，分類到以下 5 個桶：
 
 ```text
 A: package.json 有變動？
 B: Skills/commands/**/*.md 新增或修改（排除 _internal/）
 C: hooks/*.js 有新增或修改
 D: tools/*.js 或 index.js 有變動
+E: 首次部署（~/.claude/hooks/ 目錄不存在或為空）
 ```
+
+**若為首次部署（E）：強制執行步驟 3 和步驟 4，不論 git diff 結果。**
 
 ---
 
@@ -72,28 +75,107 @@ cp "Skills/commands/{dept}/{skill}.md" ~/.claude/commands/{skill}.md
 
 ---
 
-### 步驟 4：處理 C — 檢查 Hook 登記
+### 步驟 4：處理 C — 複製 Hook 檔案
 
-對每個 `hooks/` 下有變動的 `.js` 檔，檢查 `~/.claude/settings.json` 是否已登記：
+對每個 `hooks/` 下有變動的 `.js` 檔（以及首次部署時的全部 `.js` 檔）：
 
-```text
-用 Grep 搜尋 settings.json 中是否含有該 hook 的檔名
+```bash
+# 確保目標目錄存在
+mkdir -p ~/.claude/hooks
+
+# 逐一複製
+cp hooks/{file}.js ~/.claude/hooks/{file}.js
 ```
 
-若未找到，輸出需人工補登記的 Hook 清單（見「輸出格式」）。
-若已登記，標記「Hook：已登記」。
+同時也複製 `hooks/skill-keywords.json`（若存在）：
+
+```bash
+cp hooks/skill-keywords.json ~/.claude/hooks/skill-keywords.json
+```
+
+→ 逐一輸出複製結果。
 
 ---
 
-### 步驟 5：處理 D — 確認是否需重啟 MCP
+### 步驟 5：處理 C — 自動登記 Hook 到 settings.json
+
+複製完成後，讀取 `~/.claude/settings.json`，確認以下 hook 是否已登記。
+**未登記的項目自動寫入**（用 Node.js 讀寫 JSON，保留原有 permissions 不動）：
+
+```bash
+node - << 'EOF'
+const fs = require('fs');
+const path = require('path');
+const HOME = process.env.HOME || process.env.USERPROFILE;
+const settingsPath = path.join(HOME, '.claude', 'settings.json');
+
+let settings = {};
+try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')); } catch(e) {}
+if (!settings.hooks) settings.hooks = {};
+
+// 標準 hook 登記結構
+const REQUIRED_HOOKS = {
+  SessionStart: [
+    { command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/session-start.js"` }
+  ],
+  PreCompact: [
+    { command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/pre-compact.js"` }
+  ],
+  PreToolUse: [
+    { matcher: '.*', command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/repetition-detector.js"` },
+    { matcher: 'Write|Edit', command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/write-guard.js"` },
+    { matcher: '.*', command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/user-prompt-guard.js"` },
+    { matcher: '.*', command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/skill-router.js"` },
+  ],
+  PostToolUse: [
+    { matcher: 'Write|Edit', command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/llm-judge.js"` }
+  ],
+  Stop: [
+    { command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/session-stop.js"` }
+  ],
+};
+
+let changed = 0;
+
+function commandExists(hookList, cmd) {
+  if (!Array.isArray(hookList)) return false;
+  return hookList.some(entry =>
+    (entry.hooks || []).some(h => h.command === cmd)
+  );
+}
+
+for (const [event, entries] of Object.entries(REQUIRED_HOOKS)) {
+  if (!settings.hooks[event]) settings.hooks[event] = [];
+  for (const entry of entries) {
+    if (!commandExists(settings.hooks[event], entry.command)) {
+      const hookEntry = { hooks: [{ type: 'command', command: entry.command }] };
+      if (entry.matcher) hookEntry.matcher = entry.matcher;
+      settings.hooks[event].push(hookEntry);
+      changed++;
+      console.log(`[登記] ${event}${entry.matcher ? ` (${entry.matcher})` : ''}: ${entry.command.split('/').pop()}`);
+    }
+  }
+}
+
+fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+if (changed === 0) console.log('[Hook] 所有 hook 均已登記，無需更新');
+else console.log(`[Hook] 已自動登記 ${changed} 個 hook`);
+EOF
+```
+
+→ 輸出登記結果。
+
+---
+
+### 步驟 6：處理 D — 確認是否需重啟 MCP
 
 若 `tools/*.js` 或 `index.js` 有任何變動：
 
-→ 標記需重啟 MCP Server（無法自動化，需使用者操作）。
+→ 標記需重啟 MCP Server（需使用者手動操作）。
 
 ---
 
-### 步驟 6：產出同步報告
+### 步驟 7：產出同步報告
 
 ```text
 ✅ MCP Pull Sync 完成！
@@ -105,18 +187,16 @@ cp "Skills/commands/{dept}/{skill}.md" ~/.claude/commands/{skill}.md
   [已部署：skill_a.md, skill_b.md]
   [無需部署]
 
-🪝 Hook 登記
-  [已登記：repetition-detector.js]
-  [需人工登記：（見下方步驟）]
+🪝 Hook 同步
+  [已複製：session-start.js, session-stop.js, repetition-detector.js ...]
+  [已登記：5 個 hook]
+  [無需更新]
 
 🔄 MCP Server
   [需重啟 / 無需重啟]
 
 ⚠️ 需人工操作：
-  1. settings.json 補登記以下 Hook：
-     - PreToolUse（matcher: ".*"）→ hooks/repetition-detector.js
-     （提示：用 /update-config 或直接編輯 ~/.claude/settings.json）
-  2. 重啟 MCP Server（Ctrl+Shift+P → Restart MCP Server）
+  1. 重啟 MCP Server（Ctrl+Shift+P → Restart MCP Server）
 ```
 
 若所有步驟均自動完成且無需重啟，輸出：
@@ -131,8 +211,8 @@ cp "Skills/commands/{dept}/{skill}.md" ~/.claude/commands/{skill}.md
 
 | 工具 | 用途 |
 | --- | --- |
-| Bash | git diff、npm install、cp 複製 Skill |
-| Grep | 搜尋 settings.json 中的 hook 登記狀態 |
+| Bash | git diff、npm install、cp 複製檔案、node 寫入 settings.json |
+| Grep | 搜尋確認狀態 |
 | Glob | 列出 Skills/commands/ 下的 MD 檔 |
 | Read | 讀取 settings.json 確認 hook 結構 |
 
@@ -143,5 +223,6 @@ cp "Skills/commands/{dept}/{skill}.md" ~/.claude/commands/{skill}.md
 - `git diff HEAD~1 HEAD` 只看最後一個 commit；若一次 pull 了多個 commit，改用 `git log` 先確認範圍再調整 diff 指令
 - `_internal/` 下的 Skill 不部署、不列入報告
 - `*_steps.md`（伴隨參考檔）不獨立部署，跳過
-- Hook 登記無法自動寫入 settings.json（需使用者授權），只能輸出提示
+- `skill-keywords.json` 跟著 hooks/ 一起複製（skill-router 依賴）
 - MCP Server 重啟只能由使用者手動操作，不要嘗試自動化
+- Node.js 寫入 settings.json 時只操作 `hooks` 區段，`permissions` 等其他欄位保持原樣

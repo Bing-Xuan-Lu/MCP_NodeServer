@@ -18,6 +18,7 @@ const HOME = process.env.HOME || process.env.USERPROFILE;
 const SESSIONS_DIR = path.join(HOME, '.claude', 'sessions');
 const PROJECTS_DIR = path.join(HOME, '.claude', 'projects');
 const LEARNED_DIR = path.join(HOME, '.claude', 'skills', 'learned');
+const PENDING_DIR = path.join(HOME, '.claude', 'skills', 'pending-review');
 const MAX_AGE_DAYS = 7;
 
 // === 根據 CWD 動態找對應的 project memory 目錄 ===
@@ -223,7 +224,37 @@ async function main() {
       }
     } catch (e) {}
 
-    // 9. Codemap 偵測 — 有 codemap 才能高效除錯
+    // 9. Skill 待評估提醒（pending-review）
+    try {
+      if (fs.existsSync(PENDING_DIR)) {
+        const pendingFiles = fs.readdirSync(PENDING_DIR)
+          .filter(f => f.endsWith('.json'))
+          .map(f => ({ name: f, path: path.join(PENDING_DIR, f), mtime: fs.statSync(path.join(PENDING_DIR, f)).mtimeMs }))
+          .sort((a, b) => b.mtime - a.mtime);
+
+        if (pendingFiles.length > 0) {
+          // 合併所有待評估的 Skill（去重）
+          const allSkills = new Set();
+          for (const pf of pendingFiles) {
+            try {
+              const record = JSON.parse(fs.readFileSync(pf.path, 'utf-8'));
+              (record.skills || []).forEach(s => allSkills.add(s));
+            } catch (e) {}
+          }
+
+          if (allSkills.size > 0) {
+            const skillList = [...allSkills].map(s => `/${s}`).join(', ');
+            output.push(
+              `\n[Skill Review] 上次 session 使用了以下 Skill：${skillList}\n` +
+              `請在本次對話中評估這些 Skill 的執行品質，若有改進空間請直接 patch 對應的 MD 檔（Skills/commands/ 下）。\n` +
+              `評估完成後刪除 ${PENDING_DIR} 下的 .json 檔即可。`
+            );
+          }
+        }
+      }
+    } catch (e) {}
+
+    // 11. Codemap 偵測 — 有 codemap 才能高效除錯
     const codemapCandidates = [
       path.join(cwd, 'docs', 'CODEMAPS'),
       path.join(cwd, '.reports', 'codemaps'),
