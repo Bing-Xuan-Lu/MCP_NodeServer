@@ -95,7 +95,7 @@ c. 產出互動元素清單並逐一測試：
 - 商品卡片 hover → 驗快速預覽/按鈕出現
 - 圖片 hover → 驗放大/overlay 效果
 
-**動態商品規格選項互動協議（材質/尺寸/印刷/加工等）**：
+**動態商品規格選項互動協議（尺寸/顏色/款式/數量等）**：
 
 偵測到商品詳情頁含有規格選擇器時，**必須逐一點擊每個選項並驗證回饋**：
 
@@ -127,7 +127,7 @@ c. 產出互動元素清單並逐一測試：
    - 選項點擊後若觸發 AJAX → 等待載入完成再截圖
    - 所有選項都選完後，驗證「加入購物車」按鈕是否可用
 
-> 此協議適用於所有含規格選擇的頁面（客製商品、多規格商品、報價計算器等）。
+> 此協議適用於所有含規格選擇的頁面（多規格商品、可配置商品、報價計算器等）。
 
 **POPUP/Lightbox 測試**：
 - 圖片點擊 → 驗 Lightbox 開啟 → 可左右切換 → 關閉
@@ -138,6 +138,65 @@ c. 產出互動元素清單並逐一測試：
 - 頁面捲到底 → 驗 lazy-load 圖片載入
 - 固定導覽列 → 捲動後是否 sticky
 - 回到頂部按鈕 → 捲動後出現 → 點擊 → 回頂
+
+### B0-Text. 全站文字校對（與規格書文字清單比對）
+
+瀏覽器停在每個頁面時，額外執行：
+
+1. `browser_evaluate` 提取頁面所有可見文字：
+   ```js
+   Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6,label,th,button,.btn,nav a,footer a,.breadcrumb a'))
+     .map(el => ({ tag: el.tagName, text: el.innerText.trim(), selector: el.className || el.id }))
+     .filter(x => x.text.length > 0)
+   ```
+2. 對照規格書/AxShare 的頁面文字，比對：
+   - 標題文字是否一致（如「常問問題」→ 規格書寫「常見問題」）
+   - 按鈕文字是否一致（如「編輯」→ 規格書寫「明細」）
+   - 導覽選單文字是否一致
+3. 不一致 → **NG [TEXT-MISMATCH]**（規格：xxx 實際：yyy）
+
+### B0-Image. 全站圖片健康檢查
+
+每個頁面載入後，批次驗所有圖片：
+
+1. `browser_evaluate` 檢查所有 `<img>` 載入狀態：
+   ```js
+   Array.from(document.querySelectorAll('img')).map(img => ({
+     src: img.src,
+     loaded: img.complete && img.naturalWidth > 0,
+     alt: img.alt,
+     display: getComputedStyle(img).display
+   })).filter(x => x.display !== 'none' && !x.loaded)
+   ```
+2. 每個 loaded=false 的圖片 → **NG [IMAGE-BROKEN]**（破圖）
+3. 同時掃描 `background-image` 的 CSS：
+   ```js
+   Array.from(document.querySelectorAll('*')).filter(el => {
+     const bg = getComputedStyle(el).backgroundImage;
+     return bg && bg !== 'none' && bg.includes('url(');
+   }).map(el => getComputedStyle(el).backgroundImage)
+   ```
+
+> 替代方案：可用 `page_audit` 工具（checks 含 images），會自動回傳 `brokenImages`。
+
+### B0-Upload. 後台圖片上傳欄位完整性掃描
+
+**每個後台新增/編輯頁面**，掃描所有 `<input type="file">` 旁邊是否有建議尺寸：
+
+1. `browser_evaluate`：
+   ```js
+   Array.from(document.querySelectorAll('input[type="file"]')).map(input => {
+     const label = input.closest('tr,div,.form-group')?.querySelector('label,th')?.innerText || '';
+     const hint = input.closest('tr,div,.form-group')?.innerText || '';
+     const hasSize = /\d+\s*[×xX*]\s*\d+|Width|Height|px|尺寸|建議/.test(hint);
+     return { label: label.trim(), hasSize };
+   })
+   ```
+2. `hasSize=false` → **NG [UPLOAD-NO-SIZE-HINT]**（缺少建議尺寸）
+3. 同時檢查上傳後是否有圖片預覽功能：
+   - 用 `browser_file_upload` 上傳測試圖 → 截圖 → 驗預覽是否出現
+
+> 替代方案：可用 `page_audit` 工具（checks 含 images），會自動回傳 `uploadFieldsWithoutHint`。
 
 記錄格式：`| 頁面 | 元素 | 互動類型 | 預期行為 | 實際結果 | 截圖 |`
 

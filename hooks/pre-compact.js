@@ -17,8 +17,7 @@
 
 import fs from 'fs';
 import path from 'path';
-
-const HOME = process.env.HOME || process.env.USERPROFILE;
+import { HOME } from '../env.js';
 const SESSIONS_DIR = path.join(HOME, '.claude', 'sessions');
 const LEARNED_DIR = path.join(HOME, '.claude', 'skills', 'learned');
 

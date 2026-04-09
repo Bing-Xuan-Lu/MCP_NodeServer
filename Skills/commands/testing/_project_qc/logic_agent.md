@@ -84,6 +84,62 @@
 
 ---
 
+## Phase A-Link — 前後台連動驗證（邏輯稽核員用 HTTP 驗，不用 Playwright）
+
+Phase A 的 CRUD 測試只驗「後台寫入 DB 成功」，但內部校對暴露最大宗問題是「後台改了前台沒反映」。
+本 Phase 用 `send_http_requests_batch` 批次驗前台 HTML 是否包含後台剛寫入的值。
+
+### 測試流程
+
+1. 讀取 `reports/field_map.md`，篩出所有「前台顯示 = ✅」的欄位
+2. 對每個模組：
+   a. `send_http_request` POST 後台 update 端點，把某欄位改為唯一測試值（如 `MCP_LINK_TEST_{{timestamp}}`）
+   b. `send_http_request` GET 對應的前台頁面 HTML
+   c. 驗證 HTML body 中包含該測試值
+   d. 若不包含 → **NG [LINK-MISSING]**（後台改了前台沒同步）
+3. 特別注意以下高風險欄位：
+   - 標題/名稱（後台 title → 前台 h1/h2）
+   - 圖片路徑（後台上傳 → 前台 `<img src>`）
+   - 排序值（後台 order_num → 前台列表順序）
+   - 價格/金額（後台 price → 前台顯示）
+   - 編輯器內容（後台 CKEditor → 前台 HTML 渲染）
+4. 完成後寫入 `reports/logic_qc.md` 的 Phase A-Link 章節
+
+### 記錄格式
+
+| 模組 | 欄位 | 後台更新值 | 前台 URL | 前台是否包含 | 結果 |
+|------|------|-----------|---------|------------|------|
+
+---
+
+## Phase A-Boundary — 邊界條件測試
+
+Phase A 的 CRUD 只測正常值，但內部校對暴露：庫存 0 可加購物車、金額計算錯誤、登出不清購物車。
+
+### 測試案例（通用 + 含購物車專案特化）
+
+**通用邊界（所有模組）**：
+- 圖片上傳欄位：POST 後 GET 圖片 URL → 驗 HTTP 200（不是 404 破圖）
+- CKEditor 欄位：POST HTML 內容 → GET 前台頁面 → 驗 HTML 正確渲染（不是原始碼顯示）
+- 排序修改：POST changeOrder → GET 列表 → 驗順序變化
+
+**購物車邊界（需在 field_map 標記商品/購物車模組時自動觸發）**：
+- 庫存=0 商品：`execute_sql` 設庫存為 0 → `send_http_request` POST 加入購物車 → 驗被拒絕
+- 金額計算：加入多商品 → GET 購物車頁 → 驗合計金額 = 各商品小計加總
+- Session 清除：`send_http_request` POST 登出 → GET 購物車頁 → 驗購物車為空
+- 免運門檻：加入未達免運金額 → 驗運費顯示；加入超過免運金額 → 驗運費=0
+
+### 執行方式
+
+用 `send_http_requests_batch` + `execute_sql_batch` 批次執行，測完後 `execute_sql` 還原資料。
+
+### 記錄格式
+
+| 案例 | 前置條件 | 操作 | 預期結果 | 實際結果 | 結果 |
+|------|---------|------|---------|---------|------|
+
+---
+
 ## Phase D — 規格書功能文字比對（若無規格書則跳過）
 
 邏輯稽核員**只能讀本地 spec_index.md**，不可嘗試 HTTP 爬取 AxShare。

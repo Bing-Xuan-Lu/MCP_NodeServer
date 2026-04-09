@@ -138,6 +138,42 @@ await page.waitForTimeout(1000);
 
 ---
 
+## 新增頁面殘留資料檢查（Anti-Dirty-Data）
+
+> **內部校對發現**：多個後台 add.php 頁面在尚未輸入時就已有資料（CKEditor 殘留、表單預填）。
+
+**所有後台 add.php 頁面測試前，先做清潔度檢查**：
+
+1. `browser_navigate` → add.php（不帶任何參數）
+2. `browser_evaluate` 檢查所有表單欄位是否為空：
+   ```js
+   Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea, select'))
+     .map(el => ({ name: el.name, value: el.value, tag: el.tagName }))
+     .filter(x => x.value && x.value.trim().length > 0)
+   ```
+3. CKEditor 實例內容檢查：
+   ```js
+   typeof CKEDITOR !== 'undefined'
+     ? Object.entries(CKEDITOR.instances).map(([id, ed]) => ({ id, content: ed.getData().trim() })).filter(x => x.content.length > 0)
+     : []
+   ```
+4. 若有非空欄位（排除 hidden 和預設值如日期、status=1）→ **NG [DIRTY-ADD-PAGE]**
+
+> 替代方案：可用 `page_audit` 工具（checks 含 images），會自動回傳 `dirtyFormFields` 和 `ckEditorStatus`。
+
+## CSV 匯出編碼驗證
+
+> **內部校對發現**：匯出 CSV 可能從某欄位開始亂碼。
+
+**所有含「匯出」按鈕的列表頁面**，必須額外驗證：
+
+1. `send_http_request` GET 匯出端點（通常是 `list.php?export=csv` 或類似）
+2. 驗回應 Header：`Content-Type` 包含 `charset=utf-8` 或 `charset=big5`
+3. 驗回應 Body 前 3 bytes 是否為 UTF-8 BOM（`EF BB BF`）
+4. 若 Excel 開啟亂碼 → **NG [CSV-ENCODING]**
+
+---
+
 ## 截圖嵌入義務（報告可驗證性）
 
 > **核心原則：使用者看不到截圖 = 無法驗證 = 等於沒測。**

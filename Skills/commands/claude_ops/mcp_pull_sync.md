@@ -6,13 +6,14 @@
 
 ## 背景
 
-MCP_NodeServer 更新後，通常有五類後續工作需要處理：
+MCP_NodeServer 更新後，通常有六類後續工作需要處理：
 
-1. 新 npm 套件安裝
-2. 新 Skill MD 部署到 `~/.claude/commands/`
-3. Hook 檔案複製到 `~/.claude/hooks/`
-4. Hook 登記到 `settings.json`（自動寫入）
-5. MCP Server 重啟（tools / index.js 有變動時）
+1. 環境變數檔（`.env`）建立或更新
+2. 新 npm 套件安裝
+3. 新 Skill MD 部署到 `~/.claude/commands/`
+4. Hook 檔案複製到 `~/.claude/hooks/`
+5. Hook 登記到 `settings.json`（自動寫入）
+6. MCP Server 重啟（tools / index.js 有變動時）
 
 ---
 
@@ -34,18 +35,46 @@ git rev-parse ORIG_HEAD 2>/dev/null && \
 取得變更檔案清單後，分類到以下 5 個桶：
 
 ```text
-A: package.json 有變動？
-B: Skills/commands/**/*.md 新增或修改（排除 _internal/）
-C: hooks/*.js 有新增或修改
-D: tools/*.js 或 index.js 有變動
-E: 首次部署（~/.claude/hooks/ 目錄不存在或為空）
+A: .env.example 或 env.js 有變動？
+B: package.json 有變動？
+C: Skills/commands/**/*.md 新增或修改（排除 _internal/）
+D: hooks/*.js 有新增或修改
+E: tools/*.js 或 index.js 有變動
+F: 首次部署（.env 不存在 或 ~/.claude/hooks/ 目錄不存在或為空）
 ```
 
-**若為首次部署（E）：強制執行步驟 3 和步驟 4，不論 git diff 結果。**
+**若為首次部署（F）：強制執行步驟 2～5，不論 git diff 結果。**
 
 ---
 
-### 步驟 2：處理 A — npm install
+### 步驟 2：處理 A — 環境變數檔
+
+檢查 MCP_Server 根目錄是否存在 `.env`：
+
+- **不存在**（首次部署或新成員）→ 自動複製：
+
+  ```bash
+  cp .env.example .env
+  ```
+
+  並提醒使用者：「已從 `.env.example` 建立 `.env`，請檢查並依本機環境調整設定值。」
+
+- **已存在但 `.env.example` 有新增變數** → 比對兩檔的 key，列出 `.env` 缺少的變數：
+
+  ```bash
+  # 取出 .env.example 的 key（排除註解和空行）
+  grep -oP '^[A-Z_]+=?' .env.example | sort > /tmp/env_example_keys
+  grep -oP '^[A-Z_]+=?' .env | sort > /tmp/env_keys
+  comm -23 /tmp/env_example_keys /tmp/env_keys
+  ```
+
+  若有差異 → 輸出缺少的變數名稱及 `.env.example` 中的預設值和註解，提醒使用者手動補入。
+
+- **兩邊一致** → 標記「環境變數：無需更新」。
+
+---
+
+### 步驟 3：處理 B — npm install
 
 若 `package.json` 有變動：
 
@@ -58,7 +87,7 @@ npm install
 
 ---
 
-### 步驟 3：處理 B — 部署新 Skill
+### 步驟 4：處理 C — 部署新 Skill
 
 對每個 `Skills/commands/` 下有變動的 `.md` 檔（排除 `_internal/`、`_skill_template.md`、`*_steps.md`）：
 
@@ -75,7 +104,7 @@ cp "Skills/commands/{dept}/{skill}.md" ~/.claude/commands/{skill}.md
 
 ---
 
-### 步驟 4：處理 C — 複製 Hook 檔案
+### 步驟 5：處理 D — 複製 Hook 檔案
 
 對每個 `hooks/` 下有變動的 `.js` 檔（以及首次部署時的全部 `.js` 檔）：
 
@@ -97,7 +126,7 @@ cp hooks/skill-keywords.json ~/.claude/hooks/skill-keywords.json
 
 ---
 
-### 步驟 5：處理 C — 自動登記 Hook 到 settings.json
+### 步驟 6：處理 D — 自動登記 Hook 到 settings.json
 
 複製完成後，讀取 `~/.claude/settings.json`，確認以下 hook 是否已登記。
 **未登記的項目自動寫入**（用 Node.js 讀寫 JSON，保留原有 permissions 不動）：
@@ -167,7 +196,7 @@ EOF
 
 ---
 
-### 步驟 6：處理 D — 確認是否需重啟 MCP
+### 步驟 7：處理 E — 確認是否需重啟 MCP
 
 若 `tools/*.js` 或 `index.js` 有任何變動：
 
@@ -175,10 +204,13 @@ EOF
 
 ---
 
-### 步驟 7：產出同步報告
+### 步驟 8：產出同步報告
 
 ```text
 ✅ MCP Pull Sync 完成！
+
+⚙️ 環境變數
+  [已建立 .env / 需補入 N 個新變數 / 無需更新]
 
 📦 npm 套件
   [已更新 / 無需更新]
@@ -196,7 +228,8 @@ EOF
   [需重啟 / 無需重啟]
 
 ⚠️ 需人工操作：
-  1. 重啟 MCP Server（Ctrl+Shift+P → Restart MCP Server）
+  1. 檢查 .env 設定值是否正確（首次或有新變數時）
+  2. 重啟 MCP Server（Ctrl+Shift+P → Restart MCP Server）
 ```
 
 若所有步驟均自動完成且無需重啟，輸出：

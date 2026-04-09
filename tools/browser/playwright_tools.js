@@ -120,7 +120,7 @@ export const definitions = [
   {
     name: "page_audit",
     description:
-      "一鍵頁面健檢:蒐集 console 錯誤/警告、載入失敗的資源(JS/CSS/圖片 404)、壞圖偵測、效能指標(loadTime/DOMContentLoaded/FCP/LCP)、meta 標籤。一次呼叫取代多次手動檢查。",
+      "一鍵頁面健檢:蒐集 console 錯誤/警告、載入失敗的資源(JS/CSS/圖片 404)、壞圖偵測(含 QC 增強:空 select/上傳欄位缺提示/表單殘留/CKEditor 狀態/CKFinder 健康)、效能指標(loadTime/DOMContentLoaded/FCP/LCP)、meta 標籤。一次呼叫取代多次手動檢查。",
     inputSchema: {
       type: "object",
       properties: {
@@ -798,6 +798,77 @@ async function handlePageAudit(args) {
       });
       report.images = imageReport;
       summaryParts.push(`Images: ${imageReport.total} 張，${imageReport.broken.length} 壞圖，${imageReport.noAlt.length} 缺 alt`);
+    }
+
+    // QC 增強檢查（隨 images 一起執行）
+    if (checks.includes("images")) {
+      // emptySelects: 只有 0-1 個 option 的 <select>
+      const emptySelects = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll("select")).map(sel => {
+          const label = sel.closest("tr,div,.form-group")?.querySelector("label,th")?.innerText?.trim() || "";
+          return { name: sel.name, label, optionCount: sel.options.length };
+        }).filter(x => x.optionCount <= 1);
+      });
+      report.emptySelects = emptySelects;
+
+      // uploadFieldsWithoutHint: input[type=file] 周圍無尺寸提示
+      const uploadFieldsWithoutHint = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('input[type="file"]')).map(input => {
+          const container = input.closest("tr,div,.form-group");
+          const label = container?.querySelector("label,th")?.innerText?.trim() || "";
+          const hint = container?.innerText || "";
+          const hasSize = /\d+\s*[×xX*]\s*\d+|Width|Height|px|尺寸|建議/.test(hint);
+          return { label, hasSize };
+        }).filter(x => !x.hasSize);
+      });
+      report.uploadFieldsWithoutHint = uploadFieldsWithoutHint;
+
+      // dirtyFormFields: 非 hidden 且有預填值的 input/textarea（add.php 殘留檢測）
+      const dirtyFormFields = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll(
+          'input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea, select'
+        )).map(el => ({ name: el.name, value: el.value, tag: el.tagName }))
+          .filter(x => x.value && x.value.trim().length > 0);
+      });
+      report.dirtyFormFields = dirtyFormFields;
+
+      // ckEditorStatus: CKEditor 實例數量 + 各實例內容是否為空
+      const ckEditorStatus = await page.evaluate(() => {
+        if (typeof CKEDITOR === "undefined") return { available: false, instances: 0, nonEmpty: [] };
+        const entries = Object.entries(CKEDITOR.instances);
+        const nonEmpty = entries
+          .map(([id, ed]) => ({ id, content: (ed.getData ? ed.getData() : "").trim() }))
+          .filter(x => x.content.length > 0);
+        return { available: true, instances: entries.length, nonEmpty };
+      });
+      report.ckEditorStatus = ckEditorStatus;
+
+      // ckfinderHealth: 若頁面有 CKEditor，自動打 CKFinder connector
+      if (ckEditorStatus.available) {
+        const ckfinderHealth = await page.evaluate(async () => {
+          const paths = [
+            "/lib/plugin/ckfinder/core/connector/php/connector.php?command=Init&type=Images",
+            "/ckfinder/core/connector/php/connector.php?command=Init&type=Images",
+          ];
+          for (const p of paths) {
+            try {
+              const res = await fetch(p, { credentials: "include" });
+              const text = await res.text();
+              const canUpload = res.status === 200 && (text.includes("resourceType") || text.includes("ResourceType"));
+              return { endpoint: p, status: res.status, canUpload, error: null };
+            } catch (e) { continue; }
+          }
+          return { endpoint: null, status: null, canUpload: false, error: "No CKFinder endpoint found" };
+        });
+        report.ckfinderHealth = ckfinderHealth;
+      }
+
+      const qcParts = [];
+      if (emptySelects.length) qcParts.push(`${emptySelects.length} 空 select`);
+      if (uploadFieldsWithoutHint.length) qcParts.push(`${uploadFieldsWithoutHint.length} 上傳欄位缺尺寸提示`);
+      if (dirtyFormFields.length) qcParts.push(`${dirtyFormFields.length} 預填欄位`);
+      if (ckEditorStatus.available) qcParts.push(`CKEditor ${ckEditorStatus.instances} 實例`);
+      if (qcParts.length) summaryParts.push(`QC: ${qcParts.join(", ")}`);
     }
 
     // 效能指標

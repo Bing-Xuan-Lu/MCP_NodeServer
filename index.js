@@ -10,8 +10,8 @@ import {
 // ── Global Audit Log ──────────────────────────────────────
 import { appendFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { HOME as _HOME } from './env.js';
 
-const _HOME = process.env.USERPROFILE || process.env.HOME || '';
 const _AUDIT_DIR  = join(_HOME, '.claude', 'logs');
 const _AUDIT_FILE = join(_AUDIT_DIR, 'mcp_audit.log');
 
