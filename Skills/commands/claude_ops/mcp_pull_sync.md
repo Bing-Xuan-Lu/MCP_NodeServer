@@ -128,69 +128,13 @@ cp hooks/skill-keywords.json ~/.claude/hooks/skill-keywords.json
 
 ### 步驟 6：處理 D — 自動登記 Hook 到 settings.json
 
-複製完成後，讀取 `~/.claude/settings.json`，確認以下 hook 是否已登記。
-**未登記的項目自動寫入**（用 Node.js 讀寫 JSON，保留原有 permissions 不動）：
+複製完成後，執行 repo 內的專用腳本（避免 heredoc 在 Windows Git Bash 的逃逸問題）：
 
 ```bash
-node - << 'EOF'
-const fs = require('fs');
-const path = require('path');
-const HOME = process.env.HOME || process.env.USERPROFILE;
-const settingsPath = path.join(HOME, '.claude', 'settings.json');
-
-let settings = {};
-try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')); } catch(e) {}
-if (!settings.hooks) settings.hooks = {};
-
-// 標準 hook 登記結構
-const REQUIRED_HOOKS = {
-  SessionStart: [
-    { command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/session-start.js"` }
-  ],
-  PreCompact: [
-    { command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/pre-compact.js"` }
-  ],
-  PreToolUse: [
-    { matcher: '.*', command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/repetition-detector.js"` },
-    { matcher: 'Write|Edit', command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/write-guard.js"` },
-    { matcher: '.*', command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/user-prompt-guard.js"` },
-    { matcher: '.*', command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/skill-router.js"` },
-  ],
-  PostToolUse: [
-    { matcher: 'Write|Edit', command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/llm-judge.js"` }
-  ],
-  Stop: [
-    { command: `node "${HOME.replace(/\\/g,'/')}/.claude/hooks/session-stop.js"` }
-  ],
-};
-
-let changed = 0;
-
-function commandExists(hookList, cmd) {
-  if (!Array.isArray(hookList)) return false;
-  return hookList.some(entry =>
-    (entry.hooks || []).some(h => h.command === cmd)
-  );
-}
-
-for (const [event, entries] of Object.entries(REQUIRED_HOOKS)) {
-  if (!settings.hooks[event]) settings.hooks[event] = [];
-  for (const entry of entries) {
-    if (!commandExists(settings.hooks[event], entry.command)) {
-      const hookEntry = { hooks: [{ type: 'command', command: entry.command }] };
-      if (entry.matcher) hookEntry.matcher = entry.matcher;
-      settings.hooks[event].push(hookEntry);
-      changed++;
-      console.log(`[登記] ${event}${entry.matcher ? ` (${entry.matcher})` : ''}: ${entry.command.split('/').pop()}`);
-    }
-  }
-}
-
-fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
-if (changed === 0) console.log('[Hook] 所有 hook 均已登記，無需更新');
-else console.log(`[Hook] 已自動登記 ${changed} 個 hook`);
-EOF
+node hooks/register_hooks.cjs
 ```
+
+腳本位於 `hooks/register_hooks.cjs`，會讀取 `~/.claude/settings.json`，自動補齊未登記的 hook，保留原有 `permissions` 等欄位不動。
 
 → 輸出登記結果。
 
@@ -259,3 +203,4 @@ EOF
 - `skill-keywords.json` 跟著 hooks/ 一起複製（skill-router 依賴）
 - MCP Server 重啟只能由使用者手動操作，不要嘗試自動化
 - Node.js 寫入 settings.json 時只操作 `hooks` 區段，`permissions` 等其他欄位保持原樣
+- `register_hooks.cjs` 用 `.cjs` 副檔名是因為 `package.json` 設定 `"type": "module"`，CommonJS 腳本必須用 `.cjs`
