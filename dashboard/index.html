@@ -4,9 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MCP助理員工 — Bento Dashboard</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <style>
     .tab-btn {
@@ -77,6 +74,7 @@
         <p>您的專屬 Node.js MCP 助理，配備 <span id="heroSkillCount">-</span> 個 Skill 與 <span id="heroToolCount">-</span> 個工具，隨時準備好處理檔案、操作資料庫與執行 PHP 任務。</p>
         <div style="margin-top:32px; display:flex; gap:16px;">
           <a href="#skills" onclick="document.querySelector('.tab-btn[data-tab=\'skills\']').click();" style="background:white; color:black; padding:12px 24px; border-radius:30px; font-weight:700; font-size:14px;">開始工作吧 →</a>
+          <a href="#install" onclick="document.getElementById('tab-overview').scrollIntoView(); setTimeout(()=>document.getElementById('install-section').scrollIntoView({behavior:'smooth'}),50);" style="background:transparent; color:white; padding:12px 24px; border-radius:30px; font-weight:700; font-size:14px; border:1px solid rgba(255,255,255,0.4);">安裝指南 ↓</a>
           <div style="font-family:var(--font-mono); font-size:12px; font-weight:700; opacity:0.8; display:flex; align-items:center; border-left:1px solid rgba(255,255,255,0.3); padding-left:16px;">V5.1.0 EST. 2026</div>
         </div>
       </section>
@@ -157,6 +155,81 @@
         </div>
       </section>
 
+      <!-- ── Installation (Span 12) ── -->
+      <section id="install-section" class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border);">
+        <h2 style="font-size:24px; font-weight:700; text-transform:uppercase; color:var(--text); margin-bottom:6px; letter-spacing:0.05em;">Installation</h2>
+        <p style="font-size:14px; color:var(--muted); margin-bottom:28px;">Windows · PowerShell · Node.js 18+ &nbsp;·&nbsp; 前置需求：Git for Windows、Claude Code CLI</p>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:28px;">
+
+          <!-- Step 1 + Step 2 -->
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:20px;">
+              <div style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.1em; margin-bottom:4px;">STEP 1 — CLONE</div>
+              <div style="font-size:13px; color:var(--muted); margin-bottom:10px;">取得程式碼</div>
+              <pre style="margin:0; font-family:var(--font-mono); font-size:13px; color:var(--text); line-height:1.8; white-space:pre-wrap;">git clone &lt;repo-url&gt; MCP_NodeServer
+cd MCP_NodeServer</pre>
+            </div>
+
+            <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:20px;">
+              <div style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.1em; margin-bottom:4px;">STEP 2 — CONFIGURE .env <span style="color:var(--orange);">（唯一需手動設定）</span></div>
+              <div style="font-size:13px; color:var(--muted); margin-bottom:10px;">複製範本後依本機路徑調整</div>
+              <pre style="margin:0; font-family:var(--font-mono); font-size:13px; color:var(--text); line-height:1.8; white-space:pre-wrap;">cp .env.example .env
+# 用編輯器開啟 .env</pre>
+              <div style="margin-top:10px; font-size:12px; font-family:var(--font-mono); line-height:2; color:var(--text); opacity:0.85;">
+                <span style="color:var(--cyan);">MCP_BASE_PATHS</span>=D:YourProject&nbsp;&nbsp;<span style="color:var(--muted);"># 允許存取的根目錄</span><br>
+                <span style="color:var(--cyan);">CLAUDE_TOKEN_FEEDBACK</span>=passive&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted);"># 或 active</span><br>
+                <span style="color:var(--cyan);">CLAUDE_HOOK_DEBUG</span>=0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted);"># 設 1 開啟除錯</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <div style="background:var(--bg); border:2px solid var(--purple); border-radius:12px; padding:20px; flex:1;">
+              <div style="font-size:11px; font-weight:700; color:var(--purple); letter-spacing:.1em; margin-bottom:4px;">STEP 3 — RUN SETUP SCRIPT <span style="color:var(--green);">（一鍵完成其餘全部）</span></div>
+              <div style="font-size:13px; color:var(--muted); margin-bottom:12px;">PowerShell 以系統管理員執行</div>
+              <pre style="margin:0; font-family:var(--font-mono); font-size:13px; color:var(--text); line-height:1.8; white-space:pre-wrap;">Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+.setup.ps1</pre>
+              <div style="margin-top:14px; font-size:12px; color:var(--muted); line-height:2;">
+                自動完成：<br>
+                &nbsp;✓ npm install<br>
+                &nbsp;✓ 複製 Hooks 到 <code>~/.claude/hooks/</code><br>
+                &nbsp;✓ 登記 Hooks 到 <code>settings.json</code><br>
+                &nbsp;✓ 部署 Skills（<code>deploy-commands.bat</code>）<br>
+                &nbsp;✓ Playwright MCP 權限設定<br>
+                &nbsp;✓ 同步全域 CLAUDE.md
+              </div>
+            </div>
+
+            <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px 20px;">
+              <div style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.1em; margin-bottom:6px;">STEP 4 — RESTART</div>
+              <pre style="margin:0; font-family:var(--font-mono); font-size:13px; color:var(--text); line-height:1.8; white-space:pre-wrap;">Ctrl+Shift+P → Restart MCP Server</pre>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 驗證 + 更新 -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:16px 20px; font-size:13px; font-family:var(--font-mono); line-height:2;">
+            <div style="font-size:11px; font-weight:700; color:var(--green); letter-spacing:.1em; margin-bottom:6px;">VERIFY INSTALLATION · 安裝後驗證</div>
+            /harness_audit&nbsp;&nbsp;<span style="color:var(--muted)"># 確認工具、Hook、Skill 狀態</span>
+          </div>
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:16px 20px; font-size:13px; font-family:var(--font-mono); line-height:2;">
+            <div style="font-size:11px; font-weight:700; color:var(--cyan); letter-spacing:.1em; margin-bottom:6px;">AFTER EVERY GIT PULL · 每次更新後</div>
+            /mcp_pull_sync&nbsp;&nbsp;<span style="color:var(--muted)"># 自動同步 hooks · skills · npm</span>
+          </div>
+        </div>
+
+        <p style="margin-top:16px; font-size:13px; color:var(--muted);">
+          完整步驟說明 →
+          <a href="javascript:void(0)"
+             onclick="document.querySelector('.tab-btn[data-tab='workflows']').click(); setTimeout(()=>document.querySelector('.wf-tab-btn[data-wf='install']').click(),50);"
+             style="color:var(--purple); text-decoration:none; font-weight:600;">Workflows → MCP Server 安裝</a>
+        </p>
+      </section>
+
       </div><!-- /tab-overview -->
 
       <!-- ═══════════════ Tab: Skills ═══════════════ -->
@@ -172,6 +245,7 @@
         <button class="wf-tab-btn active" data-wf="php" style="padding:10px 24px; border-radius:12px; font-size:14px;">PHP 開發流程</button>
         <button class="wf-tab-btn" data-wf="setup" style="padding:10px 24px; border-radius:12px; font-size:14px;">專案初始化與環境配置</button>
         <button class="wf-tab-btn" data-wf="deploy" style="padding:10px 24px; border-radius:12px; font-size:14px;">部署流程</button>
+        <button class="wf-tab-btn" data-wf="install" style="padding:10px 24px; border-radius:12px; font-size:14px;">MCP Server 安裝</button>
         <button class="wf-tab-btn" data-wf="mcp" style="padding:10px 24px; border-radius:12px; font-size:14px;">MCP Server 自檢</button>
         <button class="wf-tab-btn" data-wf="memory" style="padding:10px 24px; border-radius:12px; font-size:14px;">記憶生命週期</button>
         <button class="wf-tab-btn" data-wf="design" style="padding:10px 24px; border-radius:12px; font-size:14px;">設計稿比對</button>
@@ -342,6 +416,212 @@
           </ul>
         </section>
       </div><!-- /wf-setup -->
+
+      <!-- ─── Workflow: MCP Server 安裝 ─── -->
+      <div id="wf-install" class="wf-panel" style="display:none;">
+        <section class="bento-item span-12 notes-item" style="border-color:var(--purple); padding:40px;">
+          <h2 class="notes-title" style="color:var(--purple); font-size:32px; letter-spacing:-0.04em;">MCP Server 安裝 · Windows Setup Guide</h2>
+          <p style="color:var(--text); font-size:18px; margin-top:12px; opacity:0.8; line-height:1.6;">在 Windows 環境（Git Bash + Node.js）首次安裝 MCP_NodeServer，讓 Claude Code 取得完整工具能力與 Hook 防護。</p>
+        </section>
+
+        <!-- 前置需求 -->
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <h3 style="color:var(--purple); font-size:16px; margin-bottom:12px;">前置需求</h3>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; font-size:14px; font-family:var(--font-mono); color:var(--text); line-height:2;">
+            <div>
+              <b style="color:var(--green);">必要</b><br>
+              · Node.js 18+（<code>node -v</code> 確認）<br>
+              · Git for Windows（含 Git Bash）<br>
+              · Claude Code CLI（<code>claude --version</code> 確認）
+            </div>
+            <div>
+              <b style="color:var(--muted);">選用</b><br>
+              · Docker Desktop — Python 工具 (<code>run_python_script</code>)<br>
+              · GitHub CLI (<code>gh</code>) — PR / Issue 操作<br>
+              · Flyway CLI — DB migration 工具
+            </div>
+          </div>
+        </section>
+
+        <!-- 步驟 timeline -->
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:32px 40px;">
+          <ul class="timeline">
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">① Clone &amp; Install</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">取得程式碼與安裝套件</div>
+                  <div style="margin-top:12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 16px; font-family:var(--font-mono); font-size:13px; color:var(--text); line-height:1.8;">
+                    git clone &lt;repo-url&gt; MCP_NodeServer<br>
+                    cd MCP_NodeServer<br>
+                    npm install
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">② 建立 .env</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">設定本機環境變數</div>
+                  <div style="margin-top:12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 16px; font-family:var(--font-mono); font-size:13px; color:var(--text); line-height:1.8;">
+                    cp .env.example .env<br>
+                    <span style="color:var(--muted)"># 用編輯器開啟 .env，依本機環境調整</span>
+                  </div>
+                  <table style="width:100%; border-collapse:collapse; font-size:13px; font-family:var(--font-mono); margin-top:12px;">
+                    <thead>
+                      <tr style="border-bottom:1px solid var(--border);">
+                        <th style="text-align:left; padding:6px 10px; color:var(--muted); width:220px;">變數</th>
+                        <th style="text-align:left; padding:6px 10px; color:var(--muted); width:140px;">預設值</th>
+                        <th style="text-align:left; padding:6px 10px; color:var(--muted);">說明</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style="border-bottom:1px solid var(--border);">
+                        <td style="padding:6px 10px; color:var(--cyan);">MCP_BASE_PATHS</td>
+                        <td style="padding:6px 10px; color:var(--text); opacity:0.7;">D:\Project\</td>
+                        <td style="padding:6px 10px; color:var(--text); opacity:0.85;">MCP 工具可存取的根目錄，逗號分隔多個</td>
+                      </tr>
+                      <tr style="border-bottom:1px solid var(--border);">
+                        <td style="padding:6px 10px; color:var(--cyan);">CLAUDE_HOOK_DEBUG</td>
+                        <td style="padding:6px 10px; color:var(--text); opacity:0.7;">0</td>
+                        <td style="padding:6px 10px; color:var(--text); opacity:0.85;">設 1 開啟 [hook-debug] 除錯輸出</td>
+                      </tr>
+                      <tr style="border-bottom:1px solid var(--border);">
+                        <td style="padding:6px 10px; color:var(--cyan);">CLAUDE_TOKEN_FEEDBACK</td>
+                        <td style="padding:6px 10px; color:var(--text); opacity:0.7;">passive</td>
+                        <td style="padding:6px 10px; color:var(--text); opacity:0.85;">active=逐次提醒 / passive=每 N 次摘要</td>
+                      </tr>
+                      <tr style="border-bottom:1px solid var(--border);">
+                        <td style="padding:6px 10px; color:var(--cyan);">CLAUDE_SUMMARY_INTERVAL</td>
+                        <td style="padding:6px 10px; color:var(--text); opacity:0.7;">25</td>
+                        <td style="padding:6px 10px; color:var(--text); opacity:0.85;">passive 模式每幾次 tool call 輸出摘要</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 10px; color:var(--cyan);">CLAUDE_SLACK_WEBHOOK</td>
+                        <td style="padding:6px 10px; color:var(--text); opacity:0.7;">（空）</td>
+                        <td style="padding:6px 10px; color:var(--text); opacity:0.85;">Hook block 事件 Slack 通知（選填）</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--orange); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">③ 複製 Hooks</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">將 Hook 腳本部署到 Claude Code</div>
+                  <div style="margin-top:12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 16px; font-family:var(--font-mono); font-size:13px; color:var(--text); line-height:1.8;">
+                    mkdir -p ~/.claude/hooks<br>
+                    cp hooks/*.js ~/.claude/hooks/<br>
+                    cp hooks/*.cjs ~/.claude/hooks/<br>
+                    cp hooks/skill-keywords.json ~/.claude/hooks/
+                  </div>
+                  <p style="font-size:13px; color:var(--muted); margin-top:8px; line-height:1.6;">
+                    包含：<code>session-start.js</code> · <code>pre-compact.js</code> · <code>repetition-detector.js</code> · <code>write-guard.js</code> · <code>user-prompt-guard.js</code> · <code>skill-router.js</code> · <code>llm-judge.js</code> · <code>register_hooks.cjs</code> · <code>skill-keywords.json</code>
+                  </p>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--orange); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">④ 登記 Hooks</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">寫入 settings.json</div>
+                  <div style="margin-top:12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 16px; font-family:var(--font-mono); font-size:13px; color:var(--text); line-height:1.8;">
+                    node hooks/register_hooks.cjs
+                  </div>
+                  <p style="font-size:13px; color:var(--muted); margin-top:8px; line-height:1.6;">
+                    自動補齊 <code>~/.claude/settings.json</code> 的 hooks 區段（SessionStart / PreCompact / PreToolUse / PostToolUse / Stop）。冪等，重複執行安全。
+                  </p>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⑤ 部署 Skills</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">斜線指令部署到 Claude Code</div>
+                  <div style="margin-top:12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 16px; font-family:var(--font-mono); font-size:13px; color:var(--text); line-height:1.8;">
+                    <span style="color:var(--muted)"># Git Bash</span><br>
+                    bash deploy-commands.sh<br>
+                    <br>
+                    <span style="color:var(--muted)"># 或 CMD / PowerShell</span><br>
+                    deploy-commands.bat
+                  </div>
+                  <p style="font-size:13px; color:var(--muted); margin-top:8px; line-height:1.6;">
+                    將 <code>Skills/commands/**/*.md</code>（排除 <code>_internal/</code>、<code>*_steps.md</code>）平坦複製到 <code>~/.claude/commands/</code>。
+                  </p>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--cyan); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⑥ 確認 .mcp.json</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">MCP Server 連線設定</div>
+                  <p style="font-size:14px; color:var(--text); line-height:1.6; margin-top:12px; opacity:0.9;">確認專案根目錄的 <code>.mcp.json</code> 存在且 <code>command</code> 路徑指向本機 node / index.js。Claude Code 啟動時自動讀取此檔。</p>
+                  <div style="margin-top:12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 16px; font-family:var(--font-mono); font-size:13px; color:var(--text); line-height:1.8;">
+                    cat .mcp.json
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <div style="font-size:20px; font-weight:800; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;">⑦ 重啟 Claude Code</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--muted); letter-spacing:.08em;">套用所有設定</div>
+                  <div style="margin-top:12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 16px; font-family:var(--font-mono); font-size:13px; color:var(--text); line-height:1.8;">
+                    <span style="color:var(--muted)"># VS Code Extension</span><br>
+                    Ctrl+Shift+P → Restart MCP Server<br>
+                    <br>
+                    <span style="color:var(--muted)"># 或直接重啟 Claude Code 視窗</span>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+          </ul>
+        </section>
+
+        <!-- 安裝後驗證 -->
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <h3 style="color:var(--green); font-size:16px; margin-bottom:12px;">安裝後驗證</h3>
+          <div style="font-size:14px; color:var(--text); line-height:2; font-family:var(--font-mono);">
+            · 輸入 <code>/harness_audit</code> → 確認工具數量、Hooks 登記、Skills 部署狀態全數通過<br>
+            · 之後每次 git pull → 執行 <code>/mcp_pull_sync</code> 同步更新<br>
+            · 確認 <code>MCP_BASE_PATHS</code> 包含你的開發目錄，否則檔案工具會 permission denied
+          </div>
+        </section>
+
+        <!-- Git Bash PATH 補充 -->
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <h3 style="color:var(--muted); font-size:15px; margin-bottom:12px;">Git Bash PATH 補充（選用）</h3>
+          <div style="font-size:13px; color:var(--text); line-height:2; font-family:var(--font-mono); opacity:0.85;">
+            Claude Code 在 Windows 透過 Git Bash 執行指令，部分工具不在預設 PATH。在 <code>~/.bashrc</code> 加入：
+            <div style="margin-top:8px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 16px; line-height:1.8;">
+              export PATH="$PATH:/c/Program Files/GitHub CLI"&nbsp;&nbsp;<span style="color:var(--muted)"># gh 指令</span>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /wf-install -->
 
       <!-- ─── Workflow: PHP 開發流程 ─── -->
       <div id="wf-php" class="wf-panel" style="display:contents;">
@@ -745,6 +1025,80 @@
           </ul>
         </section>
 
+        <!-- Hook 架構說明 -->
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px; margin-top:8px;">
+          <h3 style="color:var(--orange); font-size:20px; margin-bottom:16px; letter-spacing:-0.02em;">Hook 偵測架構 · 8 Layer Detection</h3>
+          <p style="font-size:14px; color:var(--muted); margin-bottom:20px; line-height:1.6;">
+            每次工具呼叫都會經過 <code>repetition-detector.js</code> 的 8 層過濾。各層獨立判斷，觸發後輸出提醒或阻擋。
+          </p>
+          <table style="width:100%; border-collapse:collapse; font-size:13px; font-family:var(--font-mono);">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border);">
+                <th style="text-align:left; padding:8px 12px; color:var(--muted); font-weight:600; width:60px;">層級</th>
+                <th style="text-align:left; padding:8px 12px; color:var(--muted); font-weight:600; width:180px;">ID</th>
+                <th style="text-align:left; padding:8px 12px; color:var(--muted); font-weight:600;">觸發條件</th>
+                <th style="text-align:left; padding:8px 12px; color:var(--muted); font-weight:600; width:220px;">行為</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px 12px; color:var(--cyan);">L1</td>
+                <td style="padding:8px 12px; color:var(--text);">bash_wrong_tool</td>
+                <td style="padding:8px 12px; color:var(--text); opacity:0.85;">Bash 做有專用工具的事（docker mysql、cat/grep/find 等）</td>
+                <td style="padding:8px 12px; color:var(--orange);">⚠️ 警告（部分 block）</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px 12px; color:var(--cyan);">L2</td>
+                <td style="padding:8px 12px; color:var(--text);">bash_pattern_repeat</td>
+                <td style="padding:8px 12px; color:var(--text); opacity:0.85;">Bash 模式重複 2+ 次</td>
+                <td style="padding:8px 12px; color:var(--orange);">⚠️ 警告</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px 12px; color:var(--cyan);">L2.5</td>
+                <td style="padding:8px 12px; color:var(--text);">grep_scatter_search</td>
+                <td style="padding:8px 12px; color:var(--text); opacity:0.85;">Grep 散搜 3+ 不同路徑</td>
+                <td style="padding:8px 12px; color:var(--purple);">🧠 強制注入記憶</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px 12px; color:var(--cyan);">L2.6</td>
+                <td style="padding:8px 12px; color:var(--text);">grep_read_alternation</td>
+                <td style="padding:8px 12px; color:var(--text); opacity:0.85;">Grep↔Read 交替 3+ 次</td>
+                <td style="padding:8px 12px; color:var(--orange);">⚠️ 提醒改用高效工具</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px 12px; color:var(--cyan);">L3</td>
+                <td style="padding:8px 12px; color:var(--text);">same_category_repeat</td>
+                <td style="padding:8px 12px; color:var(--text); opacity:0.85;">同類操作 3+ 次</td>
+                <td style="padding:8px 12px; color:var(--orange);">⚠️ 警告（7+ 次 block）</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px 12px; color:var(--cyan);">L4</td>
+                <td style="padding:8px 12px; color:var(--text);">uncommitted_accumulation</td>
+                <td style="padding:8px 12px; color:var(--text); opacity:0.85;">修改 15+ 檔案未 commit</td>
+                <td style="padding:8px 12px; color:var(--text); opacity:0.7;">ℹ️ 提醒（大 commit 流程）</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px 12px; color:var(--cyan);">L5</td>
+                <td style="padding:8px 12px; color:var(--text);">token_waste_detection</td>
+                <td style="padding:8px 12px; color:var(--text); opacity:0.85;">8 種低效模式（重複讀檔、無過濾 Grep、頻繁截圖等）</td>
+                <td style="padding:8px 12px; color:var(--text); opacity:0.7;">💰 active=逐次提醒 / passive=每 N 次摘要</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 12px; color:var(--cyan);">L6</td>
+                <td style="padding:8px 12px; color:var(--text);">auto_fix_suggestion</td>
+                <td style="padding:8px 12px; color:var(--text); opacity:0.85;">sed/awk 可自動化操作</td>
+                <td style="padding:8px 12px; color:var(--green);">✨ 生成修復建議</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="margin-top:16px; font-size:13px; color:var(--muted); line-height:1.8;">
+            <b style="color:var(--text);">相關設定（.env）：</b>
+            <code>CLAUDE_TOKEN_FEEDBACK=passive</code>（active=逐次、passive=每 N 次摘要）·
+            <code>CLAUDE_SUMMARY_INTERVAL=25</code>（passive 模式每幾次 tool call 輸出一次）·
+            <code>CLAUDE_HOOK_DEBUG=0</code>（設 1 開啟 [hook-debug] 標籤輸出）
+          </div>
+        </section>
+
         <!-- Hook 投訴系統流程圖 -->
         <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px; margin-top:8px;">
           <h3 style="color:var(--orange); font-size:20px; margin-bottom:16px; letter-spacing:-0.02em;">Hook 投訴系統 · Complaint Pipeline</h3>
@@ -785,10 +1139,30 @@
           <div style="font-size:15px; color:var(--text); line-height:2;">
             <b style="color:var(--green);">記憶系統架構</b><br>
             · 記憶存放於 <code>~/.claude/projects/{project}/memory/</code>，每個專案獨立<br>
-            · <code>MEMORY.md</code> 是索引檔（< 200 行），每次對話自動載入，指向各主題 MD 檔<br>
+            · <code>MEMORY.md</code> 是索引檔（&lt; 200 行），每次對話自動載入，指向各主題 MD 檔<br>
             · 分四類：<b>user</b>（使用者偏好）、<b>feedback</b>（操作回饋）、<b>project</b>（專案知識）、<b>reference</b>（外部連結）<br>
             · 記憶只存「結論」不存「過程」— 寫「X 情況下應該用 Y 方法」，不寫對話流水帳<br>
             · 記憶會過期 — project 類型變動最快，feedback 最持久
+          </div>
+        </section>
+
+        <section class="bento-item span-12" style="background:var(--surface); border:1px solid var(--border); padding:24px 40px;">
+          <h3 style="color:var(--green); font-size:18px; margin-bottom:16px; letter-spacing:-0.02em;">Hook × Memory 自動化觸發</h3>
+          <div style="font-size:14px; color:var(--text); line-height:2; font-family:var(--font-mono);">
+            <b style="color:var(--green);">SessionStart（session-start.js）</b><br>
+            &nbsp;&nbsp;→ 載入 <code>MEMORY.md</code> 索引，注入本次對話 system-reminder<br>
+            &nbsp;&nbsp;→ 偵測 <code>hook-complaints.jsonl</code> 中的 pending 投訴，提醒數量<br>
+            &nbsp;&nbsp;→ 讀取上次 <code>pre-compact.js</code> 存的快照（context 摘要）<br>
+            <br>
+            <b style="color:var(--green);">PreCompact（pre-compact.js）</b><br>
+            &nbsp;&nbsp;→ context 壓縮前自動存快照到 <code>memory/snapshots/</code><br>
+            &nbsp;&nbsp;→ 偵測對話中的踩坑紀錄，提示是否要存入 memory<br>
+            <br>
+            <b style="color:var(--green);">Stop（session-stop.js）</b><br>
+            &nbsp;&nbsp;→ 對話結束時提醒執行 <code>/retro</code> 收割記憶（若有值得記的內容）<br>
+            <br>
+            <b style="color:var(--green);">PreToolUse — L2.5（repetition-detector.js）</b><br>
+            &nbsp;&nbsp;→ 偵測 Grep 散搜時，強制注入建議改用 memory 或 Agent 工具的提醒
           </div>
         </section>
 
