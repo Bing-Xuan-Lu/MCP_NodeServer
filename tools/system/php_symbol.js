@@ -371,7 +371,7 @@ export async function handle(name, args) {
       `| Include/Require | ${includeCount} |`,
       `| 解析錯誤 | ${index.errors.length} |`,
       ``,
-      `⏱️ 快取 10 分鐘，期間 find_usages / find_hierarchy / find_dependencies 免重建。`,
+      `⏱️ 快取 4 小時，期間 find_usages / find_hierarchy / find_dependencies 免重建。`,
     ];
 
     if (index.errors.length > 0 && index.errors.length <= 10) {

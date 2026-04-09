@@ -274,6 +274,47 @@ browser_snapshot → 取得實際 DOM 結構
 - `[MAPPING-CACHE]`：快取導致前台未即時更新（MED）
 - `[MAPPING-RENDER]`：HTML/圖片渲染問題（MED）
 
+#### 2g. CKEditor/CKFinder 健康檢查（所有含編輯器的後台頁面）
+
+內部校對發現 CKFinder 圖片上傳功能可能全站壞掉（影響最新消息、部落格、FAQ 等所有編輯器頁面）。
+
+1. 找出所有含 CKEditor 的後台頁面：
+   ```
+   Grep: ckeditor|CKEditor|CKEDITOR  路徑: adminControl/
+   ```
+2. 對每個編輯器頁面，用 `browser_evaluate` 驗證：
+   ```js
+   // CKEditor 實例是否存在
+   typeof CKEDITOR !== 'undefined' && Object.keys(CKEDITOR.instances).length > 0
+   ```
+3. 用 `send_http_request` 直接打 CKFinder connector 端點驗證可用性：
+   ```
+   GET /lib/plugin/ckfinder/core/connector/php/connector.php?command=Init&type=Images
+   ```
+   - HTTP 200 + JSON 含 resourceType → PASS
+   - 403/404/500/HTML → **NG [CKFINDER-BROKEN]**
+4. 若 CKFinder 壞了，所有含編輯器的頁面都標記 **NG [CKFINDER-BROKEN]**，不需逐頁重測
+
+> 替代方案：可用 `page_audit` 工具（checks 含 images），會自動回傳 `ckEditorStatus` 和 `ckfinderHealth`。
+
+#### 2h. 下拉選單選項完整性（所有含 select 的頁面）
+
+內部校對發現多處 select 選項不完整（分類下拉只有「全部」沒有子分類、付款方式順序錯誤）。
+
+1. `browser_evaluate` 提取頁面所有 `<select>` 的選項：
+   ```js
+   Array.from(document.querySelectorAll('select')).map(sel => ({
+     name: sel.name,
+     label: sel.closest('tr,div,.form-group')?.querySelector('label,th')?.innerText || '',
+     options: Array.from(sel.options).map(o => ({ value: o.value, text: o.text }))
+   }))
+   ```
+2. 對照規格書的選項清單（如付款方式應有完整選項列表）
+3. 選項數量不足 → **NG [SELECT-INCOMPLETE]**
+4. 選項順序不符規格 → **NG [SELECT-ORDER]**
+
+> 替代方案：可用 `page_audit` 工具（checks 含 images），會自動回傳 `emptySelects`。
+
 #### 2f. RWD 快速檢查（Responsive Quick Check）
 
 ```
@@ -334,9 +375,9 @@ browser_snapshot → 取得實際 DOM 結構
 訂單查詢 → 各 Tab 切換 → 詳情 POPUP → 取消訂單 → 退貨申請 → 評價
 ```
 
-### 流程 D：客製商品流程
+### 流程 D：客製/報價商品流程
 ```
-客製列表 → 選型式 → 填尺寸 → 報價 → 加購物車 → 結帳 → 再次訂購
+商品列表 → 選規格 → 填參數 → 報價 → 加購物車 → 結帳 → 再次訂購
 ```
 
 每個流程記錄：

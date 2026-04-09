@@ -46,16 +46,29 @@ async function auditSQL(sql, dbName) {
 }
 
 // ============================================
-// 記憶體狀態：當前資料庫連線設定
+// 記憶體狀態：多連線管理
 // ============================================
-let currentDb = null;
+const dbPool = new Map();  // key = database name, value = config object
+let defaultDb = null;      // 最後一次 set_database 的 database name
 
 // 啟動時自動載入已儲存的連線設定（密碼為空，需免密或手動補足）
 try {
-  const saved = JSON.parse(await fs.readFile(DB_CONFIG_FILE, "utf-8"));
-  if (saved && saved.database) {
-    currentDb = { password: "", ...saved };
-    console.error(`[database] 自動載入連線: ${saved.database}@${saved.host || "127.0.0.1"}:${saved.port || 3306}`);
+  const raw = JSON.parse(await fs.readFile(DB_CONFIG_FILE, "utf-8"));
+
+  // 新格式：{ default, connections: { name: config } }
+  if (raw && raw.connections && typeof raw.connections === "object") {
+    for (const [name, config] of Object.entries(raw.connections)) {
+      dbPool.set(name, { password: "", ...config });
+    }
+    defaultDb = raw.default || null;
+    if (defaultDb && !dbPool.has(defaultDb)) defaultDb = dbPool.keys().next().value || null;
+    console.error(`[database] 自動載入 ${dbPool.size} 個連線，預設：${defaultDb || "無"}`);
+  }
+  // 舊格式相容：單一物件 { host, port, user, database }
+  else if (raw && raw.database) {
+    dbPool.set(raw.database, { password: "", ...raw });
+    defaultDb = raw.database;
+    console.error(`[database] 自動載入連線（舊格式遷移）: ${raw.database}@${raw.host || "127.0.0.1"}:${raw.port || 3306}`);
   }
 } catch {
   // 無設定檔或格式錯誤，略過
@@ -67,7 +80,7 @@ try {
 export const definitions = [
   {
     name: "set_database",
-    description: "設定資料庫連線 (設定後同一次對話內的所有查詢都會使用此連線)",
+    description: "設定資料庫連線。支援多連線：不同 database 各自儲存，最後設定的為預設連線。",
     inputSchema: {
       type: "object",
       properties: {
@@ -88,7 +101,7 @@ export const definitions = [
   },
   {
     name: "get_current_db",
-    description: "查看目前的資料庫連線設定",
+    description: "查看目前所有已設定的資料庫連線（含預設標記）",
     inputSchema: { type: "object", properties: {} },
   },
   {
@@ -96,17 +109,21 @@ export const definitions = [
     description: "查看資料表結構",
     inputSchema: {
       type: "object",
-      properties: { table_name: { type: "string" } },
+      properties: {
+        table_name: { type: "string" },
+        database: { type: "string", description: "指定資料庫名稱（不傳則用預設連線）" },
+      },
       required: ["table_name"],
     },
   },
   {
     name: "execute_sql",
-    description: "執行 SQL 指令 (DDL/DML)，支援多條語句以分號分隔、逐條執行。DELETE/UPDATE/DROP/TRUNCATE 需加 confirm: true。",
+    description: "執行 SQL 指令 (DDL/DML)，支援多條語句以分號分隔、逐條執行。DELETE/UPDATE/DROP/TRUNCATE 需加 confirm: true。可指定 database 切換連線。",
     inputSchema: {
       type: "object",
       properties: {
         sql: { type: "string" },
+        database: { type: "string", description: "指定資料庫名稱（不傳則用預設連線）" },
         confirm: {
           type: "boolean",
           description: "對 DELETE/UPDATE/DROP/TRUNCATE 必須明確傳 true，表示已確認操作不是為了規避測試失敗",
@@ -126,6 +143,7 @@ export const definitions = [
           items: { type: "string" },
           description: "資料表名稱陣列",
         },
+        database: { type: "string", description: "指定資料庫名稱（不傳則用預設連線）" },
       },
       required: ["table_names"],
     },
@@ -148,6 +166,7 @@ export const definitions = [
           },
           description: "SQL 查詢陣列",
         },
+        database: { type: "string", description: "指定資料庫名稱（不傳則用預設連線）" },
         confirm: {
           type: "boolean",
           description: "批次中含 DELETE/UPDATE/DROP/TRUNCATE 時必須傳 true",
@@ -159,12 +178,17 @@ export const definitions = [
 ];
 
 // ============================================
-// 內部：保存連線設定 (不含密碼)
+// 內部：保存連線設定 (不含密碼，多連線格式)
 // ============================================
-async function saveDbConfig(config) {
-  const { password, ...safeConfig } = config;
+async function saveAllDbConfigs() {
   try {
-    await fs.writeFile(DB_CONFIG_FILE, JSON.stringify(safeConfig, null, 2), "utf-8");
+    const connections = {};
+    for (const [name, config] of dbPool.entries()) {
+      const { password, ...safeConfig } = config;
+      connections[name] = safeConfig;
+    }
+    const data = { default: defaultDb, connections };
+    await fs.writeFile(DB_CONFIG_FILE, JSON.stringify(data, null, 2), "utf-8");
     return true;
   } catch {
     return false;
@@ -176,8 +200,16 @@ async function saveDbConfig(config) {
 // ============================================
 async function loadDbConfig() {
   try {
-    const data = await fs.readFile(DB_CONFIG_FILE, "utf-8");
-    return JSON.parse(data);
+    const raw = JSON.parse(await fs.readFile(DB_CONFIG_FILE, "utf-8"));
+    // 新格式
+    if (raw && raw.connections && typeof raw.connections === "object") {
+      return raw;
+    }
+    // 舊格式 → 轉換
+    if (raw && raw.database) {
+      return { default: raw.database, connections: { [raw.database]: raw } };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -198,14 +230,23 @@ function errorResp(message, nextActions = []) {
 // ============================================
 // 內部：取得連線設定，未設定時回傳錯誤
 // ============================================
-function requireDb() {
-  if (!currentDb) {
+function requireDb(database) {
+  const key = database || defaultDb;
+  if (!key || !dbPool.has(key)) {
+    const available = dbPool.size > 0
+      ? `可用連線：${[...dbPool.keys()].join(", ")}`
+      : "";
     return {
       ok: false,
-      error: errorResp("尚未設定資料庫連線。", ["呼叫 set_database 設定連線或 load_db_connection 載入設定後重試"]),
+      error: errorResp(
+        database
+          ? `找不到資料庫 "${database}" 的連線設定。${available}`
+          : `尚未設定資料庫連線。`,
+        ["呼叫 set_database 設定連線或 load_db_connection 載入設定後重試"]
+      ),
     };
   }
-  return { ok: true, config: currentDb };
+  return { ok: true, config: dbPool.get(key) };
 }
 
 // ============================================
@@ -335,11 +376,16 @@ export async function handle(name, args) {
       if (conn) await conn.end();
     }
 
-    currentDb = dbConfig;
+    dbPool.set(dbConfig.database, dbConfig);
+    defaultDb = dbConfig.database;
+
     let msg = `✅ 已連線到 ${dbConfig.database}@${dbConfig.host}:${dbConfig.port} (user: ${dbConfig.user})`;
-    
+    if (dbPool.size > 1) {
+      msg += `\n📊 目前共 ${dbPool.size} 個連線：${[...dbPool.keys()].join(", ")}（預設：${defaultDb}）`;
+    }
+
     if (args.remember) {
-      const saved = await saveDbConfig(dbConfig);
+      const saved = await saveAllDbConfigs();
       if (saved) msg += "\n💾 連線設定已持久化至 .mcp_db_config.json";
     }
 
@@ -348,21 +394,27 @@ export async function handle(name, args) {
 
   // ── load_db_connection ──
   if (name === "load_db_connection") {
-    const config = await loadDbConfig();
-    if (!config) {
+    const data = await loadDbConfig();
+    if (!data) {
       return errorResp("找不到已儲存的連線設定。", ["請先呼叫 set_database 並開啟 remember 選項"]);
     }
-    
-    // 試著連線 (需要密碼)
-    // 注意：密碼不在 JSON 裡，如果需要自動載入，通常假設為空或由 env 提供
-    // 這裡我們僅載入設定，並提示使用者提供密碼 (如果不是空的話)
-    currentDb = { ...config, password: "" };
-    
+
+    let loaded = 0;
+    for (const [name, config] of Object.entries(data.connections)) {
+      if (!dbPool.has(name)) {
+        dbPool.set(name, { ...config, password: "" });
+        loaded++;
+      }
+    }
+    if (data.default && dbPool.has(data.default)) {
+      defaultDb = data.default;
+    }
+
     return {
       content: [
         {
           type: "text",
-          text: `📂 已載入連線設定：${config.database}@${config.host}:${config.port}\n⚠️ 目前密碼設為空，若連線失敗請手動呼叫 set_database 補足密碼。`,
+          text: `📂 已載入 ${loaded} 個新連線（共 ${dbPool.size} 個）：${[...dbPool.keys()].join(", ")}（預設：${defaultDb || "無"}）\n⚠️ 密碼為空，若連線失敗請手動呼叫 set_database 補足密碼。`,
         },
       ],
     };
@@ -370,21 +422,21 @@ export async function handle(name, args) {
 
   // ── get_current_db ──
   if (name === "get_current_db") {
-    if (!currentDb) {
+    if (dbPool.size === 0) {
       return {
-        content: [{ type: "text", text: "尚未設定資料庫連線。" }],
+        content: [{ type: "text", text: "尚未設定任何資料庫連線。" }],
       };
+    }
+    const lines = [];
+    for (const [name, config] of dbPool.entries()) {
+      const marker = name === defaultDb ? " ← 預設" : "";
+      lines.push(`${name}: ${config.host}:${config.port} (user: ${config.user})${marker}`);
     }
     return {
       content: [
         {
           type: "text",
-          text: [
-            `Host: ${currentDb.host}`,
-            `Port: ${currentDb.port}`,
-            `User: ${currentDb.user}`,
-            `Database: ${currentDb.database}`,
-          ].join("\n"),
+          text: `📊 已設定 ${dbPool.size} 個連線：\n${lines.join("\n")}`,
         },
       ],
     };
@@ -392,7 +444,7 @@ export async function handle(name, args) {
 
   // ── get_db_schema ──
   if (name === "get_db_schema") {
-    const check = requireDb();
+    const check = requireDb(args.database);
     if (!check.ok) return check.error;
 
     const conn = await mysql.createConnection(check.config);
@@ -400,7 +452,7 @@ export async function handle(name, args) {
       const [rows] = await conn.execute(`DESCRIBE ${args.table_name}`);
       return {
         content: [
-          { type: "text", text: rows.map((r) => `${r.Field} (${r.Type})`).join("\n") },
+          { type: "text", text: `[${check.config.database}] ${args.table_name}:\n` + rows.map((r) => `${r.Field} (${r.Type})`).join("\n") },
         ],
       };
     } catch (err) {
@@ -412,7 +464,7 @@ export async function handle(name, args) {
 
   // ── execute_sql ──
   if (name === "execute_sql") {
-    const check = requireDb();
+    const check = requireDb(args.database);
     if (!check.ok) return check.error;
 
     const statements = splitSQL(args.sql);
@@ -440,6 +492,7 @@ export async function handle(name, args) {
 
     const conn = await mysql.createConnection(check.config);
     const results = [];
+    const dbLabel = check.config.database;
     try {
       for (let i = 0; i < statements.length; i++) {
         const sql = statements[i];
@@ -451,7 +504,7 @@ export async function handle(name, args) {
             // 非 SELECT 寫入 audit log
             const upper = sql.trim().toUpperCase();
             if (!upper.startsWith("SELECT") && !upper.startsWith("SHOW") && !upper.startsWith("DESCRIBE")) {
-              await auditSQL(sql, check.config.database);
+              await auditSQL(sql, dbLabel);
             }
             results.push(`[${i + 1}] ✅ 執行成功。影響列數: ${res.affectedRows}`);
           }
@@ -460,7 +513,8 @@ export async function handle(name, args) {
           break;
         }
       }
-      return { content: [{ type: "text", text: results.join("\n\n") }] };
+      const header = dbPool.size > 1 ? `🗄️ [${dbLabel}]\n` : "";
+      return { content: [{ type: "text", text: header + results.join("\n\n") }] };
     } finally {
       await conn.end();
     }
@@ -468,11 +522,12 @@ export async function handle(name, args) {
 
   // ── get_db_schema_batch ──
   if (name === "get_db_schema_batch") {
-    const check = requireDb();
+    const check = requireDb(args.database);
     if (!check.ok) return check.error;
 
     const conn = await mysql.createConnection(check.config);
     const results = [];
+    const dbLabel = check.config.database;
     try {
       for (const table of args.table_names) {
         try {
@@ -483,7 +538,8 @@ export async function handle(name, args) {
           results.push(`❌ ${table}：${err.message}`);
         }
       }
-      return { content: [{ type: "text", text: results.join("\n\n") }] };
+      const header = dbPool.size > 1 ? `🗄️ [${dbLabel}]\n` : "";
+      return { content: [{ type: "text", text: header + results.join("\n\n") }] };
     } finally {
       await conn.end();
     }
@@ -491,7 +547,7 @@ export async function handle(name, args) {
 
   // ── execute_sql_batch ──
   if (name === "execute_sql_batch") {
-    const check = requireDb();
+    const check = requireDb(args.database);
     if (!check.ok) return check.error;
 
     // 危險語句預檢（所有批次項目）
@@ -517,20 +573,22 @@ export async function handle(name, args) {
 
     const conn = await mysql.createConnection(check.config);
     const results = [];
+    const dbLabel = check.config.database;
     try {
       for (const q of args.queries) {
         try {
           const [res] = await conn.execute(q.sql);
           const upper = q.sql.trim().toUpperCase();
           if (!upper.startsWith("SELECT") && !upper.startsWith("SHOW") && !upper.startsWith("DESCRIBE")) {
-            await auditSQL(q.sql, check.config.database);
+            await auditSQL(q.sql, dbLabel);
           }
           results.push(`${q.label || "SQL"}: ✅ 成功`);
         } catch (err) {
           results.push(`${q.label || "SQL"}: ❌ ${err.message}`);
         }
       }
-      return { content: [{ type: "text", text: results.join("\n") }] };
+      const header = dbPool.size > 1 ? `🗄️ [${dbLabel}]\n` : "";
+      return { content: [{ type: "text", text: header + results.join("\n") }] };
     } finally {
       await conn.end();
     }

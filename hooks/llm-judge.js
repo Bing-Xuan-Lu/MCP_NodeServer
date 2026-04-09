@@ -19,8 +19,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-
-const HOME = process.env.HOME || process.env.USERPROFILE;
+import { HOME } from '../env.js';
 const GLOBAL_RISK_TIERS = path.join(HOME, '.claude', 'risk-tiers.json');
 
 function loadRiskTiers() {

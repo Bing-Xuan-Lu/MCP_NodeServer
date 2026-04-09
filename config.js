@@ -1,8 +1,8 @@
 import path from "path";
 import { createRequire } from "module";
+import { MCP_BASE_PATHS } from "./env.js";
 
-// 本機覆蓋設定：複製 config.example.js 為 config.local.js 並修改
-// config.local.js 已加入 .gitignore，不進版控
+// 優先順序：.env (MCP_BASE_PATHS) → config.local.js → 硬編碼預設
 let localConfig = {};
 try {
   const require = createRequire(import.meta.url);
@@ -12,7 +12,7 @@ try {
 }
 
 export const CONFIG = {
-  basePaths: localConfig.basePaths ?? ["D:\\Project\\"],
+  basePaths: MCP_BASE_PATHS ?? localConfig.basePaths ?? ["D:\\Project\\"],
   /** @deprecated 向後相容：舊程式碼用 CONFIG.basePath，回傳 basePaths[0] */
   get basePath() { return this.basePaths[0]; },
 };

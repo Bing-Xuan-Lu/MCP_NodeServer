@@ -13,8 +13,7 @@
 
 import fs from 'fs';
 import path from 'path';
-
-const HOME = process.env.HOME || process.env.USERPROFILE;
+import { HOME } from '../env.js';
 const GLOBAL_RISK_TIERS = path.join(HOME, '.claude', 'risk-tiers.json');
 
 // ── 載入風險分級設定 ──────────────────────────────────────

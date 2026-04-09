@@ -14,18 +14,20 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { execSync } from 'child_process';
+import {
+  HOME,
+  CLAUDE_HOOK_DEBUG as DEBUG_MODE,
+  CLAUDE_SLACK_WEBHOOK as SLACK_WEBHOOK,
+  CLAUDE_NOTIFY_ON_BLOCK as NOTIFY_ON_BLOCK,
+  CLAUDE_TOKEN_FEEDBACK as TOKEN_FEEDBACK_MODE,
+  CLAUDE_SUMMARY_INTERVAL as PASSIVE_SUMMARY_INTERVAL,
+} from '../env.js';
 
 // ── 設定 ──────────────────────────────────────────
-const HOME = process.env.HOME || process.env.USERPROFILE;
 const LOG_DIR = path.join(os.tmpdir(), 'claude_tool_logs');
 const COMPLAINTS_PATH = path.join(HOME, '.claude', 'hook-complaints.jsonl');
 const MAX_LOG_AGE_MS = 2 * 60 * 60 * 1000; // 2 小時後自動清除
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.tif', '.avif', '.svg']);
-
-// 環境變數配置
-const DEBUG_MODE = process.env.CLAUDE_HOOK_DEBUG === '1';
-const SLACK_WEBHOOK = process.env.CLAUDE_SLACK_WEBHOOK || '';
-const NOTIFY_ON_BLOCK = process.env.CLAUDE_NOTIFY_ON_BLOCK === '1';
 
 // 內網 IP 範圍（這些 host 的 sftp/ssh 操作跳過重複偵測）
 const INTERNAL_IP_PATTERNS = [
@@ -90,43 +92,209 @@ function estimateToolTokens(tool, args) {
   return inputTokens + estimated;
 }
 
-/** 識別低效操作並計算可節省的 token */
+/** 識別低效操作並計算可節省的 token（回傳陣列，可能一次偵測到多個問題） */
 function identifyTokenWaste(entry, history) {
   const tool = shortName(entry.tool);
   const args = entry.args || {};
+  const issues = [];
 
-  // 同檔案連讀多次
-  if (tool === 'Read') {
-    const filePath = args.file_path || '';
-    const sameFileReads = history.filter(h =>
-      shortName(h.tool) === 'Read' &&
-      (h.args?.file_path || '') === filePath
-    ).length + 1;
+  // ── W1: 同檔案連讀多次 ──
+  if (tool === 'Read' || tool === 'read_file') {
+    const filePath = args.file_path || args.path || '';
+    const sameFileReads = history.filter(h => {
+      const t = shortName(h.tool);
+      return (t === 'Read' || t === 'read_file') &&
+        (h.args?.file_path || h.args?.path || '') === filePath;
+    }).length + 1;
 
     if (sameFileReads >= 2) {
-      const wastedTokens = estimateToolTokens(entry.tool, args) * (sameFileReads - 1);
-      return {
-        issue: `重複讀同檔案 ${sameFileReads} 次`,
-        wasted: wastedTokens,
-        suggestion: '用 Read 的 offset/limit 一次讀完，或改用 read_files_batch',
-      };
+      issues.push({
+        id: 'W1_duplicate_read',
+        issue: `重複讀同檔案 ${sameFileReads} 次：${path.basename(filePath)}`,
+        wasted: estimateToolTokens(entry.tool, args) * (sameFileReads - 1),
+        suggestion: '一次用 Read(offset, limit) 讀完需要的區段，或用 Grep 定位行號再精準讀',
+      });
     }
   }
 
-  // Bash 逐行讀檔
+  // ── W2: Read 大檔案未用 offset/limit ──
+  if (tool === 'Read' || tool === 'read_file') {
+    const hasOffset = args.offset != null;
+    const hasLimit = args.limit != null;
+    if (!hasOffset && !hasLimit) {
+      // 檢查歷史中是否有對同檔案的 Grep 結果（代表知道位置但仍整檔讀取）
+      const filePath = args.file_path || args.path || '';
+      const hadGrep = history.some(h =>
+        shortName(h.tool) === 'Grep' &&
+        (h.args?.path || '').includes(path.basename(filePath))
+      );
+      if (hadGrep) {
+        issues.push({
+          id: 'W2_read_without_offset',
+          issue: `已 Grep 定位過卻整檔 Read：${path.basename(filePath)}`,
+          wasted: 800, // 估算：整檔 vs 精準讀的差距
+          suggestion: '已知行號就用 Read(offset, limit) 精準讀取，省掉不需要的上下文',
+        });
+      }
+    }
+  }
+
+  // ── W3: Bash 做了內建工具的事（與 L1 互補，L1 是即時警告，這裡是 token 計算） ──
   if (tool === 'Bash') {
     const cmd = args.command || '';
     if (/^\s*(cat|head|tail|grep|wc)\s+/i.test(cmd)) {
-      const wastedTokens = estimateToolTokens(entry.tool, args) * 2;
-      return {
+      issues.push({
+        id: 'W3_bash_builtin',
         issue: 'Bash 做了內建工具的事',
-        wasted: wastedTokens,
-        suggestion: '用 Read / Grep 工具替代（省 token）',
-      };
+        wasted: estimateToolTokens(entry.tool, args) * 2,
+        suggestion: '用 Read / Grep 工具替代（省 token、輸出結構化）',
+      });
     }
   }
 
-  return null;
+  // ── W4: Agent 重複搜尋相似目標 ──
+  if (tool === 'Agent') {
+    const prompt = (args.prompt || '').slice(0, 200).toLowerCase();
+    const recentAgents = history.filter(h => shortName(h.tool) === 'Agent');
+    for (const prev of recentAgents) {
+      const prevPrompt = (prev.args?.prompt || '').slice(0, 200).toLowerCase();
+      if (prevPrompt && prompt && stringSimilarity(prompt, prevPrompt) > 0.6) {
+        issues.push({
+          id: 'W4_agent_similar_search',
+          issue: '多次派遣 Agent 做相似搜尋任務',
+          wasted: 3000, // Agent 開銷大
+          suggestion: '合併搜尋需求到一次 Agent 呼叫，或用 Grep/Glob 直接定位',
+        });
+        break;
+      }
+    }
+  }
+
+  // ── W5: Grep 結果太大（head_limit 未設 + 無 glob 過濾） ──
+  if (tool === 'Grep') {
+    const hasGlob = !!args.glob;
+    const hasType = !!args.type;
+    const hasLimit = args.head_limit != null;
+    const hasPath = !!args.path;
+    // 沒有任何過濾條件 = 全目錄暴搜
+    if (!hasGlob && !hasType && !hasLimit && !hasPath) {
+      issues.push({
+        id: 'W5_grep_unscoped',
+        issue: 'Grep 無任何過濾（無 glob、type、path、head_limit）',
+        wasted: 600,
+        suggestion: '加 glob/type 縮小範圍，或設 head_limit 限制輸出量',
+      });
+    }
+  }
+
+  // ── W6: 連續 ToolSearch 相同工具 ──
+  if (tool === 'ToolSearch') {
+    const query = args.query || '';
+    const recentTS = history.filter(h => shortName(h.tool) === 'ToolSearch');
+    const dupCount = recentTS.filter(h => (h.args?.query || '') === query).length;
+    if (dupCount >= 1) {
+      issues.push({
+        id: 'W6_duplicate_toolsearch',
+        issue: `重複 ToolSearch 同一 query: "${query.slice(0, 40)}"`,
+        wasted: 400,
+        suggestion: 'ToolSearch 結果在整個對話中都有效，不需重複查詢',
+      });
+    }
+  }
+
+  // ── W7: 多個單檔 MCP 工具可用 batch 替代 ──
+  if (BATCH_HINTS[tool]) {
+    const recentSame = history.slice(-10).filter(h => shortName(h.tool) === tool).length;
+    if (recentSame >= 2) {
+      issues.push({
+        id: 'W7_batch_available',
+        issue: `連續 ${recentSame + 1} 次 ${tool}，有 batch 版可用`,
+        wasted: recentSame * 200, // 每次 round-trip 開銷
+        suggestion: `改用 ${BATCH_HINTS[tool]} 一次處理`,
+      });
+    }
+  }
+
+  // ── W8: browser_interact 頻繁截圖（連續 screenshot action） ──
+  if (tool === 'browser_interact') {
+    const actions = args.actions || [];
+    const hasScreenshot = actions.some(a => a.type === 'screenshot');
+    if (hasScreenshot) {
+      const recentScreenshots = history.slice(-6).filter(h => {
+        if (shortName(h.tool) !== 'browser_interact') return false;
+        return (h.args?.actions || []).some(a => a.type === 'screenshot');
+      }).length;
+      if (recentScreenshots >= 3) {
+        issues.push({
+          id: 'W8_frequent_screenshot',
+          issue: `近期 ${recentScreenshots + 1} 次截圖操作`,
+          wasted: recentScreenshots * 1200,
+          suggestion: '截圖消耗大量 token（圖片 base64），合併操作後再截一次確認',
+        });
+      }
+    }
+  }
+
+  return issues.length > 0 ? issues : null;
+}
+
+/** 簡易字串相似度（Jaccard on bigrams），用於 Agent prompt 比對 */
+function stringSimilarity(a, b) {
+  const bigrams = s => {
+    const set = new Set();
+    for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
+    return set;
+  };
+  const setA = bigrams(a);
+  const setB = bigrams(b);
+  if (setA.size === 0 && setB.size === 0) return 1;
+  let intersection = 0;
+  for (const bg of setA) if (setB.has(bg)) intersection++;
+  return intersection / (setA.size + setB.size - intersection);
+}
+
+/** 計算 session 累計 token 浪費摘要（被動模式用） */
+function buildTokenSummary(history) {
+  const allWastes = [];
+  let totalWasted = 0;
+
+  for (let i = 0; i < history.length; i++) {
+    const entry = history[i];
+    const prevHistory = history.slice(0, i);
+    const wastes = identifyTokenWaste(entry, prevHistory);
+    if (wastes) {
+      for (const w of wastes) {
+        totalWasted += w.wasted;
+        // 累計每種問題的次數
+        const existing = allWastes.find(x => x.id === w.id);
+        if (existing) {
+          existing.count++;
+          existing.totalWasted += w.wasted;
+        } else {
+          allWastes.push({ id: w.id, issue: w.issue, suggestion: w.suggestion, count: 1, totalWasted: w.wasted });
+        }
+      }
+    }
+  }
+
+  if (allWastes.length === 0) return null;
+
+  // 按浪費量排序
+  allWastes.sort((a, b) => b.totalWasted - a.totalWasted);
+
+  const lines = [
+    `\n[Token Summary] 📊 本次對話效率報告（${history.length} 次工具呼叫）：`,
+    `  累計可節省 ~${totalWasted} tokens`,
+    '',
+  ];
+
+  for (const w of allWastes.slice(0, 5)) {
+    lines.push(`  • ${w.issue}（${w.count} 次，~${w.totalWasted} tokens）`);
+    lines.push(`    💡 ${w.suggestion}`);
+  }
+
+  lines.push('');
+  return lines.join('\n');
 }
 
 /** Slack 通知（異步，不阻擋 hook） */
@@ -767,6 +935,13 @@ const PATTERNS = [
       // 跳過已被 bash_pattern_repeat 處理的
       if (entry.bashSig) return null;
 
+      // 白名單：PHP AST 查詢工具本質上就是批量連續呼叫，不計入重複
+      const L3_WHITELIST = new Set([
+        'class_method_lookup', 'find_usages', 'find_hierarchy',
+        'find_dependencies', 'symbol_index',
+      ]);
+      if (L3_WHITELIST.has(shortName(entry.tool))) return null;
+
       const catKey = getCategoryKey(entry);
       const tool = shortName(entry.tool);
 
@@ -867,17 +1042,29 @@ const PATTERNS = [
   },
   {
     // Layer 5: 成本追蹤 — 識別低效操作並估算 token 浪費
+    //   active 模式：每次偵測到立即提醒（適合小 context）
+    //   passive 模式：累計記錄，每 PASSIVE_SUMMARY_INTERVAL 次輸出摘要（適合 Pro Max 1M）
     id: 'token_waste_detection',
     detect: (entry, history) => {
-      const waste = identifyTokenWaste(entry, history);
-      if (!waste) return null;
+      const wastes = identifyTokenWaste(entry, history);
 
-      const lines = [
-        `[Token Accounting] 💰 偵測到低效操作：${waste.issue}`,
-        `  估計浪費 ~${waste.wasted} tokens`,
-        `  💡 建議：${waste.suggestion}`,
-      ];
-      return lines.join('\n') + '\n';
+      if (TOKEN_FEEDBACK_MODE === 'active') {
+        // ── 主動模式：逐次即時回饋 ──
+        if (!wastes) return null;
+        const lines = [];
+        for (const w of wastes) {
+          lines.push(`[Token Accounting] 💰 ${w.issue}`);
+          lines.push(`  浪費 ~${w.wasted} tokens → ${w.suggestion}`);
+        }
+        return lines.join('\n') + '\n';
+      }
+
+      // ── 被動模式：累計，定期輸出摘要 ──
+      const callCount = history.length + 1;
+      if (callCount % PASSIVE_SUMMARY_INTERVAL !== 0) return null;
+
+      const summary = buildTokenSummary([...history, entry]);
+      return summary;
     },
   },
   AUTO_FIX_PATTERN,
