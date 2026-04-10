@@ -116,7 +116,7 @@ MCP_NodeServer/
 │   ├── database.js      ← set_database, load_db_connection, get_db_schema, execute_sql（危險語句攔截 + confirm + audit log）, *_batch
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   ├── bookmarks.js     ← Chrome 書籤管理 (12 工具)
-│   ├── sftp.js          ← sftp_connect/upload/download/list/delete, sftp_*_batch (list/upload/download/delete)
+│   ├── sftp.js          ← sftp_connect/upload/download/list/delete, sftp_*_batch (list/upload/download/delete), sftp_preset
 │   ├── python.js        ← run_python_script (via Docker python_runner)
 │   ├── word.js          ← read_word_file, read_word_files_batch (.docx → Markdown/HTML/Text)
 │   ├── pptx.js          ← read_pptx_file, read_pptx_files_batch (.pptx → Markdown/Text + 圖片)

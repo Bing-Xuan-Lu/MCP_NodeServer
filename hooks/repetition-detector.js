@@ -1067,6 +1067,48 @@ const PATTERNS = [
       return summary;
     },
   },
+  {
+    // Layer 1.5: Screenshot Path — 截圖未指定 screenshot/ 路徑就 block
+    id: 'screenshot_wrong_path',
+    detect: (entry, _history) => {
+      const tool = shortName(entry.tool);
+
+      // browser_take_screenshot（獨立工具）
+      if (tool === 'browser_take_screenshot') {
+        const filename = entry.args?.filename || '';
+        if (!filename || !/screenshot[s]?\//i.test(filename)) {
+          return {
+            block: true,
+            message: `[Wrong Path] ❌ BLOCKED：截圖路徑必須在 screenshot/ 子資料夾。\n` +
+                     `  → 收到的 filename: "${filename || '(未指定)'}"\n` +
+                     `  → 請改為：screenshot/your-filename.png\n` +
+                     `  → 截圖是暫存物，不可污染專案根目錄。\n`,
+          };
+        }
+      }
+
+      // browser_interact 裡的 screenshot action
+      if (tool === 'browser_interact') {
+        const actions = entry.args?.actions || [];
+        for (const action of actions) {
+          if (action.type === 'screenshot') {
+            const filename = action.filename || '';
+            if (!filename || !/screenshot[s]?\//i.test(filename)) {
+              return {
+                block: true,
+                message: `[Wrong Path] ❌ BLOCKED：browser_interact 截圖路徑必須在 screenshot/ 子資料夾。\n` +
+                         `  → 收到的 filename: "${filename || '(未指定)'}"\n` +
+                         `  → 請改為：screenshot/your-filename.png\n` +
+                         `  → 截圖是暫存物，不可污染專案根目錄。\n`,
+              };
+            }
+          }
+        }
+      }
+
+      return null;
+    },
+  },
   AUTO_FIX_PATTERN,
 ];
 

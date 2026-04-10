@@ -336,15 +336,79 @@ export async function handle(name, args) {
   }
 
   if (name === "run_php_test") {
-    const targetPath = resolveSecurePath(args.targetPath);
-    const configPath = args.configPath ? resolveSecurePath(args.configPath) : null;
     const useDocker = !!args.container;
 
-    // Docker 模式下 wrapper 內的路徑要用容器路徑
-    const targetInCode = useDocker ? toContainerPath(targetPath) : targetPath.replace(/\\/g, "/");
-    const configInCode = configPath
-      ? (useDocker ? toContainerPath(configPath) : configPath.replace(/\\/g, "/"))
-      : null;
+    if (useDocker) {
+      // ── Docker 模式：runner 檔在容器內建立與清理 ──
+      const err = await checkContainer(args.container);
+      if (err) return err;
+
+      // 路徑解析：支援本機路徑（轉容器路徑）或容器內絕對路徑
+      let targetInCode, configInCode, runnerDir;
+      try {
+        const localPath = resolveSecurePath(args.targetPath);
+        targetInCode = toContainerPath(localPath);
+        runnerDir = path.posix.dirname(targetInCode);
+      } catch {
+        // resolveSecurePath 失敗 → 當作容器內絕對路徑
+        targetInCode = args.targetPath.replace(/\\/g, "/");
+        runnerDir = path.posix.dirname(targetInCode);
+      }
+      if (args.configPath) {
+        try {
+          configInCode = toContainerPath(resolveSecurePath(args.configPath));
+        } catch {
+          configInCode = args.configPath.replace(/\\/g, "/");
+        }
+      }
+
+      let wrapperCode = "<?php\n";
+      if (args.sessionData) {
+        wrapperCode += "session_start();\n";
+        wrapperCode += `$_SESSION = json_decode('${args.sessionData.replace(/'/g, "\\'")}', true);\n`;
+      }
+      if (args.postData) {
+        wrapperCode += `$_POST = json_decode('${args.postData.replace(/'/g, "\\'")}', true);\n`;
+      }
+      if (configInCode) {
+        wrapperCode += `require_once '${configInCode}';\n`;
+      }
+      wrapperCode += `require '${targetInCode}';\n`;
+
+      const runnerName = `_mcp_runner_${Date.now()}.php`;
+      const runnerPath = `${runnerDir}/${runnerName}`;
+
+      // 在容器內建立 runner 檔（用 docker exec -i + stdin pipe，避免 shell 引號問題）
+      try {
+        await new Promise((resolve, reject) => {
+          const proc = exec(
+            `docker exec -i ${args.container} tee "${runnerPath}" > /dev/null`,
+            { timeout: 10000 },
+            (err) => err ? reject(err) : resolve()
+          );
+          proc.stdin.end(wrapperCode);
+        });
+        const { stdout, stderr } = await execPromise(
+          `docker exec ${args.container} php "${runnerPath}"`,
+          { timeout: 30000 }
+        );
+        return {
+          content: [{
+            type: "text",
+            text: `📝 測試結果 [${args.container}]：\n${stdout}\n${stderr ? `⚠️ 錯誤：\n${stderr}` : ""}`,
+          }],
+        };
+      } finally {
+        await execPromise(`docker exec ${args.container} rm -f "${runnerPath}"`).catch(() => {});
+      }
+    }
+
+    // ── 本機模式 ──
+    const targetPath = resolveSecurePath(args.targetPath);
+    const configPath = args.configPath ? resolveSecurePath(args.configPath) : null;
+
+    const targetInCode = targetPath.replace(/\\/g, "/");
+    const configInCode = configPath ? configPath.replace(/\\/g, "/") : null;
 
     let wrapperCode = "<?php\n";
     if (args.sessionData) {
@@ -363,24 +427,12 @@ export async function handle(name, args) {
     await fs.writeFile(tempFile, wrapperCode);
 
     try {
-      let cmd;
-      let label = "";
-      if (useDocker) {
-        const err = await checkContainer(args.container);
-        if (err) return err;
-        cmd = `docker exec ${args.container} php "${toContainerPath(tempFile)}"`;
-        label = ` [${args.container}]`;
-      } else {
-        cmd = `php "${tempFile}"`;
-      }
-      const { stdout, stderr } = await execPromise(cmd, { timeout: 30000 });
+      const { stdout, stderr } = await execPromise(`php "${tempFile}"`, { timeout: 30000 });
       return {
-        content: [
-          {
-            type: "text",
-            text: `📝 測試結果${label}：\n${stdout}\n${stderr ? `⚠️ 錯誤：\n${stderr}` : ""}`,
-          },
-        ],
+        content: [{
+          type: "text",
+          text: `📝 測試結果：\n${stdout}\n${stderr ? `⚠️ 錯誤：\n${stderr}` : ""}`,
+        }],
       };
     } finally {
       await fs.unlink(tempFile).catch(() => {});

@@ -22,8 +22,9 @@ const TOOLS = {
   'send_http_requests_batch':{ dept:'PHP & SFTP 部署', title:'批次發送 HTTP 請求', desc:'並行發送多個請求，減少 tool call 延遲。', usage:'send_http_requests_batch {requests:[...]}', tools:[] },
   'run_php_script_batch':   { dept:'PHP & SFTP 部署', title:'批次執行多個 PHP 腳本', desc:'循序執行多支 PHP 腳本，適合測試、migration 批次跑。支援 container 參數在 Docker 容器內執行。', usage:'run_php_script_batch {container:"dev-php84", scripts:[{path:"..."}]}', tools:[] },
 
-  'sftp_connect':           { dept:'PHP & SFTP 部署', title:'設定 SFTP 連線', desc:'設定後同一次對話內的所有操作都會使用此連線。', usage:'sftp_connect {host:"...", user:"..."}', tools:[] },
-  'sftp_upload':            { dept:'PHP & SFTP 部署', title:'上傳檔案/目錄', desc:'上傳本機檔案或整個目錄到遠端伺服器。', usage:'sftp_upload {local_path:"...", remote_path:"..."}', tools:[] },
+  'sftp_connect':           { dept:'PHP & SFTP 部署', title:'設定 SFTP 連線', desc:'設定後同一次對話內的所有操作都會使用此連線。支援 preset 參數一鍵載入已儲存的連線 + 路徑對應。', usage:'sftp_connect {preset:"my_project"} 或 sftp_connect {host:"...", user:"..."}', tools:[] },
+  'sftp_upload':            { dept:'PHP & SFTP 部署', title:'上傳檔案/目錄', desc:'上傳本機檔案或整個目錄到遠端伺服器。若已載入 preset，可只傳相對路徑。', usage:'sftp_upload {local_path:"...", remote_path:"..."} 或 sftp_upload {local_path:"app/file.php"}', tools:[] },
+  'sftp_preset':            { dept:'PHP & SFTP 部署', title:'管理部署 Preset', desc:'儲存/列出/刪除 SFTP 部署 preset（連線資訊 + local_base/remote_base 路徑對應 + excludes 排除清單），重啟後仍保留。', usage:'sftp_preset {action:"save", preset_name:"my_project", host:"...", user:"...", local_base:"D:\\\\Project\\\\xxx", remote_base:"/var/www/html_xxx/"}', tools:[] },
   'sftp_download':          { dept:'PHP & SFTP 部署', title:'下載檔案/目錄', desc:'從遠端伺服器下載檔案或目錄到本機。', usage:'sftp_download {remote_path:"...", local_path:"..."}', tools:[] },
   'sftp_list':              { dept:'PHP & SFTP 部署', title:'列出遠端目錄', desc:'列出遠端目錄內容（檔名、類型、大小、修改時間）。', usage:'sftp_list {remote_path:"..."}', tools:[] },
   'sftp_delete':            { dept:'PHP & SFTP 部署', title:'刪除遠端檔案', desc:'刪除遠端檔案或目錄（支援遞迴刪除）。', usage:'sftp_delete {remote_path:"..."}', tools:[] },
