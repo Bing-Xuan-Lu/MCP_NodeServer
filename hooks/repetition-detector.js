@@ -928,6 +928,45 @@ const PATTERNS = [
     },
   },
   {
+    // Layer 2.7: Edit Batch Replace — 多檔做相同字串替換時提醒用批次腳本
+    id: 'edit_batch_replace',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'Edit') return null;
+
+      const oldStr = (entry.args?.old_string || '').trim();
+      if (!oldStr) return null;
+
+      // 找歷史中 old_string 相同（或 old+new 都相同）的 Edit，但不同檔案
+      const currentFile = entry.args?.file_path || '';
+      const sameReplace = history.filter(h => {
+        if (shortName(h.tool) !== 'Edit') return false;
+        const hOld = (h.args?.old_string || '').trim();
+        const hFile = h.args?.file_path || '';
+        return hOld === oldStr && hFile !== currentFile;
+      });
+
+      const count = sameReplace.length + 1; // 含本次
+      if (count < 3) return null;
+
+      const files = [...new Set([...sameReplace.map(h => h.args?.file_path), currentFile])];
+      const preview = oldStr.length > 60 ? oldStr.slice(0, 60) + '…' : oldStr;
+
+      if (count >= 5) {
+        return {
+          block: true,
+          message: `[Batch Replace] ❌ BLOCKED：相同字串替換已跨 ${files.length} 個檔案（${count} 次 Edit）。\n` +
+                   `  → 替換內容：「${preview}」\n` +
+                   `  → 請改用一行 sed 或 node 腳本批次處理所有檔案，不要逐一 Edit。\n`,
+        };
+      }
+
+      return `[Batch Replace] ⚠️ 偵測到跨檔相同替換（${files.length} 檔，${count} 次），5 次將被阻擋。\n` +
+             `  → 替換內容：「${preview}」\n` +
+             `  → 建議改用 sed/node 腳本一次掃完所有檔案。\n`;
+    },
+  },
+  {
     // Layer 3: Same Category Repeat — 同類操作 3 次才警告，7 次阻擋
     //   排除 Read→Edit 必要流程（Edit 前的 Read 不計入重複）
     id: 'same_category_repeat',
@@ -1068,23 +1107,47 @@ const PATTERNS = [
     },
   },
   {
-    // Layer 1.5: Screenshot Path — 截圖未指定 screenshot/ 路徑就 block
+    // Layer 1.5: Screenshot Path — 截圖未指定截圖子資料夾就 block
+    // 動態偵測專案目錄下實際存在的 screenshot* 資料夾名稱
     id: 'screenshot_wrong_path',
     detect: (entry, _history) => {
       const tool = shortName(entry.tool);
+      if (tool !== 'browser_take_screenshot' && tool !== 'browser_interact') return null;
 
-      // browser_take_screenshot（獨立工具）
-      if (tool === 'browser_take_screenshot') {
-        const filename = entry.args?.filename || '';
-        if (!filename || !/screenshot[s]?\//i.test(filename)) {
+      // 掃描 cwd 下所有 screenshot* 資料夾
+      const cwd = process.cwd();
+      let screenshotDirs = [];
+      try {
+        screenshotDirs = fs.readdirSync(cwd, { withFileTypes: true })
+          .filter(d => d.isDirectory() && /^screenshot/i.test(d.name))
+          .map(d => d.name);
+      } catch { /* 讀不到就用 fallback */ }
+
+      // fallback：沒找到任何 screenshot* 資料夾，接受 screenshot/ 或 screenshots/
+      if (screenshotDirs.length === 0) screenshotDirs = ['screenshot', 'screenshots'];
+
+      // 建立 regex：匹配任一合法資料夾名稱開頭
+      const escaped = screenshotDirs.map(d => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const pattern = new RegExp(`^(${escaped.join('|')})/`, 'i');
+      const hint = screenshotDirs.join('/ 或 ') + '/';
+
+      const checkFilename = (filename) => {
+        if (!filename || !pattern.test(filename)) {
           return {
             block: true,
-            message: `[Wrong Path] ❌ BLOCKED：截圖路徑必須在 screenshot/ 子資料夾。\n` +
+            message: `[Wrong Path] ❌ BLOCKED：截圖路徑必須在截圖子資料夾。\n` +
                      `  → 收到的 filename: "${filename || '(未指定)'}"\n` +
-                     `  → 請改為：screenshot/your-filename.png\n` +
+                     `  → 請改為：${screenshotDirs[0]}/your-filename.png\n` +
+                     `  → 專案中可用的截圖資料夾：${hint}\n` +
                      `  → 截圖是暫存物，不可污染專案根目錄。\n`,
           };
         }
+        return null;
+      };
+
+      // browser_take_screenshot（獨立工具）
+      if (tool === 'browser_take_screenshot') {
+        return checkFilename(entry.args?.filename || '');
       }
 
       // browser_interact 裡的 screenshot action
@@ -1092,16 +1155,8 @@ const PATTERNS = [
         const actions = entry.args?.actions || [];
         for (const action of actions) {
           if (action.type === 'screenshot') {
-            const filename = action.filename || '';
-            if (!filename || !/screenshot[s]?\//i.test(filename)) {
-              return {
-                block: true,
-                message: `[Wrong Path] ❌ BLOCKED：browser_interact 截圖路徑必須在 screenshot/ 子資料夾。\n` +
-                         `  → 收到的 filename: "${filename || '(未指定)'}"\n` +
-                         `  → 請改為：screenshot/your-filename.png\n` +
-                         `  → 截圖是暫存物，不可污染專案根目錄。\n`,
-              };
-            }
+            const result = checkFilename(action.filename || '');
+            if (result) return result;
           }
         }
       }
