@@ -21,8 +21,8 @@ export const definitions = [
       properties: {
         action: {
           type: "string",
-          enum: ["post", "poll", "status", "list_channels", "role"],
-          description: "post=發訊息, poll=讀新訊息, status=更新任務狀態, list_channels=列出所有 channel, role=查看/指派角色設定",
+          enum: ["post", "poll", "status", "list_channels", "role", "suggest_dispatch"],
+          description: "post=發訊息, poll=讀新訊息, status=更新任務狀態, list_channels=列出所有 channel, role=查看/指派角色設定, suggest_dispatch=根據待辦清單自動建議分派方案",
         },
         project: {
           type: "string",
@@ -57,6 +57,19 @@ export const definitions = [
         after_id: {
           type: "number",
           description: "poll 時只取此 ID 之後的訊息（選填，預設取最新 20 則）",
+        },
+        tasks: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string", description: "任務名稱" },
+              description: { type: "string", description: "任務描述（用於分析分派依據）" },
+              priority: { type: "string", enum: ["high", "medium", "low"], description: "優先級（選填）" },
+            },
+            required: ["name"],
+          },
+          description: "suggest_dispatch 動作的待辦清單",
         },
       },
       required: ["action", "project"],
@@ -321,6 +334,155 @@ export async function handle(name, args) {
         text: `${icon} [${agent_id}] ${task} → ${task_status}`,
       }],
     };
+  }
+
+  // ─── suggest_dispatch ───
+  if (action === "suggest_dispatch") {
+    const { tasks: taskList } = args;
+    if (!taskList || taskList.length === 0) {
+      return { content: [{ type: "text", text: "❌ suggest_dispatch 需要指定 tasks 陣列（至少一項）" }] };
+    }
+
+    // 讀取角色設定（如果有）
+    const configFile = path.join(projDir, "_config.json");
+    const config = await readJson(configFile, null);
+    const hasRoles = config?.agents && Object.keys(config.agents).length > 0;
+
+    // 讀取現有任務狀態
+    const statusFile = getStatusFile(project);
+    const statuses = await readJson(statusFile, {});
+
+    // ── 通用分類關鍵字（無 _config.json 時使用）──
+    const GENERIC_ROLES = {
+      frontend: {
+        name: "前端 Agent",
+        keywords: ["ui", "css", "html", "js", "javascript", "typescript", "react", "vue", "component", "layout", "style", "template", "view", "page", "前端", "介面", "樣式", "頁面", "截圖", "playwright", "browser", "dom", "responsive"],
+      },
+      backend: {
+        name: "後端 Agent",
+        keywords: ["api", "php", "python", "server", "controller", "model", "route", "endpoint", "logic", "service", "class", "後端", "邏輯", "功能", "migration", "cron", "queue"],
+      },
+      qa: {
+        name: "QA Agent",
+        keywords: ["test", "qa", "verify", "check", "validation", "bug", "fix", "regression", "測試", "驗證", "品質", "校驗", "比對"],
+      },
+      data: {
+        name: "資料 Agent",
+        keywords: ["database", "db", "sql", "schema", "table", "migration", "data", "query", "index", "資料庫", "資料", "欄位", "flyway"],
+      },
+      devops: {
+        name: "DevOps Agent",
+        keywords: ["deploy", "sftp", "docker", "ci", "cd", "build", "server", "config", "env", "部署", "環境", "設定", "git"],
+      },
+    };
+
+    /** 根據文字內容匹配角色（支援 _config.json 的 modules 或通用關鍵字） */
+    function matchRole(text) {
+      const lower = text.toLowerCase();
+
+      if (hasRoles) {
+        // 用 _config.json 的角色定義匹配
+        const scores = {};
+        for (const [id, role] of Object.entries(config.agents)) {
+          let score = 0;
+          for (const mod of (role.modules || [])) {
+            const modWords = mod.toLowerCase().split(/[\s/\\,]+/);
+            for (const w of modWords) {
+              if (w.length > 2 && lower.includes(w)) score++;
+            }
+          }
+          // 也匹配角色名稱
+          if (lower.includes(id.toLowerCase())) score += 3;
+          if (role.name && lower.includes(role.name.toLowerCase())) score += 2;
+          if (score > 0) scores[id] = score;
+        }
+        if (Object.keys(scores).length > 0) {
+          return Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
+        }
+        return null;
+      }
+
+      // 通用關鍵字匹配
+      const scores = {};
+      for (const [id, role] of Object.entries(GENERIC_ROLES)) {
+        let score = 0;
+        for (const kw of role.keywords) {
+          if (lower.includes(kw)) score++;
+        }
+        if (score > 0) scores[id] = score;
+      }
+      if (Object.keys(scores).length > 0) {
+        return Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
+      }
+      return null;
+    }
+
+    // ── 分析每個任務 ──
+    const dispatch = {}; // { roleId: [task, ...] }
+    const unassigned = [];
+
+    for (const t of taskList) {
+      const searchText = `${t.name} ${t.description || ""}`;
+      const role = matchRole(searchText);
+      if (role) {
+        if (!dispatch[role]) dispatch[role] = [];
+        dispatch[role].push(t);
+      } else {
+        unassigned.push(t);
+      }
+    }
+
+    // ── 組裝輸出 ──
+    const lines = [
+      `📋 **任務分派建議** — ${project}（共 ${taskList.length} 項）`,
+      "",
+    ];
+
+    const roleSource = hasRoles ? config.agents : GENERIC_ROLES;
+    const assignedCount = taskList.length - unassigned.length;
+
+    for (const [roleId, tasks] of Object.entries(dispatch)) {
+      const roleName = roleSource[roleId]?.name || roleId;
+      const icon = { frontend: "🎨", backend: "⚙️", qa: "🧪", data: "🗄️", devops: "🚀" }[roleId] || "🤖";
+
+      // 顯示該角色目前的任務狀態（如果有）
+      const currentTasks = statuses[roleId] || {};
+      const doingCount = Object.values(currentTasks).filter(s => s.status === "doing").length;
+      const busyNote = doingCount > 0 ? ` ⚡ 目前有 ${doingCount} 項進行中` : "";
+
+      lines.push(`${icon} **${roleName}**（${roleId}）— ${tasks.length} 項${busyNote}`);
+      for (const t of tasks) {
+        const pri = t.priority ? ` [${t.priority}]` : "";
+        lines.push(`  · ${t.name}${pri}`);
+        if (t.description) lines.push(`    ${t.description}`);
+      }
+      lines.push("");
+    }
+
+    if (unassigned.length > 0) {
+      lines.push(`❓ **未能自動分配**（${unassigned.length} 項，建議手動指定或由主 Agent 處理）`);
+      for (const t of unassigned) {
+        lines.push(`  · ${t.name}`);
+        if (t.description) lines.push(`    ${t.description}`);
+      }
+      lines.push("");
+    }
+
+    // ── 建議行動 ──
+    lines.push("---");
+    lines.push("**建議行動：**");
+    if (assignedCount > 0) {
+      lines.push(`  1. 用 Agent 工具為每個角色啟動獨立 subagent（平行執行）`);
+      lines.push(`  2. 用 status action 追蹤各 agent 進度`);
+      if (taskList.length >= 5) {
+        lines.push(`  3. ⚠️ 共 ${taskList.length} 項任務，強烈建議分發而非自己全做`);
+      }
+    }
+    if (!hasRoles) {
+      lines.push(`  💡 建立 _config.json 可自訂角色定義，提高分派精準度`);
+    }
+
+    return { content: [{ type: "text", text: lines.join("\n") }] };
   }
 
   return { content: [{ type: "text", text: `❌ 未知 action: ${action}` }] };

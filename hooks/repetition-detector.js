@@ -1110,6 +1110,53 @@ const PATTERNS = [
     },
   },
   AUTO_FIX_PATTERN,
+  {
+    // Layer 7: Workload Reminder — 工作量高時提醒分發任務給其他 Agent
+    //   追蹤 session 中 tool call 總數 + 工具多樣性，超過閾值時非阻擋提醒
+    //   只提醒一次（用 _workloadReminded flag 防重複）
+    id: 'workload_reminder',
+    detect: (entry, history) => {
+      // 已提醒過就不再觸發
+      if (history.some(h => h._workloadReminded)) return null;
+
+      const totalCalls = history.length + 1;
+
+      // 閾值：至少 30 次 tool call
+      if (totalCalls < 30) return null;
+
+      // 計算最近 15 次呼叫的工具多樣性（不同 shortName 的數量）
+      const recent = history.slice(-15);
+      recent.push(entry);
+      const uniqueTools = new Set(recent.map(h => shortName(h.tool)));
+
+      // 多樣性閾值：4+ 種不同工具（表示多線並行工作）
+      if (uniqueTools.size < 4) return null;
+
+      // 計算待辦密度：最近 15 次中 Edit/Write 的比例（高 = 正在大量修改）
+      const editCount = recent.filter(h => {
+        const t = shortName(h.tool);
+        return t === 'Edit' || t === 'Write' || t === 'create_file' || t === 'apply_diff';
+      }).length;
+      const editRatio = editCount / recent.length;
+
+      // 至少有 20% 是修改操作才算真正在「做事」（排除純查詢 session）
+      if (editRatio < 0.2) return null;
+
+      // 標記已提醒（會被寫入 log，跨 process 持久化）
+      entry._workloadReminded = true;
+
+      const lines = [
+        `\n[Workload Reminder] 📋 本次對話已執行 ${totalCalls} 次工具呼叫，涉及 ${uniqueTools.size} 類工具，修改比例 ${Math.round(editRatio * 100)}%。`,
+        '  目前工作量較高，請考慮：',
+        '  1. 用 Agent 工具分發獨立子任務給其他 agent（平行處理更快）',
+        '  2. 用 agent_coord(action: "suggest_dispatch") 分析待辦清單，自動建議分派方案',
+        '  3. 若待辦項目超過 5 個，強烈建議拆分而非全部自己做',
+        '',
+      ];
+
+      return lines.join('\n');
+    },
+  },
 ];
 
 // ── Log 管理 ──────────────────────────────────────
@@ -1250,9 +1297,12 @@ process.stdin.on('end', () => {
       bashSig,
       ts: Date.now(),
     };
-    // 持久化記憶注入標記（跨 process 保留）
+    // 持久化標記（跨 process 保留）
     if (currentEntry._memoryInjected) {
       storedEntry._memoryInjected = true;
+    }
+    if (currentEntry._workloadReminded) {
+      storedEntry._workloadReminded = true;
     }
 
     history.push(storedEntry);

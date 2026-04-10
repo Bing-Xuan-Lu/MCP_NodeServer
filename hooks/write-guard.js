@@ -1,20 +1,59 @@
 #!/usr/bin/env node
 /**
- * PreToolUse Hook — Write Guard（敏感檔案寫入警告 + 風險層級警告）
+ * PreToolUse Hook — Write Guard（敏感檔案寫入警告 + 風險層級警告 + 批次限制 + Prompt Guard 連動）
  *
  * 依據 risk-tiers.json 分級輸出警告：
  *   HIGH  → 🔴 強警告（列出具體風險）
  *   MEDIUM → 🟡 提醒
  *   敏感模式 → ⚠️ 警告（.env / key / secret 等）
  *
- * 非阻擋式：只輸出提醒，不取消操作（exit 0）。
+ * 方案 A — Prompt Guard 連動：
+ *   若 Prompt Guard 發出「請先詢問使用者」提醒，在使用者下一次發話前
+ *   阻擋所有 Edit/Write（exit 2 = BLOCK）
+ *
+ * 方案 B — 批次編輯限制：
+ *   單一 session 連續 Edit/Write 超過 BATCH_LIMIT 個不同檔案時，阻擋並要求確認
+ *
  * 觸發條件：工具名稱為 Write 或 Edit 時
  */
 
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { HOME } from '../env.js';
 const GLOBAL_RISK_TIERS = path.join(HOME, '.claude', 'risk-tiers.json');
+
+// ── 方案 A+B 設定 ────────────────────────────────────────
+const BATCH_LIMIT = 5;  // 超過 N 個不同檔案 → 阻擋
+const STATE_DIR = path.join(os.tmpdir(), 'claude-write-guard');
+const STATE_FILE = path.join(STATE_DIR, 'state.json');
+
+function loadState() {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      const raw = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
+      // 超過 30 分鐘自動重置（避免跨 session 殘留）
+      if (Date.now() - (raw.ts || 0) > 30 * 60 * 1000) return freshState();
+      return raw;
+    }
+  } catch (e) {}
+  return freshState();
+}
+
+function freshState() {
+  return { ts: Date.now(), files: [], promptGuardActive: false, batchAcked: false };
+}
+
+function saveState(state) {
+  try {
+    if (!fs.existsSync(STATE_DIR)) fs.mkdirSync(STATE_DIR, { recursive: true });
+    state.ts = Date.now();
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state));
+  } catch (e) {}
+}
+
+// 注意：user-prompt-guard.js 透過直接讀寫 STATE_FILE 來設定
+// promptGuardActive 和重置 batch，不透過 import 本檔。
 
 // ── 載入風險分級設定 ──────────────────────────────────────
 function loadRiskTiers() {
@@ -143,6 +182,33 @@ process.stdin.on('end', () => {
     if (injectionWarning) {
       process.stdout.write(`[Write Guard] 🚨 ${injectionWarning} — 請確認此內容是否安全\n`);
     }
+
+    // ── 方案 A：Prompt Guard 連動阻擋 ───────────────────
+    const state = loadState();
+    if (state.promptGuardActive) {
+      process.stdout.write(
+        `[Write Guard] ❌ BLOCKED：Prompt Guard 已提醒「請先詢問使用者補充資訊」，` +
+        `但尚未詢問就直接嘗試 Edit/Write。\n` +
+        `  → 請先回覆使用者、取得所需資訊後再修改檔案。\n`
+      );
+      process.exit(2);
+    }
+
+    // ── 方案 B：批次編輯限制 ────────────────────────────
+    const normalizedFile = filePath.toLowerCase();
+    if (!state.files.includes(normalizedFile)) {
+      state.files.push(normalizedFile);
+    }
+    if (state.files.length > BATCH_LIMIT && !state.batchAcked) {
+      saveState(state);
+      process.stdout.write(
+        `[Write Guard] ❌ BLOCKED：已連續修改 ${state.files.length} 個不同檔案（上限 ${BATCH_LIMIT}）。\n` +
+        `  → 請先暫停，向使用者確認是否要繼續批次修改。\n` +
+        `  → 使用者確認後，呼叫新一輪修改即會重置計數。\n`
+      );
+      process.exit(2);
+    }
+    saveState(state);
 
     process.exit(0);
   } catch (e) {
