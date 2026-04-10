@@ -49,6 +49,7 @@
 | [feedback/tooling/feedback_docker_ops.md](feedback/tooling/feedback_docker_ops.md) | Docker image 版本必須鎖定，升版前查證持久化路徑 |
 | [feedback/tooling/feedback_license_compliance.md](feedback/tooling/feedback_license_compliance.md) | 安裝第三方套件前確認授權合規，優先 MIT/Apache 2.0 |
 | [feedback/tooling/feedback_http_request_session.md](feedback/tooling/feedback_http_request_session.md) | send_http_request 不回傳 Set-Cookie，登入後測試需用 Playwright |
+| [feedback/tooling/feedback_mcp_tool_priority.md](feedback/tooling/feedback_mcp_tool_priority.md) | DB/PHP/Python 操作必須用 MCP 工具，禁止 Bash docker exec |
 
 ### Feedback — QC
 | 檔案 | 說明 |

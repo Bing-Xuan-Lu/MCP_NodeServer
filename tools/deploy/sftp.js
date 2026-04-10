@@ -1,9 +1,14 @@
 import SftpClient from "ssh2-sftp-client";
 import { Client as SSH2Client } from "ssh2";
 import fs from "fs";
+import fsP from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
 import { resolveSecurePath } from "../../config.js";
 import { validateArgs } from "../_shared/utils.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PRESETS_FILE = path.join(__dirname, "..", "..", ".mcp_sftp_presets.json");
 
 // ============================================
 // SSH 指令安全檢查
@@ -60,29 +65,31 @@ export const definitions = [
   {
     name: "sftp_connect",
     description:
-      "設定 SFTP 連線 (設定後同一次對話內的所有操作都會使用此連線)",
+      "設定 SFTP 連線 (設定後同一次對話內的所有操作都會使用此連線)。可用 preset 參數載入已儲存的部署 preset",
     inputSchema: {
       type: "object",
       properties: {
+        preset:           { type: "string", description: "載入已儲存的 preset 名稱（免填 host/user/password）" },
         host:             { type: "string", description: "遠端主機 IP 或網域" },
         port:             { type: "number", description: "連接埠", default: 22 },
         user:             { type: "string", description: "使用者名稱" },
         password:         { type: "string", description: "密碼（與 private_key_path 擇一）" },
         private_key_path: { type: "string", description: "私鑰絕對路徑（與 password 擇一）" },
       },
-      required: ["host", "user"],
     },
   },
   {
     name: "sftp_upload",
-    description: "上傳本機檔案或資料夾到遠端伺服器（支援單檔與整個目錄）",
+    description:
+      "上傳本機檔案或資料夾到遠端伺服器（支援單檔與整個目錄）。" +
+      "若已設定 preset，可只傳相對路徑，自動補上 local_base / remote_base",
     inputSchema: {
       type: "object",
       properties: {
-        local_path:  { type: "string", description: "本機路徑（相對 basePath 或絕對路徑，需先 grant_path_access）" },
-        remote_path: { type: "string", description: "遠端目標絕對路徑（例如 /var/www/html/project）" },
+        local_path:  { type: "string", description: "本機路徑（相對 basePath 或絕對路徑；若有 preset 可傳相對於 local_base 的路徑）" },
+        remote_path: { type: "string", description: "遠端目標絕對路徑（若有 preset 且省略，自動用 remote_base + local_path 組合）" },
       },
-      required: ["local_path", "remote_path"],
+      required: ["local_path"],
     },
   },
   {
@@ -125,7 +132,9 @@ export const definitions = [
   },
   {
     name: "sftp_upload_batch",
-    description: "批次上傳多組本機檔案/資料夾到遠端（共用一條連線，減少 tool call）",
+    description:
+      "批次上傳多組本機檔案/資料夾到遠端（共用一條連線，減少 tool call）。" +
+      "若已設定 preset，items 內可只傳相對路徑，自動補上 local_base / remote_base",
     inputSchema: {
       type: "object",
       properties: {
@@ -134,10 +143,10 @@ export const definitions = [
           items: {
             type: "object",
             properties: {
-              local_path:  { type: "string", description: "本機路徑（相對 basePath 或絕對路徑）" },
-              remote_path: { type: "string", description: "遠端目標絕對路徑" },
+              local_path:  { type: "string", description: "本機路徑（相對 basePath；若有 preset 可傳相對於 local_base 的路徑）" },
+              remote_path: { type: "string", description: "遠端目標絕對路徑（若有 preset 且省略，自動用 remote_base + local_path 組合）" },
             },
-            required: ["local_path", "remote_path"],
+            required: ["local_path"],
           },
           description: "上傳項目陣列，每項含 local_path 與 remote_path",
         },
@@ -216,6 +225,31 @@ export const definitions = [
       required: ["remote_path"],
     },
   },
+  {
+    name: "sftp_preset",
+    description:
+      "管理 SFTP 部署 preset（儲存連線 + 路徑對應，重啟後仍保留）。" +
+      "save：儲存/更新 preset；list：列出所有 preset；delete：刪除 preset",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action:      { type: "string", enum: ["save", "list", "delete"], description: "操作類型" },
+        preset_name: { type: "string", description: "Preset 名稱（save/delete 必填）" },
+        host:        { type: "string", description: "遠端主機 IP 或網域（save 時填）" },
+        port:        { type: "number", description: "連接埠（預設 22）" },
+        user:        { type: "string", description: "使用者名稱（save 時填）" },
+        password:    { type: "string", description: "密碼（save 時填，與 private_key_path 擇一）" },
+        private_key_path: { type: "string", description: "私鑰絕對路徑（save 時填）" },
+        local_base:  { type: "string", description: "本機專案根目錄（如 D:\\Project\\PG_dbox3），上傳時作為相對路徑基準" },
+        remote_base: { type: "string", description: "遠端部署根目錄（如 /var/www/html_dbox3/），上傳時作為遠端路徑前綴" },
+        excludes:    {
+          type: "array", items: { type: "string" },
+          description: "部署時排除的相對路徑 pattern（如 ['config/database.php', '.env']）",
+        },
+      },
+      required: ["action"],
+    },
+  },
 ];
 
 // ============================================
@@ -279,6 +313,80 @@ async function createClient(config) {
 }
 
 // ============================================
+// 內部：Preset 路徑解析
+// ============================================
+
+/**
+ * 根據 preset 的 local_base / remote_base 補全路徑
+ * @returns {{ localPath: string, remotePath: string|null, presetNote: string }}
+ */
+function resolvePresetPaths(localPath, remotePath, sftpConfig) {
+  const lb = sftpConfig?._local_base;
+  const rb = sftpConfig?._remote_base;
+  let note = "";
+
+  // 如果已有完整 remote_path，直接用
+  if (remotePath) return { localPath, remotePath, presetNote: "" };
+
+  // 需要 preset 的 local_base + remote_base 來推算
+  if (!lb || !rb) return { localPath, remotePath: null, presetNote: "" };
+
+  // localPath 可能是相對於 local_base 的路徑，組合成完整路徑
+  // 也可能已是相對於 basePath 的路徑，需判斷
+  const normalizedLocal = localPath.replace(/\\/g, "/");
+  const normalizedLB = lb.replace(/\\/g, "/").replace(/\/$/, "");
+
+  let relativePart;
+  // 若 localPath 已包含 local_base 前綴，取相對部分
+  if (normalizedLocal.toLowerCase().startsWith(normalizedLB.toLowerCase())) {
+    relativePart = normalizedLocal.slice(normalizedLB.length).replace(/^\//, "");
+  } else if (normalizedLocal.toLowerCase().startsWith(normalizedLB.split("/").pop().toLowerCase())) {
+    // 像 PG_dbox3/app/file.php 這種（basePath + project 相對路徑）
+    const projectFolder = normalizedLB.split("/").pop();
+    relativePart = normalizedLocal.slice(projectFolder.length).replace(/^\//, "");
+  } else {
+    // 當作純相對路徑
+    relativePart = normalizedLocal;
+  }
+
+  const remoteBase = rb.replace(/\/$/, "");
+  const computed = `${remoteBase}/${relativePart}`;
+  note = `\n📦 Preset 路徑映射：${lb} → ${rb}`;
+
+  return { localPath, remotePath: computed, presetNote: note };
+}
+
+/**
+ * 檢查檔案是否在 preset 排除清單中
+ * @returns {string|null} 命中的 pattern，或 null
+ */
+function checkPresetExcludes(localPath, sftpConfig) {
+  const excludes = sftpConfig?._excludes;
+  if (!excludes?.length) return null;
+
+  const normalized = localPath.replace(/\\/g, "/").toLowerCase();
+  for (const pattern of excludes) {
+    const p = pattern.replace(/\\/g, "/").toLowerCase();
+    if (normalized.endsWith(p) || normalized.includes(`/${p}`)) {
+      return pattern;
+    }
+  }
+  return null;
+}
+
+// ============================================
+// 內部：Preset 持久化（.mcp_sftp_presets.json）
+// ============================================
+async function loadPresets() {
+  try {
+    return JSON.parse(await fsP.readFile(PRESETS_FILE, "utf-8"));
+  } catch { return {}; }
+}
+async function savePresets(data) {
+  await fsP.writeFile(PRESETS_FILE, JSON.stringify(data, null, 2), "utf-8");
+}
+
+// ============================================
 // 工具邏輯
 // ============================================
 export async function handle(name, args) {
@@ -287,12 +395,47 @@ export async function handle(name, args) {
 
   // ── sftp_connect ──
   if (name === "sftp_connect") {
-    const config = {
-      host:     args.host,
-      port:     args.port,
-      user:     args.user,
-      password: args.password || "",
-    };
+    let config;
+    let presetInfo = null;
+
+    if (args.preset) {
+      // 從 preset 載入連線資訊
+      const presets = await loadPresets();
+      const p = presets[args.preset];
+      if (!p) {
+        const available = Object.keys(presets);
+        return errorResp(`Preset "${args.preset}" 不存在。`, [
+          available.length ? `可用 preset：${available.join(", ")}` : "尚未儲存任何 preset，請先用 sftp_preset save 建立",
+        ]);
+      }
+      config = {
+        host:     args.host || p.host,
+        port:     args.port || p.port,
+        user:     args.user || p.user,
+        password: args.password || p.password || "",
+      };
+      if (p.private_key_path && !args.password) {
+        try {
+          config.privateKey = fs.readFileSync(p.private_key_path);
+        } catch (e) {
+          return errorResp(`Preset 私鑰讀取失敗：${e.message}`);
+        }
+      }
+      presetInfo = p;
+    } else {
+      if (!args.host || !args.user) {
+        return errorResp("需提供 host + user，或使用 preset 參數載入已儲存設定。", [
+          "直接填寫 host、user、password 參數",
+          "或用 sftp_preset list 查看可用 preset",
+        ]);
+      }
+      config = {
+        host:     args.host,
+        port:     args.port,
+        user:     args.user,
+        password: args.password || "",
+      };
+    }
 
     if (args.private_key_path) {
       try {
@@ -323,13 +466,23 @@ export async function handle(name, args) {
       if (client) await client.end().catch(() => {});
     }
 
+    // 儲存連線設定 + preset 路徑對應（供 upload 使用）
     currentSftp = config;
-    return {
-      content: [{
-        type: "text",
-        text: `✅ SFTP 已連線\n主機: ${config.user}@${config.host}:${config.port}\n認證: ${config.privateKey ? "私鑰" : "密碼"}`,
-      }],
-    };
+    if (presetInfo) {
+      currentSftp._preset = args.preset;
+      currentSftp._local_base = presetInfo.local_base || null;
+      currentSftp._remote_base = presetInfo.remote_base || null;
+      currentSftp._excludes = presetInfo.excludes || [];
+    }
+
+    const parts = [`✅ SFTP 已連線`, `主機: ${config.user}@${config.host}:${config.port}`, `認證: ${config.privateKey ? "私鑰" : "密碼"}`];
+    if (presetInfo) {
+      parts.push(`📦 Preset: ${args.preset}`);
+      if (presetInfo.local_base) parts.push(`   local_base: ${presetInfo.local_base}`);
+      if (presetInfo.remote_base) parts.push(`   remote_base: ${presetInfo.remote_base}`);
+      if (presetInfo.excludes?.length) parts.push(`   excludes: ${presetInfo.excludes.join(", ")}`);
+    }
+    return { content: [{ type: "text", text: parts.join("\n") }] };
   }
 
   // ── sftp_upload ──
@@ -337,9 +490,29 @@ export async function handle(name, args) {
     const check = requireSftp();
     if (!check.ok) return check.error;
 
+    // Preset 路徑解析
+    const { localPath, remotePath, presetNote } = resolvePresetPaths(
+      args.local_path, args.remote_path, check.config
+    );
+    if (!remotePath) {
+      return errorResp("無法推算 remote_path：未設定 preset 或未提供 remote_path。", [
+        "明確指定 remote_path 參數",
+        "或用 sftp_connect preset=xxx 載入含 remote_base 的 preset",
+      ]);
+    }
+
+    // 排除檢查
+    const excludeHit = checkPresetExcludes(localPath, check.config);
+    if (excludeHit) {
+      return errorResp(`⛔ 此檔案在 preset excludes 清單中：${excludeHit}`, [
+        "此檔案含環境設定，直接上傳可能覆蓋遠端設定",
+        "若確定要上傳，請明確指定完整 local_path + remote_path（不走 preset）",
+      ]);
+    }
+
     let localAbs;
     try {
-      localAbs = resolveSecurePath(args.local_path);
+      localAbs = resolveSecurePath(localPath);
     } catch (e) {
       return errorResp(e.message, ["呼叫 grant_path_access 開放此路徑後重試"]);
     }
@@ -357,19 +530,22 @@ export async function handle(name, args) {
       const stat = fs.statSync(localAbs);
 
       if (stat.isDirectory()) {
-        await client.uploadDir(localAbs, args.remote_path);
+        await client.uploadDir(localAbs, remotePath);
         return {
-          content: [{ type: "text", text: `✅ 目錄上傳完成\n本機: ${localAbs}\n遠端: ${args.remote_path}` }],
+          content: [{ type: "text", text: `✅ 目錄上傳完成\n本機: ${localAbs}\n遠端: ${remotePath}${presetNote}` }],
         };
       } else {
-        await client.put(localAbs, args.remote_path);
+        // 自動建立遠端目錄
+        const remoteDir = remotePath.replace(/\/[^/]+$/, "");
+        if (remoteDir) await client.mkdir(remoteDir, true).catch(() => {});
+        await client.put(localAbs, remotePath);
         return {
-          content: [{ type: "text", text: `✅ 檔案上傳完成\n本機: ${localAbs}\n遠端: ${args.remote_path}` }],
+          content: [{ type: "text", text: `✅ 檔案上傳完成\n本機: ${localAbs}\n遠端: ${remotePath}${presetNote}` }],
         };
       }
     } catch (err) {
       return errorResp(`上傳失敗：${err.message}`, [
-        `呼叫 sftp_list ${path.dirname(args.remote_path)} 確認遠端目錄存在`,
+        `呼叫 sftp_list ${path.dirname(remotePath)} 確認遠端目錄存在`,
         "確認遠端使用者對目標路徑有寫入權限",
       ]);
     } finally {
@@ -483,36 +659,58 @@ export async function handle(name, args) {
       client = await createClient(check.config);
       const results = [];
       let okCount = 0;
+      let skipCount = 0;
 
       for (const item of args.items) {
+        // Preset 路徑解析
+        const { localPath, remotePath } = resolvePresetPaths(
+          item.local_path, item.remote_path, check.config
+        );
+        if (!remotePath) {
+          results.push(`⚠️ ${item.local_path}：無法推算 remote_path（未設 preset 或未提供 remote_path）`);
+          continue;
+        }
+
+        // 排除檢查
+        const excludeHit = checkPresetExcludes(localPath, check.config);
+        if (excludeHit) {
+          results.push(`⛔ ${localPath} → 已排除（${excludeHit}）`);
+          skipCount++;
+          continue;
+        }
+
         try {
-          const localAbs = resolveSecurePath(item.local_path);
+          const localAbs = resolveSecurePath(localPath);
           if (!fs.existsSync(localAbs)) {
-            results.push(`❌ ${item.local_path} → ${item.remote_path}：本機路徑不存在`);
+            results.push(`❌ ${localPath} → ${remotePath}：本機路徑不存在`);
             continue;
           }
           const stat = fs.statSync(localAbs);
           if (stat.isDirectory()) {
-            await client.uploadDir(localAbs, item.remote_path);
+            await client.uploadDir(localAbs, remotePath);
           } else {
             // 自動建立遠端目錄（若不存在）
-            const remoteDir = item.remote_path.replace(/\/[^/]+$/, "");
+            const remoteDir = remotePath.replace(/\/[^/]+$/, "");
             if (remoteDir) {
               await client.mkdir(remoteDir, true).catch(() => {});
             }
-            await client.put(localAbs, item.remote_path);
+            await client.put(localAbs, remotePath);
           }
-          results.push(`✅ ${item.local_path} → ${item.remote_path}`);
+          results.push(`✅ ${localPath} → ${remotePath}`);
           okCount++;
         } catch (err) {
-          results.push(`❌ ${item.local_path} → ${item.remote_path}：${err.message}`);
+          results.push(`❌ ${localPath} → ${remotePath}：${err.message}`);
         }
       }
+
+      const summary = [`批次上傳完成：${okCount}/${args.items.length} 成功`];
+      if (skipCount) summary.push(`（${skipCount} 個被 preset excludes 排除）`);
+      if (check.config._preset) summary.push(`📦 Preset: ${check.config._preset}`);
 
       return {
         content: [{
           type: "text",
-          text: `批次上傳完成：${okCount}/${args.items.length} 成功\n\n${results.join("\n")}`,
+          text: `${summary.join(" ")}\n\n${results.join("\n")}`,
         }],
       };
     } catch (err) {
@@ -638,8 +836,37 @@ export async function handle(name, args) {
       );
     }
 
+    // MySQL 中文自動注入 SET NAMES utf8mb4
+    let finalCommand = command;
+    const mysqlMatch = command.match(/^(docker\s+exec\s+\S+\s+)?mysql\b/);
+    if (mysqlMatch) {
+      const hasCJK = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/.test(command);
+      const hasSetNames = /set\s+names/i.test(command);
+      if (hasCJK && !hasSetNames) {
+        // 偵測 -e 'SQL' 或 -e "SQL" 模式，在 SQL 前插入 SET NAMES utf8mb4;
+        finalCommand = command.replace(
+          /(-e\s*['"])(.+?)(['"])/,
+          (_, pre, sql, post) => `${pre}SET NAMES utf8mb4; ${sql}${post}`
+        );
+        if (finalCommand === command) {
+          // 非 -e 模式（如 pipe），加前置提醒
+          finalCommand = command;
+        }
+      }
+    }
+
     const timeout = Math.min(Math.max((args.timeout || 30), 1), 300) * 1000;
     const config = check.config;
+
+    // 組裝額外提示
+    const mysqlWarnings = [];
+    if (mysqlMatch && /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/.test(command) && !/set\s+names/i.test(command)) {
+      if (finalCommand !== command) {
+        mysqlWarnings.push("🔤 偵測到 MySQL 指令含中文，已自動注入 SET NAMES utf8mb4");
+      } else {
+        mysqlWarnings.push("⚠️ 偵測到 MySQL 指令含中文但未包含 SET NAMES，建議手動加上 SET NAMES utf8mb4 以避免亂碼");
+      }
+    }
 
     return new Promise((resolve) => {
       const conn = new SSH2Client();
@@ -656,7 +883,7 @@ export async function handle(name, args) {
       }, timeout);
 
       conn.on("ready", () => {
-        conn.exec(command, (err, stream) => {
+        conn.exec(finalCommand, (err, stream) => {
           if (err) {
             settled = true;
             clearTimeout(timer);
@@ -683,8 +910,9 @@ export async function handle(name, args) {
             if (stderr.length > MAX) stderr = stderr.slice(0, MAX) + `\n... (truncated, total ${stderr.length} chars)`;
 
             const parts = [];
+            if (mysqlWarnings.length) parts.push(mysqlWarnings.join("\n"));
             const warn = safety.level === "warn" ? `⚠️ 已確認執行高風險指令：${safety.msg}\n` : "";
-            parts.push(`${warn}$ ${command}\nExit code: ${code}`);
+            parts.push(`${warn}$ ${finalCommand}\nExit code: ${code}`);
             if (stdout) parts.push(`--- stdout ---\n${stdout.trimEnd()}`);
             if (stderr) parts.push(`--- stderr ---\n${stderr.trimEnd()}`);
             if (!stdout && !stderr) parts.push("（無輸出）");
@@ -746,5 +974,75 @@ export async function handle(name, args) {
     } finally {
       if (client) await client.end().catch(() => {});
     }
+  }
+
+  // ── sftp_preset ──
+  if (name === "sftp_preset") {
+    const action = args.action;
+
+    if (action === "list") {
+      const presets = await loadPresets();
+      const names = Object.keys(presets);
+      if (!names.length) {
+        return { content: [{ type: "text", text: "尚未儲存任何 preset。\n用 sftp_preset action=save 建立第一個。" }] };
+      }
+      const lines = names.map((n) => {
+        const p = presets[n];
+        const parts = [`📦 ${n}`, `   ${p.user}@${p.host}:${p.port || 22}`];
+        if (p.local_base) parts.push(`   local:  ${p.local_base}`);
+        if (p.remote_base) parts.push(`   remote: ${p.remote_base}`);
+        if (p.excludes?.length) parts.push(`   excludes: ${p.excludes.join(", ")}`);
+        return parts.join("\n");
+      });
+      return { content: [{ type: "text", text: `SFTP Presets (${names.length}):\n\n${lines.join("\n\n")}` }] };
+    }
+
+    if (action === "delete") {
+      if (!args.preset_name) return errorResp("delete 需要 preset_name 參數。");
+      const presets = await loadPresets();
+      if (!presets[args.preset_name]) {
+        return errorResp(`Preset "${args.preset_name}" 不存在。`);
+      }
+      delete presets[args.preset_name];
+      await savePresets(presets);
+      return { content: [{ type: "text", text: `🗑️ Preset "${args.preset_name}" 已刪除。` }] };
+    }
+
+    if (action === "save") {
+      if (!args.preset_name) return errorResp("save 需要 preset_name 參數。");
+      if (!args.host || !args.user) {
+        return errorResp("save 需要 host + user 參數。");
+      }
+
+      const presets = await loadPresets();
+      const isUpdate = !!presets[args.preset_name];
+
+      presets[args.preset_name] = {
+        host:             args.host,
+        port:             args.port || 22,
+        user:             args.user,
+        password:         args.password || "",
+        private_key_path: args.private_key_path || "",
+        local_base:       args.local_base || "",
+        remote_base:      args.remote_base || "",
+        excludes:         args.excludes || [],
+      };
+      await savePresets(presets);
+
+      const verb = isUpdate ? "更新" : "建立";
+      const p = presets[args.preset_name];
+      const lines = [
+        `✅ Preset "${args.preset_name}" 已${verb}`,
+        `   ${p.user}@${p.host}:${p.port}`,
+      ];
+      if (p.local_base) lines.push(`   local_base:  ${p.local_base}`);
+      if (p.remote_base) lines.push(`   remote_base: ${p.remote_base}`);
+      if (p.excludes.length) lines.push(`   excludes: ${p.excludes.join(", ")}`);
+      lines.push("", `使用方式：sftp_connect preset="${args.preset_name}"`);
+
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+
+    return errorResp(`未知 action: ${action}`, ["支援 save / list / delete"]);
   }
 }

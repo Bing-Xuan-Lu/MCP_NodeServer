@@ -95,10 +95,10 @@ if (Test-Path $settingsPath) {
     $settings = [PSCustomObject]@{ permissions = [PSCustomObject]@{ allow = @() } }
 }
 
-if (-not $settings.permissions) {
+if (-not ($settings.PSObject.Properties.Name -contains "permissions")) {
     $settings | Add-Member -MemberType NoteProperty -Name "permissions" -Value ([PSCustomObject]@{ allow = @() })
 }
-if (-not $settings.permissions.allow) {
+if (-not ($settings.permissions.PSObject.Properties.Name -contains "allow")) {
     $settings.permissions | Add-Member -MemberType NoteProperty -Name "allow" -Value @()
 }
 
