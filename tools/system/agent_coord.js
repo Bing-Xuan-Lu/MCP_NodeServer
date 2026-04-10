@@ -15,14 +15,14 @@ export const definitions = [
   {
     name: "agent_coord",
     description:
-      "多 Agent 協調工具：在 channel 中發佈訊息(post)、輪詢新訊息(poll)、更新任務狀態(status)。底層為 JSON 檔案，適用於前後端雙 Agent 同時開發同一專案時的溝通與協調。",
+      "多 Agent 協調工具：在 channel 中發佈訊息(post)、輪詢新訊息(poll)、更新任務狀態(status)、刪除訊息(delete)、歸檔已完成訊息(archive)。底層為 JSON 檔案，適用於前後端雙 Agent 同時開發同一專案時的溝通與協調。",
     inputSchema: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["post", "poll", "status", "list_channels", "role", "suggest_dispatch"],
-          description: "post=發訊息, poll=讀新訊息, status=更新任務狀態, list_channels=列出所有 channel, role=查看/指派角色設定, suggest_dispatch=根據待辦清單自動建議分派方案",
+          enum: ["post", "poll", "status", "list_channels", "role", "suggest_dispatch", "delete", "archive"],
+          description: "post=發訊息, poll=讀新訊息, status=更新任務狀態, list_channels=列出所有 channel, role=查看/指派角色設定, suggest_dispatch=根據待辦清單自動建議分派方案, delete=刪除指定訊息, archive=歸檔已完成訊息",
         },
         project: {
           type: "string",
@@ -57,6 +57,15 @@ export const definitions = [
         after_id: {
           type: "number",
           description: "poll 時只取此 ID 之後的訊息（選填，預設取最新 20 則）",
+        },
+        message_ids: {
+          type: "array",
+          items: { type: "number" },
+          description: "delete 動作要刪除的訊息 ID 列表",
+        },
+        force: {
+          type: "boolean",
+          description: "delete 時允許刪除非自己發的訊息（預設 false，只能刪自己的）",
         },
         tasks: {
           type: "array",
@@ -483,6 +492,82 @@ export async function handle(name, args) {
     }
 
     return { content: [{ type: "text", text: lines.join("\n") }] };
+  }
+
+  // ─── delete ───
+  if (action === "delete") {
+    if (!channel) return { content: [{ type: "text", text: "❌ delete 需要指定 channel" }] };
+    if (!agent_id) return { content: [{ type: "text", text: "❌ delete 需要指定 agent_id（用於權限判斷）" }] };
+    const ids = args.message_ids;
+    if (!ids || ids.length === 0) return { content: [{ type: "text", text: "❌ delete 需要指定 message_ids" }] };
+
+    const file = getChannelFile(project, channel);
+    const data = await readJson(file, { messages: [], next_id: 1 });
+
+    const deleted = [];
+    const denied = [];
+    const notFound = [];
+
+    for (const id of ids) {
+      const idx = data.messages.findIndex(m => m.id === id);
+      if (idx === -1) {
+        notFound.push(id);
+        continue;
+      }
+      const msg = data.messages[idx];
+      if (msg.agent !== agent_id && !args.force) {
+        denied.push({ id, owner: msg.agent });
+        continue;
+      }
+      data.messages.splice(idx, 1);
+      deleted.push(id);
+    }
+
+    if (deleted.length > 0) await writeJson(file, data);
+
+    const lines = [];
+    if (deleted.length > 0) lines.push(`✅ 已刪除 ${deleted.length} 則：#${deleted.join(", #")}`);
+    if (denied.length > 0) lines.push(`🚫 權限不足（非自己發的，需 force: true）：${denied.map(d => `#${d.id}(by ${d.owner})`).join(", ")}`);
+    if (notFound.length > 0) lines.push(`⚠️ 找不到：#${notFound.join(", #")}`);
+
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  }
+
+  // ─── archive ───
+  if (action === "archive") {
+    if (!channel) return { content: [{ type: "text", text: "❌ archive 需要指定 channel" }] };
+
+    const file = getChannelFile(project, channel);
+    const data = await readJson(file, { messages: [], next_id: 1 });
+
+    // 篩出 category=done 的訊息
+    const toArchive = data.messages.filter(m => m.category === "done");
+    if (toArchive.length === 0) {
+      return { content: [{ type: "text", text: `📭 [${channel}] 沒有 category=done 的訊息可歸檔` }] };
+    }
+
+    // 寫入 archive 檔
+    const archiveFile = path.join(getProjectDir(project), `_archive_${channel.replace(/[^a-zA-Z0-9_-]/g, "_")}.json`);
+    const archive = await readJson(archiveFile, { messages: [] });
+    for (const m of toArchive) {
+      m.archived_at = timestamp();
+      archive.messages.push(m);
+    }
+    await writeJson(archiveFile, archive);
+
+    // 從原 channel 移除
+    const archivedIds = new Set(toArchive.map(m => m.id));
+    data.messages = data.messages.filter(m => !archivedIds.has(m.id));
+    await writeJson(file, data);
+
+    return {
+      content: [{
+        type: "text",
+        text: `📦 [${channel}] 已歸檔 ${toArchive.length} 則 done 訊息（#${toArchive.map(m => m.id).join(", #")}）\n` +
+              `  → 歸檔檔案：_archive_${channel}.json（共 ${archive.messages.length} 則）\n` +
+              `  → channel 剩餘 ${data.messages.length} 則訊息`,
+      }],
+    };
   }
 
   return { content: [{ type: "text", text: `❌ 未知 action: ${action}` }] };
