@@ -25,7 +25,7 @@ MCP_NodeServer/
 │   │   ├── browser_pool.js ← Playwright browser pool factory（browser/* 共用）
 │   │   └── utils.js     ← 驗證函式、錯誤處理、async 工具（全工具可用）
 │   ├── file_io/         ← 檔案讀寫與文件轉換（通用 I/O）
-│   │   ├── filesystem.js ← list_files, read_file, create_file, apply_diff, read_files_batch, list_files_batch, create_file_batch
+│   │   ├── filesystem.js ← list_files, read_file, create_file, apply_diff, apply_diff_batch, read_files_batch, list_files_batch, create_file_batch
 │   │   ├── excel.js     ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   │   ├── word.js      ← read_word_file, read_word_files_batch (.docx → Markdown/HTML/Text)
 │   │   ├── pptx.js      ← read_pptx_file, read_pptx_files_batch (.pptx → Markdown/Text + 圖片)
@@ -41,7 +41,7 @@ MCP_NodeServer/
 │   │   └── flyway.js    ← flyway_info, flyway_migrate, flyway_validate, flyway_repair, flyway_baseline（需 dev-flyway Docker，選用）
 │   ├── browser/         ← 瀏覽器自動化與網頁檢查（UI testing、CSS 分析）
 │   │   ├── dom_compare.js ← dom_compare（批次比對兩個 URL 的 CSS/HTML/JS 差異；使用 browser_pool）
-│   │   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage
+│   │   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage, browser_save_session, browser_restore_session
 │   │   └── css_tools.js ← css_specificity_check, css_computed_winner（使用 browser_pool）
 │   ├── system/          ← 系統工具（多 Agent 協調、外部程式執行、程式碼分析）
 │   │   ├── python.js    ← run_python_script (Docker)

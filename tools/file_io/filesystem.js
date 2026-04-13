@@ -157,6 +157,29 @@ export const definitions = [
       required: ["path", "search", "replace"],
     },
   },
+  {
+    name: "apply_diff_batch",
+    description: "批次修改多個檔案（Search & Replace 模式）。每項指定 path/search/replace，一次 call 完成多檔修改。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        diffs: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "檔案路徑" },
+              search: { type: "string", description: "搜尋字串" },
+              replace: { type: "string", description: "取代字串" },
+            },
+            required: ["path", "search", "replace"],
+          },
+          description: "修改清單，每項含 path、search、replace",
+        },
+      },
+      required: ["diffs"],
+    },
+  },
 ];
 
 // ============================================
@@ -350,6 +373,58 @@ export async function handle(name, args) {
     if (hasCRLF) result = result.replace(/\n/g, "\r\n");
 
     await fs.writeFile(fullPath, result, "utf-8");
-    return { content: [{ type: "text", text: `✅ 檔案已更新: ${args.path}` }] };
+
+    const startLine = content.slice(0, content.indexOf(search)).split("\n").length;
+    const removedLines = search.split("\n").length;
+    const addedLines = replace.split("\n").length;
+    const delta = addedLines - removedLines;
+    const deltaStr = delta === 0 ? "±0" : delta > 0 ? `+${delta}` : `${delta}`;
+    return { content: [{ type: "text", text: `✅ ${args.path}（第 ${startLine} 行，-${removedLines} +${addedLines} 行，淨 ${deltaStr}）` }] };
+  }
+
+  if (name === "apply_diff_batch") {
+    if (!args.diffs || args.diffs.length === 0) {
+      return { isError: true, content: [{ type: "text", text: "diffs 陣列不可為空。" }] };
+    }
+    const normalize = (s) => s.replace(/\r\n/g, "\n");
+    const results = [];
+    let okCount = 0;
+
+    for (const diff of args.diffs) {
+      try {
+        checkProtected(diff.path);
+        const fullPath = resolveSecurePath(diff.path);
+        const raw = await fs.readFile(fullPath, "utf-8");
+        const hasCRLF = raw.includes("\r\n");
+
+        const content = normalize(raw);
+        const search = normalize(diff.search);
+        const replace = normalize(diff.replace);
+
+        if (!content.includes(search)) {
+          const preview = search.slice(0, 80).replace(/\n/g, "\\n");
+          results.push(`❌ ${diff.path}：比對失敗（前 80 字元：${preview}）`);
+          continue;
+        }
+
+        let result = content.replace(search, replace);
+        if (hasCRLF) result = result.replace(/\n/g, "\r\n");
+
+        await fs.writeFile(fullPath, result, "utf-8");
+        const startLine = content.slice(0, content.indexOf(search)).split("\n").length;
+        const removedLines = search.split("\n").length;
+        const addedLines = replace.split("\n").length;
+        const delta = addedLines - removedLines;
+        const deltaStr = delta === 0 ? "±0" : delta > 0 ? `+${delta}` : `${delta}`;
+        results.push(`✅ ${diff.path}（第 ${startLine} 行，-${removedLines} +${addedLines} 行，淨 ${deltaStr}）`);
+        okCount++;
+      } catch (err) {
+        results.push(`❌ ${diff.path}：${err.message}`);
+      }
+    }
+
+    return {
+      content: [{ type: "text", text: `批次修改完成：${okCount}/${args.diffs.length} 成功\n\n${results.join("\n")}` }],
+    };
   }
 }
