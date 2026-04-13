@@ -111,7 +111,7 @@ MCP_NodeServer/
 ├── index.js             ← MCP Server 主程式
 ├── config.js            ← resolveSecurePath (預設 basePath 為 D:\Project\)
 ├── tools/               ← MCP 工具模組
-│   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, *_batch (read_files/list_files/create_file)（PROTECTED_PATTERNS 防寫入測試檔 + audit log）
+│   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, apply_diff_batch, *_batch (read_files/list_files/create_file)（PROTECTED_PATTERNS 防寫入測試檔 + audit log）
 │   ├── php.js           ← run_php_script, run_php_test, send_http_request, tail_log, *_batch (http_requests/php_script)（PHP 執行 + tail_log 支援 container 參數走 Docker）
 │   ├── database.js      ← set_database, load_db_connection, get_db_schema, execute_sql（危險語句攔截 + confirm + audit log）, *_batch
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
@@ -124,7 +124,7 @@ MCP_NodeServer/
 │   ├── images.js        ← read_image, read_images_batch（圖片讀取 + 縮放，支援 PNG/JPG/WebP/GIF/SVG）
 │   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops（支援 container 參數走 Docker）
 │   ├── dom_compare.js   ← dom_compare（批次比對兩個 URL 的 CSS/HTML/JS 差異，需 Playwright）
-│   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage（自帶 headless 瀏覽器，需 Playwright）
+│   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage, browser_save_session, browser_restore_session（自帶 headless 瀏覽器，需 Playwright）
 │   ├── image_diff.js    ← image_diff（設計稿 vs 截圖像素級比對，產生 diff 圖）
 │   ├── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
 │   ├── agent_coord.js   ← agent_coord（多 Agent 協調：post/poll/status/delete/archive，JSON 檔案持久化）

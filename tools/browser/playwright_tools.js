@@ -1,7 +1,12 @@
-// tools/playwright_tools.js — browser_interact + page_audit + css_inspect + element_measure + style_snapshot + css_coverage
+// tools/playwright_tools.js — browser_interact + page_audit + css_inspect + element_measure + style_snapshot + css_coverage + browser_save_session + browser_restore_session
 // 自帶 headless Chromium，不依賴 Playwright MCP
 
+import fs from "fs/promises";
+import path from "path";
+import os from "os";
 import { validateArgs } from "../_shared/utils.js";
+
+const SESSION_DIR = path.join(os.homedir(), ".claude", "sessions");
 
 let playwrightModule = null;
 async function getPlaywright() {
@@ -299,6 +304,45 @@ export const definitions = [
         },
       },
       required: ["url"],
+    },
+  },
+  {
+    name: "browser_save_session",
+    description: "登入後儲存瀏覽器 session（cookies + localStorage + sessionStorage）到本機，供下次對話還原登入狀態，免重複走登入流程。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "登入後的任意頁面 URL（用於擷取 cookies 和 storage）" },
+        session_key: { type: "string", description: "session 識別名稱，預設 'default'（建議用專案名，如 'dbox3'）" },
+        cookies: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" }, value: { type: "string" },
+              domain: { type: "string" }, path: { type: "string" },
+            },
+            required: ["name", "value", "domain"],
+          },
+          description: "選填：先注入這些 cookies 再擷取（用於已有 cookies 想一起存）",
+        },
+        viewport: {
+          type: "object",
+          properties: { width: { type: "number" }, height: { type: "number" } },
+        },
+        timeout: { type: "number", description: "頁面載入逾時毫秒數（預設 15000）" },
+      },
+      required: ["url"],
+    },
+  },
+  {
+    name: "browser_restore_session",
+    description: "還原先前儲存的瀏覽器 session，回傳 cookies 陣列，可直接傳入 browser_interact / page_audit 的 cookies 參數跳過登入。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        session_key: { type: "string", description: "session 識別名稱，預設 'default'" },
+      },
     },
   },
 ];
@@ -1512,6 +1556,108 @@ async function handleCssCoverage(args) {
 }
 
 // ============================================
+// browser_save_session 實作
+// ============================================
+async function handleSaveSession(args) {
+  const {
+    url,
+    session_key = "default",
+    cookies: injectCookies = [],
+    viewport = { width: 1920, height: 1080 },
+    timeout = 15000,
+  } = args;
+
+  const browser = await acquireBrowser();
+  let context = null;
+  try {
+    context = await browser.newContext({
+      viewport: { width: viewport.width || 1920, height: viewport.height || 1080 },
+      ignoreHTTPSErrors: true,
+    });
+
+    if (injectCookies.length > 0) {
+      await context.addCookies(injectCookies.map((c) => ({
+        name: c.name, value: c.value, domain: c.domain, path: c.path || "/",
+      })));
+    }
+
+    const page = await context.newPage();
+    await page.goto(url, { waitUntil: "networkidle", timeout });
+
+    // 擷取 cookies
+    const cookies = await context.cookies();
+
+    // 擷取 localStorage 和 sessionStorage
+    const storages = await page.evaluate(() => ({
+      localStorage: Object.fromEntries(Object.entries(localStorage)),
+      sessionStorage: Object.fromEntries(Object.entries(sessionStorage)),
+    }));
+
+    const sessionData = {
+      saved_at: new Date().toISOString(),
+      url,
+      cookies,
+      localStorage: storages.localStorage,
+      sessionStorage: storages.sessionStorage,
+    };
+
+    await context.close();
+
+    await fs.mkdir(SESSION_DIR, { recursive: true });
+    const sessionPath = path.join(SESSION_DIR, `${session_key}.json`);
+    await fs.writeFile(sessionPath, JSON.stringify(sessionData, null, 2), "utf-8");
+
+    return {
+      content: [{
+        type: "text",
+        text: `✅ Session 已儲存：${sessionPath}\n` +
+          `  cookies: ${cookies.length} 個\n` +
+          `  localStorage keys: ${Object.keys(storages.localStorage).length}\n` +
+          `  sessionStorage keys: ${Object.keys(storages.sessionStorage).length}\n\n` +
+          `下次對話呼叫 browser_restore_session {session_key: "${session_key}"} 即可還原。`,
+      }],
+    };
+  } catch (err) {
+    if (context) await context.close().catch(() => {});
+    return { content: [{ type: "text", text: `❌ browser_save_session 失敗：${err.message}` }] };
+  }
+}
+
+// ============================================
+// browser_restore_session 實作
+// ============================================
+async function handleRestoreSession(args) {
+  const { session_key = "default" } = args;
+  const sessionPath = path.join(SESSION_DIR, `${session_key}.json`);
+
+  try {
+    const raw = await fs.readFile(sessionPath, "utf-8");
+    const sessionData = JSON.parse(raw);
+
+    const age = Math.round((Date.now() - new Date(sessionData.saved_at).getTime()) / 1000 / 60);
+    const cookies = sessionData.cookies || [];
+
+    return {
+      content: [{
+        type: "text",
+        text: `✅ Session 還原成功（${session_key}，${age} 分鐘前儲存）\n` +
+          `  cookies: ${cookies.length} 個\n` +
+          `  localStorage keys: ${Object.keys(sessionData.localStorage || {}).length}\n\n` +
+          `cookies 已回傳，直接傳入 browser_interact / page_audit 的 cookies 參數：\n` +
+          JSON.stringify(cookies.map(c => ({ name: c.name, value: c.value, domain: c.domain, path: c.path })), null, 2),
+      }],
+      // 方便呼叫端直接取用
+      _cookies: cookies.map(c => ({ name: c.name, value: c.value, domain: c.domain, path: c.path || "/" })),
+    };
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      return { content: [{ type: "text", text: `❌ 找不到 session：${sessionPath}\n請先執行 browser_save_session 儲存 session。` }] };
+    }
+    return { content: [{ type: "text", text: `❌ browser_restore_session 失敗：${err.message}` }] };
+  }
+}
+
+// ============================================
 // handle 路由
 // ============================================
 export async function handle(name, args) {
@@ -1524,7 +1670,9 @@ export async function handle(name, args) {
     case "css_inspect":       return handleCssInspect(args);
     case "element_measure":   return handleElementMeasure(args);
     case "style_snapshot":    return handleStyleSnapshot(args);
-    case "css_coverage":      return handleCssCoverage(args);
-    default:                  return null;
+    case "css_coverage":            return handleCssCoverage(args);
+    case "browser_save_session":    return handleSaveSession(args);
+    case "browser_restore_session": return handleRestoreSession(args);
+    default:                        return null;
   }
 }
