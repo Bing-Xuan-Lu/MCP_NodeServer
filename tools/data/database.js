@@ -509,7 +509,9 @@ export async function handle(name, args) {
             results.push(`[${i + 1}] ✅ 執行成功。影響列數: ${res.affectedRows}`);
           }
         } catch (err) {
-          results.push(`[${i + 1}] ❌ 失敗：${err.message}`);
+          const code = err.code ? ` [${err.code}]` : "";
+          const sqlState = err.sqlState ? ` (SQLSTATE ${err.sqlState})` : "";
+          results.push(`[${i + 1}] ❌ 失敗${code}${sqlState}：${err.message}`);
           break;
         }
       }
@@ -576,15 +578,24 @@ export async function handle(name, args) {
     const dbLabel = check.config.database;
     try {
       for (const q of args.queries) {
+        const label = q.label || "SQL";
         try {
           const [res] = await conn.execute(q.sql);
-          const upper = q.sql.trim().toUpperCase();
-          if (!upper.startsWith("SELECT") && !upper.startsWith("SHOW") && !upper.startsWith("DESCRIBE")) {
-            await auditSQL(q.sql, dbLabel);
+          if (Array.isArray(res)) {
+            // SELECT 結果：回傳實際資料
+            results.push(`${label}: 查詢結果 (${res.length} 筆)：\n${formatRows(res)}`);
+          } else {
+            // DML：寫入 audit log + 回傳影響列數
+            const upper = q.sql.trim().toUpperCase();
+            if (!upper.startsWith("SELECT") && !upper.startsWith("SHOW") && !upper.startsWith("DESCRIBE")) {
+              await auditSQL(q.sql, dbLabel);
+            }
+            results.push(`${label}: ✅ 成功（影響 ${res.affectedRows} 列）`);
           }
-          results.push(`${q.label || "SQL"}: ✅ 成功`);
         } catch (err) {
-          results.push(`${q.label || "SQL"}: ❌ ${err.message}`);
+          const code = err.code ? ` [${err.code}]` : "";
+          const sqlState = err.sqlState ? ` (SQLSTATE ${err.sqlState})` : "";
+          results.push(`${label}: ❌${code}${sqlState} ${err.message}`);
         }
       }
       const header = dbPool.size > 1 ? `🗄️ [${dbLabel}]\n` : "";
