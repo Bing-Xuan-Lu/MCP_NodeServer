@@ -724,6 +724,13 @@ function getCategoryKey(entry) {
     return `Edit:${filePath}:${oldStr}`;
   }
 
+  // apply_diff：path + search 前 80 字組合算不同類（不同檔案/不同修改不累積）
+  if (tool === 'apply_diff') {
+    const filePath = entry.args?.path || '';
+    const search = (entry.args?.search || '').slice(0, 80);
+    return `apply_diff:${filePath}:${search}`;
+  }
+
   // HTTP request：URL + method 組合算不同類（不同 endpoint 不是重複）
   if (tool === 'send_http_request') {
     const url = entry.args?.url || '';
@@ -967,6 +974,44 @@ const PATTERNS = [
     },
   },
   {
+    // Layer 2.8: Same File Edit — 同一檔案連續多次 Edit/apply_diff，提醒用 batch 或考慮重構
+    id: 'same_file_edit',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      const editTools = new Set(['Edit', 'apply_diff']);
+      if (!editTools.has(tool)) return null;
+
+      const filePath = (entry.args?.file_path || entry.args?.path || '').replace(/\\/g, '/').toLowerCase();
+      if (!filePath) return null;
+
+      const sameFileEdits = history.filter(h => {
+        const ht = shortName(h.tool);
+        if (!editTools.has(ht)) return false;
+        const hp = (h.args?.file_path || h.args?.path || '').replace(/\\/g, '/').toLowerCase();
+        return hp === filePath;
+      });
+      const count = sameFileEdits.length + 1;
+
+      if (count >= 8) {
+        const fname = filePath.split('/').pop();
+        return {
+          block: true,
+          message: `[Same File Edit] \u274C BLOCKED\uFF1A\u5C0D ${fname} \u5DF2\u9023\u7E8C\u4FEE\u6539 ${count} \u6B21\u3002\n` +
+                   `  \u2192 \u8ACB\u505C\u4E0B\u4F86\u601D\u8003\uFF1A\u662F\u5426\u61C9\u8A72\u91CD\u69CB\u9019\u500B\u6A94\u6848\uFF0C\u800C\u4E0D\u662F\u4E00\u76F4\u8CBC OK \u7E43\uFF1F\n` +
+                   `  \u2192 \u82E5\u78BA\u5BE6\u9700\u8981\u591A\u8655\u4FEE\u6539\uFF0C\u8ACB\u7528 apply_diff_batch \u4E00\u6B21\u9001\u5B8C\u3002\n`,
+        };
+      }
+
+      if (count >= 5) {
+        const fname = filePath.split('/').pop();
+        return `[Same File Edit] \u26A0\uFE0F \u5C0D ${fname} \u5DF2\u4FEE\u6539 ${count} \u6B21\uFF088 \u6B21\u5C07\u88AB\u963B\u64CB\uFF09\u3002\n` +
+               `  \u2192 \u8003\u616E\u7528 apply_diff_batch \u5408\u4F75\u5269\u9918\u4FEE\u6539\uFF0C\u6216\u5148\u5411\u4F7F\u7528\u8005\u63D0\u8B70\u91CD\u69CB\u3002\n`;
+      }
+
+      return null;
+    },
+  },
+  {
     // Layer 3: Same Category Repeat — 同類操作 3 次才警告，7 次阻擋
     //   排除 Read→Edit 必要流程（Edit 前的 Read 不計入重複）
     id: 'same_category_repeat',
@@ -1114,50 +1159,66 @@ const PATTERNS = [
       const tool = shortName(entry.tool);
       if (tool !== 'browser_take_screenshot' && tool !== 'browser_interact') return null;
 
-      // 掃描 cwd 下所有 screenshot* 資料夾
-      const cwd = process.cwd();
-      let screenshotDirs = [];
-      try {
-        screenshotDirs = fs.readdirSync(cwd, { withFileTypes: true })
-          .filter(d => d.isDirectory() && /^screenshot/i.test(d.name))
-          .map(d => d.name);
-      } catch { /* 讀不到就用 fallback */ }
-
-      // fallback：沒找到任何 screenshot* 資料夾，接受 screenshot/ 或 screenshots/
-      if (screenshotDirs.length === 0) screenshotDirs = ['screenshot', 'screenshots'];
-
-      // 建立 regex：匹配任一合法資料夾名稱開頭
-      const escaped = screenshotDirs.map(d => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-      const pattern = new RegExp(`^(${escaped.join('|')})/`, 'i');
-      const hint = screenshotDirs.join('/ 或 ') + '/';
-
-      const checkFilename = (filename) => {
-        if (!filename || !pattern.test(filename)) {
-          return {
-            block: true,
-            message: `[Wrong Path] ❌ BLOCKED：截圖路徑必須在截圖子資料夾。\n` +
-                     `  → 收到的 filename: "${filename || '(未指定)'}"\n` +
-                     `  → 請改為：${screenshotDirs[0]}/your-filename.png\n` +
-                     `  → 專案中可用的截圖資料夾：${hint}\n` +
-                     `  → 截圖是暫存物，不可污染專案根目錄。\n`,
-          };
+      // 從 filename 提取所有截圖路徑
+      const filenames = [];
+      if (tool === 'browser_take_screenshot') {
+        if (entry.args?.filename) filenames.push(entry.args.filename);
+      } else if (tool === 'browser_interact') {
+        for (const action of (entry.args?.actions || [])) {
+          if (action.type === 'screenshot' && action.filename) filenames.push(action.filename);
         }
-        return null;
+      }
+      if (filenames.length === 0) return null;
+
+      // 從 filename 的絕對路徑推斷專案目錄（D:\Project\XXX\ 或相對路徑用 cwd）
+      // 也嘗試 MCP basePath
+      const findScreenshotDirs = (filename) => {
+        let projectDir = null;
+
+        // 絕對路徑：取到專案目錄層級
+        const absMatch = filename.replace(/\\/g, '/').match(/^([A-Z]:\/[^/]+\/[^/]+)\//i);
+        if (absMatch) {
+          projectDir = absMatch[1];
+        }
+
+        // 相對路徑：從第一段取專案名，嘗試 basePath 拼接
+        if (!projectDir) {
+          const firstSeg = filename.replace(/\\/g, '/').split('/')[0];
+          const tryPaths = ['D:/Project/' + firstSeg, process.cwd()];
+          for (const p of tryPaths) {
+            try { if (fs.statSync(p).isDirectory()) { projectDir = p; break; } } catch {}
+          }
+        }
+
+        if (!projectDir) return ['screenshot', 'screenshots'];
+
+        try {
+          const dirs = fs.readdirSync(projectDir, { withFileTypes: true })
+            .filter(d => d.isDirectory() && /^screenshot/i.test(d.name))
+            .map(d => d.name);
+          return dirs.length > 0 ? dirs : ['screenshot', 'screenshots'];
+        } catch {
+          return ['screenshot', 'screenshots'];
+        }
       };
 
-      // browser_take_screenshot（獨立工具）
-      if (tool === 'browser_take_screenshot') {
-        return checkFilename(entry.args?.filename || '');
-      }
+      for (const filename of filenames) {
+        const screenshotDirs = findScreenshotDirs(filename);
+        const escaped = screenshotDirs.map(d => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const pattern = new RegExp(`(^|[\\/\\\\])(${escaped.join('|')})/`, 'i');
+        const hint = screenshotDirs.join('/ \u6216 ') + '/';
 
-      // browser_interact 裡的 screenshot action
-      if (tool === 'browser_interact') {
-        const actions = entry.args?.actions || [];
-        for (const action of actions) {
-          if (action.type === 'screenshot') {
-            const result = checkFilename(action.filename || '');
-            if (result) return result;
-          }
+        // 正規化路徑後檢查
+        const normalized = filename.replace(/\\/g, '/');
+        if (!pattern.test(normalized)) {
+          return {
+            block: true,
+            message: `[Wrong Path] \u274C BLOCKED\uFF1A\u622A\u5716\u8DEF\u5F91\u5FC5\u9808\u5728\u622A\u5716\u5B50\u8CC7\u6599\u593E\u3002\n` +
+                     `  \u2192 \u6536\u5230\u7684 filename: "${filename}"\n` +
+                     `  \u2192 \u8ACB\u6539\u70BA\uFF1A${screenshotDirs[0]}/your-filename.png\n` +
+                     `  \u2192 \u5C08\u6848\u4E2D\u53EF\u7528\u7684\u622A\u5716\u8CC7\u6599\u593E\uFF1A${hint}\n` +
+                     `  \u2192 \u622A\u5716\u662F\u66AB\u5B58\u7269\uFF0C\u4E0D\u53EF\u6C61\u67D3\u5C08\u6848\u6839\u76EE\u9304\u3002\n`,
+          };
         }
       }
 

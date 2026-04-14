@@ -1,6 +1,14 @@
+---
+name: axshare_spec_index
+description: "擷取 AxShare 規格書內容。當使用者貼 axshare.com 連結、說「擷取規格」「爬規格」「抓規格」時使用。注意：使用者說「比對規格」「校閱」時應改用 /axshare_diff。"
+---
+
 # /axshare_spec_index — 爬取 AxShare 規格書並建立本地索引
 
-你是規格書索引建立專家。一次性爬取整份 AxShare 規格書（或本地 HTML 匯出），將每個頁面的結構化內容存成本地 Markdown 索引檔，讓後續的 `/axshare_diff` 可以直接讀取，無需每次重爬。
+你是規格書索引建立專家。支援兩種模式：
+
+- **單頁模式**：使用者貼了 AxShare 連結，快速擷取該頁完整內容
+- **全站模式**：爬取整份規格書，存成本地 Markdown 索引檔供 `/axshare_diff` 使用
 
 ---
 
@@ -10,10 +18,25 @@ $ARGUMENTS
 
 ---
 
+## 模式判斷（重要）
+
+| 使用者輸入 | 模式 | 說明 |
+|-----------|------|------|
+| AxShare URL（無其他指令）| **單頁模式** | 擷取該頁完整內容並輸出 |
+| AxShare URL +「全站」「建索引」「全部爬」| 全站模式 | 爬取全站並存檔 |
+| `/axshare_spec_index` 無 URL | 全站模式 | 詢問來源後爬全站 |
+| AxShare URL +「比對」「校閱」| **不觸發本 Skill** | 應改用 `/axshare_diff` |
+
+---
+
 ## 需要的資訊
 
-若使用者未提供以下資訊，請主動詢問：
+### 單頁模式
+| 參數 | 必要 | 說明 |
+|------|------|------|
+| AxShare 頁面 URL | 是 | 從使用者輸入取得，不需額外詢問 |
 
+### 全站模式
 | 參數 | 說明 | 範例 |
 |------|------|------|
 | 規格書來源 | AxShare 網址 或 本地匯出目錄 | `https://xxx.axshare.com` 或 `D:\specs\export\` |
@@ -34,7 +57,114 @@ $ARGUMENTS
 
 ---
 
-## 執行步驟
+## 單頁模式（使用者貼了 AxShare 連結時）
+
+> **此模式不需詢問任何額外資訊，直接執行。**
+
+### S1：開啟頁面
+
+```
+browser_navigate(url: "{使用者貼的 AxShare URL}")
+```
+
+### S2：用 browser_evaluate 擷取完整內容
+
+> **核心方法**：AxShare 內容在 iframe 中，用 JS 直接從 iframe DOM 抽取比 snapshot 更完整。
+
+```
+browser_evaluate(script: `
+  // 收集所有 iframe + 主頁面的文字內容
+  const result = { title: document.title, sections: [] };
+
+  function extractFromDoc(doc, label) {
+    const section = { label, texts: [], tables: [], inputs: [], links: [] };
+
+    // 所有文字節點（排除 script/style）
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: n => {
+        const tag = n.parentElement?.tagName;
+        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') return NodeFilter.FILTER_REJECT;
+        const text = n.textContent.trim();
+        return text.length > 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    let node;
+    while (node = walker.nextNode()) {
+      const text = node.textContent.trim();
+      if (text) section.texts.push(text);
+    }
+
+    // 表格
+    doc.querySelectorAll('table').forEach(t => {
+      const rows = Array.from(t.rows).map(r =>
+        Array.from(r.cells).map(c => c.textContent.trim())
+      );
+      if (rows.length > 0) section.tables.push(rows);
+    });
+
+    // 表單元素
+    doc.querySelectorAll('input,select,textarea').forEach(el => {
+      section.inputs.push({
+        tag: el.tagName.toLowerCase(),
+        type: el.type || '',
+        name: el.name || '',
+        placeholder: el.placeholder || '',
+        value: el.value || ''
+      });
+    });
+
+    // 連結
+    doc.querySelectorAll('a[href]').forEach(a => {
+      const text = a.textContent.trim();
+      if (text) section.links.push({ text, href: a.href });
+    });
+
+    result.sections.push(section);
+  }
+
+  // 主頁面
+  extractFromDoc(document, 'main');
+
+  // 所有 iframe
+  Array.from(document.querySelectorAll('iframe')).forEach((f, i) => {
+    try {
+      if (f.contentDocument?.body) {
+        extractFromDoc(f.contentDocument, 'iframe_' + i);
+      }
+    } catch(e) {} // cross-origin 跳過
+  });
+
+  return result;
+`)
+```
+
+### S3：整理並輸出
+
+將 browser_evaluate 取得的結構化資料整理為可讀格式：
+
+1. **頁面標題**
+2. **文字內容**：所有文字按出現順序列出，保留功能說明、備註、注意事項等區塊的完整性
+3. **表格**：還原為 Markdown 表格格式
+4. **表單欄位**：列出所有 input/select/textarea
+5. **連結**：列出頁面內的跨頁引用
+
+直接輸出到對話中（不存檔），格式：
+
+```
+📄 AxShare 規格書擷取：{頁面標題}
+來源：{URL}
+
+---
+
+{完整內容，保留所有區塊}
+```
+
+> **提示**：若使用者後續要全站建索引，建議執行 `/axshare_spec_index`（全站模式）。
+> 若要比對實作差異，建議執行 `/axshare_diff`。
+
+---
+
+## 全站模式
 
 ### 步驟 1：確認來源與輸出
 

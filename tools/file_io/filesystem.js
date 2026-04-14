@@ -367,7 +367,8 @@ export async function handle(name, args) {
       throw new Error(`比對失敗：找不到 search 區塊（前 80 字元：${preview}）`);
     }
 
-    let result = content.replace(search, replace);
+    // 用函式形式避免 replace 的 $ 特殊字元解析（$&, $', $` 等）
+    let result = content.replace(search, () => replace);
 
     // 還原原始換行風格
     if (hasCRLF) result = result.replace(/\n/g, "\r\n");
@@ -407,7 +408,8 @@ export async function handle(name, args) {
           continue;
         }
 
-        let result = content.replace(search, replace);
+        // 用函式形式避免 replace 的 $ 特殊字元解析（$&, $', $` 等）
+        let result = content.replace(search, () => replace);
         if (hasCRLF) result = result.replace(/\n/g, "\r\n");
 
         await fs.writeFile(fullPath, result, "utf-8");
