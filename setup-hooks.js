@@ -36,6 +36,17 @@ const HOOK_FILES = [
   'repetition-detector.js',
 ];
 
+// 確保 ~/.claude/ 和 hooks/ 都有 package.json（避免 NODE MODULE_TYPELESS_PACKAGE_JSON 警告）
+// ~/.claude/package.json — 覆蓋 env.js proxy
+// ~/.claude/hooks/package.json — 覆蓋所有 hook 檔案
+for (const dir of [CLAUDE, HOOKS_DST]) {
+  const pkg = path.join(dir, 'package.json');
+  if (!fs.existsSync(pkg)) {
+    fs.writeFileSync(pkg, '{ "type": "module" }\n', 'utf-8');
+    console.log(`  [hooks] OK: ${path.relative(CLAUDE, pkg) || 'package.json'} (type: module)`);
+  }
+}
+
 let copied = 0;
 for (const f of HOOK_FILES) {
   const src = path.join(HOOKS_SRC, f);
