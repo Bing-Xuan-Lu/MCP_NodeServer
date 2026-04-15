@@ -19,10 +19,11 @@ const REQUIRED_HOOKS = {
     { command: `node "${hooksDir}/pre-compact.js"` },
   ],
   PreToolUse: [
-    { matcher: '.*',          command: `node "${hooksDir}/repetition-detector.js"` },
-    { matcher: 'Write|Edit',  command: `node "${hooksDir}/write-guard.js"` },
-    { matcher: '.*',          command: `node "${hooksDir}/user-prompt-guard.js"` },
-    { matcher: '.*',          command: `node "${hooksDir}/skill-router.js"` },
+    { matcher: '.*',                                    command: `node "${hooksDir}/repetition-detector.js"` },
+    { matcher: 'Write|Edit',                            command: `node "${hooksDir}/write-guard.js"` },
+    { matcher: '.*',                                    command: `node "${hooksDir}/user-prompt-guard.js"` },
+    { matcher: '.*',                                    command: `node "${hooksDir}/skill-router.js"` },
+    { matcher: 'Write|Edit|apply_diff|apply_diff_batch', command: `node "${hooksDir}/refactor-advisor.js"` },
   ],
   PostToolUse: [
     { matcher: 'Write|Edit',  command: `node "${hooksDir}/llm-judge.js"` },
