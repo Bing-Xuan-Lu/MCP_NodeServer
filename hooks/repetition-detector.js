@@ -724,6 +724,18 @@ function getCategoryKey(entry) {
     return `Edit:${filePath}:${oldStr}`;
   }
 
+  // execute_sql：依 SQL 語句類型（SELECT/UPDATE/INSERT/DELETE）+ 表名分類
+  //   不同操作目的不應累積為「重複」（如查詢→驗證→更新是正常流程）
+  if (tool === 'execute_sql') {
+    const sql = (entry.args?.sql || entry.args?.query || '').trim().toUpperCase();
+    const typeMatch = sql.match(/^(SELECT|INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE|SHOW|DESCRIBE|EXPLAIN)/);
+    const sqlType = typeMatch ? typeMatch[1] : 'OTHER';
+    // 嘗試提取主要表名
+    const tableMatch = sql.match(/(?:FROM|INTO|UPDATE|TABLE|JOIN)\s+[`"]?(\w+)[`"]?/i);
+    const table = tableMatch ? tableMatch[1].toLowerCase() : '';
+    return `execute_sql:${sqlType}:${table}`;
+  }
+
   // apply_diff：path + search 前 80 字組合算不同類（不同檔案/不同修改不累積）
   if (tool === 'apply_diff') {
     const filePath = entry.args?.path || '';

@@ -337,6 +337,8 @@ function resolvePresetPaths(localPath, remotePath, sftpConfig) {
   const normalizedLB = lb.replace(/\\/g, "/").replace(/\/$/, "");
 
   let relativePart;
+  let resolvedLocal = localPath;  // 預設不變；若為相對路徑會拼上 local_base
+
   // 若 localPath 已包含 local_base 前綴，取相對部分
   if (normalizedLocal.toLowerCase().startsWith(normalizedLB.toLowerCase())) {
     relativePart = normalizedLocal.slice(normalizedLB.length).replace(/^\//, "");
@@ -345,15 +347,16 @@ function resolvePresetPaths(localPath, remotePath, sftpConfig) {
     const projectFolder = normalizedLB.split("/").pop();
     relativePart = normalizedLocal.slice(projectFolder.length).replace(/^\//, "");
   } else {
-    // 當作純相對路徑
+    // 當作純相對路徑 → 拼上 local_base 讓後續 resolveSecurePath 能定位到正確檔案
     relativePart = normalizedLocal;
+    resolvedLocal = `${normalizedLB}/${normalizedLocal}`;
   }
 
   const remoteBase = rb.replace(/\/$/, "");
   const computed = `${remoteBase}/${relativePart}`;
   note = `\n📦 Preset 路徑映射：${lb} → ${rb}`;
 
-  return { localPath, remotePath: computed, presetNote: note };
+  return { localPath: resolvedLocal, remotePath: computed, presetNote: note };
 }
 
 /**
