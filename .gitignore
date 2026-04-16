@@ -40,5 +40,8 @@ flyway/conf/*.toml
 !flyway/conf/template_*.toml
 config.local.js
 
+# Improvements backlog（含專案名稱，不進版控）
+improvements_backlog.md
+
 # Windows reserved device names (accidentally created by > nul instead of > /dev/null)
 nul

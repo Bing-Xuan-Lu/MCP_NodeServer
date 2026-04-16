@@ -507,6 +507,7 @@ function buildMemoryInjection(grepCount) {
   // 4. MCP 工具提醒
   lines.push('── MCP 工具優先規則 ──');
   lines.push('  找函式碼 → class_method_lookup（一次到位，禁止 Grep→Read 兩步）');
+  lines.push('  追邏輯流程 → trace_logic（解析 if/switch 分支 + 遞迴展開子呼叫）');
   lines.push('  不確定位置 → find_usages（AST 精確搜尋）或先讀 CODEMAPS');
   lines.push('  知道函式名 → Grep OK，但不要散搜多個檔案');
   lines.push('  3+ 檔案 → 查 _batch 版本工具');
@@ -859,8 +860,10 @@ const PATTERNS = [
   },
   {
     // Layer 2.4: Grep PHP Symbol — Grep 搜尋 PHP class/method 時提醒用 AST 工具
+    //   第 1 次：💡 軟提醒
+    //   第 2+ 次跨不同路徑：⚠️ 強警告 + 記憶注入
     id: 'grep_php_symbol',
-    detect: (entry, _history) => {
+    detect: (entry, history) => {
       const tool = shortName(entry.tool);
       if (tool !== 'Grep') return null;
 
@@ -878,11 +881,37 @@ const PATTERNS = [
         /^[A-Z][a-zA-Z]+$/.test(pattern); // PascalCase = likely class name
       if (!isSymbolSearch) return null;
 
+      // 累計：統計歷史中同樣是 PHP symbol search 的 Grep，跨不同路徑
+      const prevSymbolGreps = history.filter(h => {
+        if (shortName(h.tool) !== 'Grep') return false;
+        const hp = h.args?.pattern || '';
+        const hPath = h.args?.path || '';
+        const hGlob = h.args?.glob || '';
+        const hPhp = /\.php/i.test(hGlob) || /\.php/i.test(hPath) || /admin|model|controller|cls\b/i.test(hPath);
+        const hSym = /(::|->|extends|implements|new\s+|class\s+|function\s+)/i.test(hp) || /^[A-Z][a-zA-Z]+$/.test(hp);
+        return hPhp && hSym;
+      });
+      const uniquePaths = new Set(prevSymbolGreps.map(h => h.args?.path || 'cwd'));
+      uniquePaths.add(filePath || 'cwd');
+      const count = prevSymbolGreps.length + 1;
+
+      if (count >= 2 && uniquePaths.size >= 2) {
+        // 2+ 次跨路徑：強警告
+        return `[PHP Symbol] ⚠️ 已用 Grep 搜尋 PHP symbol ${count} 次（跨 ${uniquePaths.size} 個路徑）。\n` +
+               `  🛑 請停止 Grep 掃描，改用 MCP AST 工具（精確、省 token）：\n` +
+               `  → find_usages：找「誰呼叫了這個 method」「哪裡用到這個 class」\n` +
+               `  → class_method_lookup：直接取得 method 原始碼\n` +
+               `  → trace_logic：追蹤函式的完整控制流（if/switch 分支、子呼叫展開）\n` +
+               `  → find_hierarchy：找繼承鏈（extends / implements）\n` +
+               `  Grep 只適合搜「變數名」「字串常數」等純文字定位。\n`;
+      }
+
       return `[PHP Symbol] 💡 偵測到用 Grep 搜尋 PHP class/method「${pattern.substring(0, 40)}」。\n` +
              `  PHP 關係型查詢請改用 MCP AST 工具（精確、零 token）：\n` +
              `  → find_usages：找「誰呼叫了這個 method」「哪裡用到這個 class」\n` +
-             `  → find_hierarchy：找繼承鏈（extends / implements）\n` +
              `  → class_method_lookup：直接取得 method 原始碼\n` +
+             `  → trace_logic：追蹤函式的控制流（if/switch/迴圈分支展開）\n` +
+             `  → find_hierarchy：找繼承鏈（extends / implements）\n` +
              `  Grep 只適合搜「變數名」「字串常數」等純文字定位。\n`;
     },
   },
@@ -1004,7 +1033,22 @@ const PATTERNS = [
       });
       const count = sameFileEdits.length + 1;
 
-      if (count >= 8) {
+      // 區分「同區塊反覆修改」vs「不同區塊各修一次」
+      // 用 old_string/search 前 80 字元作為 block key
+      const getBlockKey = (h) => {
+        const s = (h.args?.old_string || h.args?.search || '').trim().slice(0, 80);
+        return s || `L${h.args?.offset || 0}`;
+      };
+      const blockKeys = new Set(sameFileEdits.map(getBlockKey));
+      blockKeys.add(getBlockKey(entry));
+      const uniqueBlocks = blockKeys.size;
+      const isMultiBlock = uniqueBlocks === count; // 每次都改不同地方
+
+      // 不同區塊分散修改：閾值加倍（8→15 警告，12→20 block）
+      const warnAt = isMultiBlock ? 8 : 5;
+      const blockAt = isMultiBlock ? 15 : 8;
+
+      if (count >= blockAt) {
         const fname = filePath.split('/').pop();
         return {
           block: true,
@@ -1014,9 +1058,10 @@ const PATTERNS = [
         };
       }
 
-      if (count >= 5) {
+      if (count >= warnAt) {
         const fname = filePath.split('/').pop();
-        return `[Same File Edit] \u26A0\uFE0F \u5C0D ${fname} \u5DF2\u4FEE\u6539 ${count} \u6B21\uFF088 \u6B21\u5C07\u88AB\u963B\u64CB\uFF09\u3002\n` +
+        const modeNote = isMultiBlock ? `（${uniqueBlocks} 個不同區塊）` : '';
+        return `[Same File Edit] \u26A0\uFE0F \u5C0D ${fname} \u5DF2\u4FEE\u6539 ${count} \u6B21${modeNote}\uFF08${blockAt} \u6B21\u5C07\u88AB\u963B\u64CB\uFF09\u3002\n` +
                `  \u2192 \u8003\u616E\u7528 apply_diff_batch \u5408\u4F75\u5269\u9918\u4FEE\u6539\uFF0C\u6216\u5148\u5411\u4F7F\u7528\u8005\u63D0\u8B70\u91CD\u69CB\u3002\n`;
       }
 
@@ -1034,7 +1079,7 @@ const PATTERNS = [
       // 白名單：PHP AST 查詢工具本質上就是批量連續呼叫，不計入重複
       const L3_WHITELIST = new Set([
         'class_method_lookup', 'find_usages', 'find_hierarchy',
-        'find_dependencies', 'symbol_index',
+        'find_dependencies', 'symbol_index', 'trace_logic',
       ]);
       if (L3_WHITELIST.has(shortName(entry.tool))) return null;
 
