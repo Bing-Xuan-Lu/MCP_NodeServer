@@ -4,6 +4,7 @@ import fs from "fs";
 import fsP from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import { glob } from "glob";
 import { resolveSecurePath } from "../../config.js";
 import { validateArgs } from "../_shared/utils.js";
 
@@ -134,6 +135,7 @@ export const definitions = [
     name: "sftp_upload_batch",
     description:
       "批次上傳多組本機檔案/資料夾到遠端（共用一條連線，減少 tool call）。" +
+      "支援 glob pattern（如 admin/**/*.php）自動展開。" +
       "若已設定 preset，items 內可只傳相對路徑，自動補上 local_base / remote_base",
     inputSchema: {
       type: "object",
@@ -143,7 +145,7 @@ export const definitions = [
           items: {
             type: "object",
             properties: {
-              local_path:  { type: "string", description: "本機路徑（相對 basePath；若有 preset 可傳相對於 local_base 的路徑）" },
+              local_path:  { type: "string", description: "本機路徑（相對 basePath）。支援 glob pattern（如 admin/**/*.php、cart/*.js），自動展開為多檔上傳" },
               remote_path: { type: "string", description: "遠端目標絕對路徑（若有 preset 且省略，自動用 remote_base + local_path 組合）" },
             },
             required: ["local_path"],
@@ -664,7 +666,36 @@ export async function handle(name, args) {
       let okCount = 0;
       let skipCount = 0;
 
+      // Glob 展開：若 local_path 含萬用字元（* ?），展開為多個檔案
+      const expandedItems = [];
       for (const item of args.items) {
+        if (/[*?{]/.test(item.local_path)) {
+          try {
+            // 用 resolvePresetPaths 取得完整路徑前綴，再從中推算 glob 基底
+            const localBase = check.config?.local_base || '';
+            const prefix = localBase
+              ? resolveSecurePath(localBase).replace(/\\/g, '/')
+              : resolveSecurePath('.').replace(/\\/g, '/');
+            const fullPattern = `${prefix}/${item.local_path}`.replace(/\\/g, '/');
+            const matched = await glob(fullPattern, { nodir: true });
+            for (const m of matched) {
+              const rel = path.relative(prefix, m).replace(/\\/g, '/');
+              expandedItems.push({ local_path: rel });
+            }
+            if (matched.length === 0) {
+              results.push(`⚠️ ${item.local_path}：glob 無符合檔案`);
+            } else {
+              results.push(`📦 ${item.local_path} → 展開 ${matched.length} 個檔案`);
+            }
+          } catch (err) {
+            results.push(`❌ ${item.local_path}：glob 展開失敗：${err.message}`);
+          }
+        } else {
+          expandedItems.push(item);
+        }
+      }
+
+      for (const item of expandedItems) {
         // Preset 路徑解析
         const { localPath, remotePath } = resolvePresetPaths(
           item.local_path, item.remote_path, check.config

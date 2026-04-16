@@ -72,6 +72,7 @@ const TOOLS = {
   'find_usages':            { dept:'PHP 分析', title:'找出所有引用位置', desc:'找出指定 class 或 method 在專案中所有被呼叫、繼承、實作的位置。基於 AST 精確分析，非文字搜尋。', usage:'find_usages {project:"...", class_name:"Order", method_name:"getList"}', tools:[] },
   'find_hierarchy':         { dept:'PHP 分析', title:'Class 繼承鏈查詢', desc:'列出指定 class 的完整繼承鏈：父類別、子類別、實作的 interface，以樹狀圖呈現。', usage:'find_hierarchy {project:"...", class_name:"BaseModel"}', tools:[] },
   'find_dependencies':      { dept:'PHP 分析', title:'檔案 include/require 依賴', desc:'列出指定檔案的 include/require 依賴關係（它引用了誰、誰引用了它）。', usage:'find_dependencies {project:"...", file:"admin/model/order.php"}', tools:[] },
+  'trace_logic':            { dept:'PHP 分析', title:'業務邏輯流程追蹤', desc:'追蹤 PHP 函式/方法的控制流：解析 if/switch/迴圈/呼叫/回傳，輸出樹狀流程圖。支援遞迴追蹤子呼叫（max_depth 2-3）。', usage:'trace_logic {project:"...", function_name:"cancelOrder", class_name:"OrderModel", max_depth:2}', tools:[] },
 
   'image_transform':        { dept:'圖片處理', title:'圖片轉換與合成', desc:'resize、加背景色、圓形裁切、多圖合成、格式轉換、旋轉翻轉。一次呼叫可串聯多個操作。', usage:'image_transform {input:"...", operations:[{type:"resize", width:200}]}', tools:[] },
 };

@@ -203,7 +203,8 @@ export async function handle(name, args) {
   if (def) args = validateArgs(def.inputSchema, args);
 
   if (name === "run_php_script") {
-    const fullPath = resolveSecurePath(args.path);
+    const isContainerAbsPath = args.container && /^\//.test(args.path);
+    const fullPath = isContainerAbsPath ? args.path : resolveSecurePath(args.path);
     if (!fullPath.endsWith(".php")) throw new Error("安全限制：只能執行 .php 檔案");
 
     try {
@@ -212,7 +213,7 @@ export async function handle(name, args) {
       if (args.container) {
         const err = await checkContainer(args.container);
         if (err) return err;
-        const containerPath = toContainerPath(fullPath);
+        const containerPath = isContainerAbsPath ? fullPath : toContainerPath(fullPath);
         cmd = `docker exec ${args.container} php "${containerPath}" ${args.args || ""}`;
         label = ` [${args.container}]`;
       } else {
@@ -455,14 +456,15 @@ export async function handle(name, args) {
       const s = args.scripts[i];
       const label = s.label || `Script ${i + 1}`;
       try {
-        const fullPath = resolveSecurePath(s.path);
+        const isAbsPath = useDocker && /^\//.test(s.path);
+        const fullPath = isAbsPath ? s.path : resolveSecurePath(s.path);
         if (!fullPath.endsWith(".php")) {
           results.push(`[${i + 1}] ${label} ❌ 安全限制：只能執行 .php 檔案`);
           continue;
         }
         let cmd;
         if (useDocker) {
-          cmd = `docker exec ${args.container} php "${toContainerPath(fullPath)}" ${s.args || ""}`;
+          cmd = `docker exec ${args.container} php "${isAbsPath ? fullPath : toContainerPath(fullPath)}" ${s.args || ""}`;
         } else {
           cmd = `php "${fullPath}" ${s.args || ""}`;
         }

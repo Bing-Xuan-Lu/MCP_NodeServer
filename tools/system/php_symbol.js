@@ -115,6 +115,37 @@ export const definitions = [
       required: ["project", "file"],
     },
   },
+  {
+    name: "trace_logic",
+    description:
+      "追蹤 PHP 函式/方法的業務邏輯流程：解析 if/switch/迴圈/呼叫/回傳，輸出樹狀流程圖。適合理解「某個參數走哪條分支」這類問題。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: {
+          type: "string",
+          description: "專案資料夾名稱（相對 basePath）",
+        },
+        function_name: {
+          type: "string",
+          description: "要追蹤的函式或 method 名稱",
+        },
+        class_name: {
+          type: "string",
+          description: "Class 名稱（追蹤 method 時填寫；省略則搜尋全域函式）",
+        },
+        file: {
+          type: "string",
+          description: "指定檔案路徑（相對專案目錄，省略則從索引自動查找）",
+        },
+        max_depth: {
+          type: "number",
+          description: "遞迴追蹤呼叫深度（預設 1 只分析進入點，2 = 追一層子呼叫，上限 3）",
+        },
+      },
+      required: ["project", "function_name"],
+    },
+  },
 ];
 
 // ============================================
@@ -155,7 +186,8 @@ function extractSymbols(ast, relPath) {
     switch (node.kind) {
       case "class":
       case "trait":
-      case "interface": {
+      case "interface":
+      case "enum": {
         const cls = {
           name: typeof node.name === "string" ? node.name : node.name?.name || "",
           kind: node.kind,
@@ -334,6 +366,394 @@ async function getIndex(project, opts = {}) {
   const index = await buildIndex(projectPath, opts.paths, opts.exclude);
   indexCache.set(cacheKey, { index, timestamp: Date.now() });
   return index;
+}
+
+// ============================================
+// trace_logic helpers
+// ============================================
+
+/** AST expression → readable PHP string (truncated at maxLen) */
+function exprToStr(n, maxLen = 80) {
+  if (!n) return "";
+  const s = _expr(n);
+  return s.length > maxLen ? s.slice(0, maxLen - 3) + "..." : s;
+}
+
+function _expr(n) {
+  if (!n || typeof n !== "object") return String(n ?? "");
+  switch (n.kind) {
+    case "variable": { const nm = typeof n.name === "string" ? n.name : n.name?.name || "?"; return `$${nm}`; }
+    case "string": return n.value?.length > 30 ? `'${n.value.slice(0, 27)}...'` : `'${n.value}'`;
+    case "number": return String(n.value);
+    case "boolean": return n.value ? "true" : "false";
+    case "nullkeyword": return "null";
+    case "name": case "identifier": return n.name || "";
+    case "bin": return `${_expr(n.left)} ${n.type} ${_expr(n.right)}`;
+    case "unary": return `${n.type}${_expr(n.what)}`;
+    case "post": return `${_expr(n.what)}${n.type}`;
+    case "pre": return `${n.type}${_expr(n.what)}`;
+    case "cast": return `(${n.type})${_expr(n.what)}`;
+    case "parenthesis": return `(${_expr(n.inner)})`;
+    case "propertylookup": return `${_expr(n.what)}->${_expr(n.offset)}`;
+    case "staticlookup": return `${_expr(n.what)}::${_expr(n.offset)}`;
+    case "offsetlookup": return `${_expr(n.what)}[${n.offset ? _expr(n.offset) : ""}]`;
+    case "call": return `${_expr(n.what)}(${(n.arguments || []).map(_expr).join(", ")})`;
+    case "new": { const a = (n.arguments || []).map(_expr).join(", "); return a ? `new ${_expr(n.what)}(${a})` : `new ${_expr(n.what)}`; }
+    case "assign": case "assignref": return `${_expr(n.left)} = ${_expr(n.right)}`;
+    case "retif": return `${_expr(n.test)} ? ${_expr(n.trueExpr)} : ${_expr(n.falseExpr)}`;
+    case "isset": return `isset(${(n.arguments || []).map(_expr).join(", ")})`;
+    case "empty": return `empty(${_expr(n.expression)})`;
+    case "array": {
+      const items = (n.items || []).slice(0, 3).map(i => i?.key ? `${_expr(i.key)} => ${_expr(i.value)}` : _expr(i?.value));
+      return n.items?.length > 3 ? `[${items.join(", ")}, ...]` : `[${items.join(", ")}]`;
+    }
+    case "encapsed": return '"..."';
+    case "staticreference": return "static";
+    case "selfreference": return "self";
+    case "parentreference": return "parent";
+    default: return `{${n.kind}}`;
+  }
+}
+
+/** Normalize body to statement array */
+function stmtsOf(body) {
+  if (!body) return [];
+  if (Array.isArray(body)) return body;
+  if (body.kind === "block") return body.children || [];
+  return [body];
+}
+
+/** Extract control flow tree from AST statements */
+function traceStmts(stmts) {
+  const flow = [];
+  for (const s of stmts) {
+    if (!s || typeof s !== "object") continue;
+    const L = s.loc?.start?.line || 0;
+
+    switch (s.kind) {
+      case "if": {
+        const branches = [{ label: exprToStr(s.test), body: traceStmts(stmtsOf(s.body)) }];
+        let alt = s.alternate;
+        while (alt) {
+          if (alt.kind === "if") {
+            branches.push({ label: `elseif (${exprToStr(alt.test)})`, body: traceStmts(stmtsOf(alt.body)) });
+            alt = alt.alternate;
+          } else {
+            branches.push({ label: "else", body: traceStmts(stmtsOf(alt)) });
+            alt = null;
+          }
+        }
+        flow.push({ type: "if", condition: exprToStr(s.test), line: L, branches });
+        break;
+      }
+
+      case "switch": {
+        const cases = [];
+        for (const c of (s.body?.children || s.body || [])) {
+          if (c.kind === "case") {
+            cases.push({ label: c.test ? exprToStr(c.test) : "default", body: traceStmts(stmtsOf(c.body)) });
+          }
+        }
+        flow.push({ type: "switch", condition: exprToStr(s.test), line: L, cases });
+        break;
+      }
+
+      case "for": {
+        const init = (s.init || []).map(x => exprToStr(x)).join(", ");
+        const test = (s.test || []).map(x => exprToStr(x)).join(", ");
+        const incr = (s.increment || []).map(x => exprToStr(x)).join(", ");
+        flow.push({ type: "loop", sub: "for", cond: `${init}; ${test}; ${incr}`, line: L, body: traceStmts(stmtsOf(s.body)) });
+        break;
+      }
+
+      case "foreach": {
+        const key = s.key ? `${_expr(s.key)} => ` : "";
+        flow.push({ type: "loop", sub: "foreach", cond: `${_expr(s.source)} as ${key}${_expr(s.value)}`, line: L, body: traceStmts(stmtsOf(s.body)) });
+        break;
+      }
+
+      case "while":
+        flow.push({ type: "loop", sub: "while", cond: exprToStr(s.test), line: L, body: traceStmts(stmtsOf(s.body)) });
+        break;
+
+      case "do":
+        flow.push({ type: "loop", sub: "do-while", cond: exprToStr(s.test), line: L, body: traceStmts(stmtsOf(s.body)) });
+        break;
+
+      case "return":
+        flow.push({ type: "return", text: s.expr ? exprToStr(s.expr) : "(void)", line: L });
+        break;
+
+      case "throw":
+        flow.push({ type: "throw", text: exprToStr(s.what), line: L });
+        break;
+
+      case "try": {
+        const catches = (s.catches || []).map(c => ({
+          types: (c.what || []).map(x => typeof x === "string" ? x : x.name || "Exception").join("|"),
+          var: c.variable ? _expr(c.variable) : "",
+          body: traceStmts(stmtsOf(c.body)),
+        }));
+        flow.push({ type: "try", line: L, body: traceStmts(stmtsOf(s.body)), catches, finally: s.always ? traceStmts(stmtsOf(s.always)) : null });
+        break;
+      }
+
+      case "expressionstatement": {
+        const e = s.expression;
+        if (!e) break;
+        if (e.kind === "call" || e.kind === "new") {
+          flow.push({ type: "call", text: exprToStr(e), line: L });
+        } else if (e.kind === "assign" || e.kind === "assignref") {
+          const r = e.right;
+          if (r && (r.kind === "call" || r.kind === "new" || r.kind === "retif")) {
+            flow.push({ type: "assign", text: exprToStr(e), line: L });
+          } else {
+            const lhs = _expr(e.left);
+            const rhsStr = exprToStr(e.right);
+            // Include property/static assigns, or non-trivial RHS (skip $i = 0 etc.)
+            if (lhs.includes("->") || lhs.includes("::") || rhsStr.length > 10) {
+              flow.push({ type: "assign", text: exprToStr(e), line: L });
+            }
+          }
+        }
+        break;
+      }
+
+      case "continue":
+        flow.push({ type: "continue", level: s.level ? exprToStr(s.level) : "", line: L });
+        break;
+
+      case "block":
+        flow.push(...traceStmts(s.children || []));
+        break;
+
+      case "echo": {
+        const vals = (s.expressions || s.arguments || []).map(x => exprToStr(x)).join(", ");
+        flow.push({ type: "echo", text: vals, line: L });
+        break;
+      }
+
+      default: break;
+    }
+  }
+  return flow;
+}
+
+/** Render flow tree to text with box-drawing characters */
+function renderFlow(nodes, prefix = "") {
+  const out = [];
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    const last = i === nodes.length - 1;
+    const cur = last ? "└─ " : "├─ ";
+    const nxt = last ? "   " : "│  ";
+    const tag = n.line ? ` :${n.line}` : "";
+
+    switch (n.type) {
+      case "if": {
+        out.push(`${prefix}${cur}if (${n.condition})${tag}`);
+        const hasManyBranches = n.branches.length > 1;
+        for (let b = 0; b < n.branches.length; b++) {
+          const br = n.branches[b];
+          if (b === 0 && !hasManyBranches) {
+            // single if without else — body directly under if
+            out.push(...renderFlow(br.body, prefix + nxt));
+          } else if (b === 0) {
+            // then branch with else coming
+            out.push(`${prefix}${nxt}├─ then`);
+            out.push(...renderFlow(br.body, prefix + nxt + "│  "));
+          } else {
+            const bLast = b === n.branches.length - 1;
+            const bCur = bLast ? "└─ " : "├─ ";
+            const bNxt = bLast ? "   " : "│  ";
+            out.push(`${prefix}${nxt}${bCur}${br.label}`);
+            out.push(...renderFlow(br.body, prefix + nxt + bNxt));
+          }
+        }
+        break;
+      }
+
+      case "switch":
+        out.push(`${prefix}${cur}switch (${n.condition})${tag}`);
+        for (let c = 0; c < n.cases.length; c++) {
+          const cs = n.cases[c];
+          const cLast = c === n.cases.length - 1;
+          const cCur = cLast ? "└─ " : "├─ ";
+          const cNxt = cLast ? "   " : "│  ";
+          out.push(`${prefix}${nxt}${cCur}case ${cs.label}`);
+          out.push(...renderFlow(cs.body, prefix + nxt + cNxt));
+        }
+        break;
+
+      case "loop":
+        out.push(`${prefix}${cur}${n.sub} (${n.cond})${tag}`);
+        out.push(...renderFlow(n.body, prefix + nxt));
+        break;
+
+      case "try":
+        out.push(`${prefix}${cur}try${tag}`);
+        out.push(...renderFlow(n.body, prefix + nxt));
+        for (let c = 0; c < n.catches.length; c++) {
+          const ct = n.catches[c];
+          const hasFinally = !!n.finally;
+          const cLast = c === n.catches.length - 1 && !hasFinally;
+          const cCur = cLast ? "└─ " : "├─ ";
+          const cNxt = cLast ? "   " : "│  ";
+          out.push(`${prefix}${nxt}${cCur}catch (${ct.types} ${ct.var})`);
+          out.push(...renderFlow(ct.body, prefix + nxt + cNxt));
+        }
+        if (n.finally) {
+          out.push(`${prefix}${nxt}└─ finally`);
+          out.push(...renderFlow(n.finally, prefix + nxt + "   "));
+        }
+        break;
+
+      case "call":
+        out.push(`${prefix}${cur}→ ${n.text}${tag}`);
+        if (n.subFlow) out.push(...renderFlow(n.subFlow, prefix + nxt));
+        break;
+
+      case "assign":
+        out.push(`${prefix}${cur}${n.text}${tag}`);
+        if (n.subFlow) out.push(...renderFlow(n.subFlow, prefix + nxt));
+        break;
+
+      case "continue":
+        out.push(`${prefix}${cur}continue${n.text ? " " + n.text : ""}${tag}`);
+        break;
+
+      case "return":
+        out.push(`${prefix}${cur}⏎ return ${n.text}${tag}`);
+        break;
+
+      case "throw":
+        out.push(`${prefix}${cur}💥 throw ${n.text}${tag}`);
+        break;
+
+      case "echo":
+        out.push(`${prefix}${cur}echo ${n.text}${tag}`);
+        break;
+    }
+  }
+  return out;
+}
+
+/** Find a function/method AST node in parsed AST */
+function findFuncInAST(ast, funcName, className) {
+  let found = null;
+  const fnLower = funcName.toLowerCase();
+  const clsLower = className ? className.toLowerCase() : null;
+
+  // Collect trait names used by the target class (for fallback)
+  const usedTraits = [];
+
+  walkAST(ast, (node) => {
+    if (found) return;
+    if (clsLower && (node.kind === "class" || node.kind === "trait" || node.kind === "interface" || node.kind === "enum")) {
+      const name = typeof node.name === "string" ? node.name : node.name?.name || "";
+      if (name.toLowerCase() === clsLower && node.body) {
+        // Collect `use TraitName` declarations
+        for (const member of node.body) {
+          if (member.kind === "traituse") {
+            for (const t of (member.traits || [])) {
+              const tName = typeof t === "string" ? t : t.name || "";
+              if (tName) usedTraits.push(tName.toLowerCase());
+            }
+          }
+        }
+        // Search direct methods
+        for (const member of node.body) {
+          if (member.kind === "method") {
+            const mName = typeof member.name === "string" ? member.name : member.name?.name || "";
+            if (mName.toLowerCase() === fnLower) { found = member; return; }
+          }
+        }
+      }
+    } else if (!clsLower && node.kind === "function") {
+      const name = typeof node.name === "string" ? node.name : node.name?.name || "";
+      if (name.toLowerCase() === fnLower) { found = node; }
+    }
+  });
+
+  // Fallback: search in used traits (same file)
+  if (!found && usedTraits.length > 0) {
+    walkAST(ast, (node) => {
+      if (found) return;
+      if (node.kind === "trait") {
+        const name = typeof node.name === "string" ? node.name : node.name?.name || "";
+        if (usedTraits.includes(name.toLowerCase()) && node.body) {
+          for (const member of node.body) {
+            if (member.kind === "method") {
+              const mName = typeof member.name === "string" ? member.name : member.name?.name || "";
+              if (mName.toLowerCase() === fnLower) { found = member; return; }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  return found;
+}
+
+/** Create a parser instance for trace_logic */
+async function createParser() {
+  const PhpParser = await getParser();
+  return new PhpParser({
+    parser: { extractDoc: false, php7: true, suppressErrors: true },
+    ast: { withPositions: true, withSource: false },
+  });
+}
+
+/** Recursively enrich call nodes with sub-flow (depth tracing) */
+async function enrichCalls(flowNodes, index, projectPath, parser, depth, maxDepth, visited) {
+  if (depth >= maxDepth) return;
+  for (const node of flowNodes) {
+    // Recurse into sub-structures
+    if (node.branches) for (const b of node.branches) await enrichCalls(b.body, index, projectPath, parser, depth, maxDepth, visited);
+    if (node.cases) for (const c of node.cases) await enrichCalls(c.body, index, projectPath, parser, depth, maxDepth, visited);
+    if (node.body && Array.isArray(node.body)) await enrichCalls(node.body, index, projectPath, parser, depth, maxDepth, visited);
+    if (node.catches) for (const c of node.catches) await enrichCalls(c.body, index, projectPath, parser, depth, maxDepth, visited);
+    if (node.finally) await enrichCalls(node.finally, index, projectPath, parser, depth, maxDepth, visited);
+
+    // Enrich call/assign nodes
+    if (node.type !== "call" && node.type !== "assign") continue;
+    // Extract function name from the text (last function call pattern)
+    const callMatch = node.text.match(/(?:->|::|^|\b)(\w+)\s*\(/);
+    if (!callMatch) continue;
+    const calledName = callMatch[1].toLowerCase();
+    if (visited.has(calledName)) continue;
+
+    // Search index for this function
+    let targetFile = null;
+    let targetClass = null;
+    // Check methods first
+    for (const cls of index.classes) {
+      const m = cls.methods.find(m => m.name.toLowerCase() === calledName);
+      if (m) { targetFile = cls.file; targetClass = cls.name; break; }
+    }
+    // Then global functions
+    if (!targetFile) {
+      const func = index.functions.find(f => f.name.toLowerCase() === calledName);
+      if (func) targetFile = func.file;
+    }
+    if (!targetFile) continue;
+
+    visited.add(calledName);
+    try {
+      const filePath = path.join(projectPath, targetFile);
+      const code = await fs.readFile(filePath, "utf-8");
+      const ast = parser.parseCode(code, targetFile);
+      const funcNode = findFuncInAST(ast, callMatch[1], targetClass);
+      if (funcNode) {
+        const subFlow = traceStmts(stmtsOf(funcNode.body));
+        if (subFlow.length > 0) {
+          node.subFlow = subFlow;
+          await enrichCalls(subFlow, index, projectPath, parser, depth + 1, maxDepth, visited);
+        }
+      }
+    } catch { /* skip files that can't be parsed */ }
+  }
 }
 
 // ============================================
@@ -553,6 +973,106 @@ export async function handle(name, args) {
 
     if (ancestors.length === 0 && children.length === 0 && implementors.length === 0) {
       lines.push(`此 class 沒有繼承關係（獨立）。`);
+    }
+
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  }
+
+  // ── trace_logic ──
+  if (name === "trace_logic") {
+    const maxDepth = Math.min(Math.max(args.max_depth || 1, 1), 3);
+    const projectPath = resolveSecurePath(args.project);
+    const index = await getIndex(args.project);
+    const parser = await createParser();
+
+    // 1. Find the target function/method definition
+    let targetFile = args.file || null;
+    let targetClass = args.class_name || null;
+    const funcName = args.function_name;
+
+    if (!targetFile) {
+      // Search index
+      if (targetClass) {
+        const cls = index.classes.find(c => c.name.toLowerCase() === targetClass.toLowerCase());
+        if (cls) {
+          const m = cls.methods.find(m => m.name.toLowerCase() === funcName.toLowerCase());
+          if (m) targetFile = cls.file;
+        }
+      } else {
+        // Try global function first
+        const func = index.functions.find(f => f.name.toLowerCase() === funcName.toLowerCase());
+        if (func) {
+          targetFile = func.file;
+        } else {
+          // Try as method in any class
+          for (const cls of index.classes) {
+            const m = cls.methods.find(m => m.name.toLowerCase() === funcName.toLowerCase());
+            if (m) { targetFile = cls.file; targetClass = cls.name; break; }
+          }
+        }
+      }
+    }
+
+    if (!targetFile) {
+      return { content: [{ type: "text", text: `❌ 找不到 ${targetClass ? targetClass + "::" : ""}${funcName}。請確認已執行 symbol_index，或用 file 參數指定檔案。` }] };
+    }
+
+    // 2. Read and parse the file
+    const filePath = path.join(projectPath, targetFile);
+    let code;
+    try {
+      code = await fs.readFile(filePath, "utf-8");
+    } catch (err) {
+      return { content: [{ type: "text", text: `❌ 無法讀取 ${targetFile}: ${err.message}` }] };
+    }
+
+    let ast;
+    try {
+      ast = parser.parseCode(code, targetFile);
+    } catch (err) {
+      return { content: [{ type: "text", text: `❌ PHP 解析失敗 ${targetFile}: ${err.message}` }] };
+    }
+
+    // 3. Find the function AST node
+    const funcNode = findFuncInAST(ast, funcName, targetClass);
+    if (!funcNode) {
+      return { content: [{ type: "text", text: `❌ 在 ${targetFile} 中找不到 ${targetClass ? targetClass + "::" : ""}${funcName} 的定義。` }] };
+    }
+
+    // 4. Build flow tree
+    const body = stmtsOf(funcNode.body);
+    const flowTree = traceStmts(body);
+
+    // 5. Recursive depth tracing
+    if (maxDepth > 1 && flowTree.length > 0) {
+      const visited = new Set([funcName.toLowerCase()]);
+      await enrichCalls(flowTree, index, projectPath, parser, 1, maxDepth, visited);
+    }
+
+    // 6. Format output
+    const params = (funcNode.arguments || []).map(a => {
+      const pName = typeof a.name === "string" ? a.name : a.name?.name || "?";
+      return `$${pName}`;
+    }).join(", ");
+
+    const header = targetClass
+      ? `${targetClass}::${funcName}(${params})`
+      : `${funcName}(${params})`;
+
+    const startLine = funcNode.loc?.start?.line || 0;
+    const endLine = funcNode.loc?.end?.line || 0;
+
+    const lines = [
+      `🔀 Logic Trace: ${header}`,
+      `📍 ${targetFile}:${startLine}-${endLine}`,
+      `📊 depth: ${maxDepth}`,
+      ``,
+      header,
+    ];
+    lines.push(...renderFlow(flowTree));
+
+    if (flowTree.length === 0) {
+      lines.push(`   (empty body)`);
     }
 
     return { content: [{ type: "text", text: lines.join("\n") }] };

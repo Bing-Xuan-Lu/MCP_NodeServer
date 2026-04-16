@@ -42,6 +42,7 @@
 | [feedback/workflow/feedback_deploy_script_sync.md](feedback/workflow/feedback_deploy_script_sync.md) | 改 .bat 後必須同步更新 .sh（排除條件、目標目錄、說明訊息） |
 | [feedback/workflow/feedback_skill_frontmatter.md](feedback/workflow/feedback_skill_frontmatter.md) | Skill frontmatter token 節省規則：何時加、description 只寫觸發詞一行 |
 | [feedback/workflow/feedback_batch_replace.md](feedback/workflow/feedback_batch_replace.md) | 多檔相同替換用 sed/node 批次處理，不逐一 Edit |
+| [feedback/workflow/feedback_ast_tools_priority.md](feedback/workflow/feedback_ast_tools_priority.md) | PHP 函式查詢必須用 AST 工具，禁 Grep 散搜（Hook L2.4 強制） |
 
 ### Feedback — Tooling
 | 檔案 | 說明 |

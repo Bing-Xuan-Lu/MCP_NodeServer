@@ -361,14 +361,33 @@ export async function handle(name, args) {
     const search = normalize(args.search);
     const replace = normalize(args.replace);
 
-    if (!content.includes(search)) {
-      // 提供更有用的錯誤訊息：顯示 search 前 80 字元方便除錯
-      const preview = search.slice(0, 80).replace(/\n/g, "\\n");
-      throw new Error(`比對失敗：找不到 search 區塊（前 80 字元：${preview}）`);
+    let result;
+    if (content.includes(search)) {
+      // 精確比對成功
+      result = content.replace(search, () => replace);
+    } else {
+      // Fallback：縮排容錯比對（tab↔space 正規化）
+      const indentNorm = s => s.replace(/^[ \t]+/gm, m => m.replace(/\t/g, '    ').replace(/ {2,}/g, ss => ' '.repeat(ss.length)));
+      const cNorm = indentNorm(content);
+      const sNorm = indentNorm(search);
+      if (cNorm.includes(sNorm)) {
+        // 找到正規化後的位置，用原始 content 的對應行做替換
+        const normIdx = cNorm.indexOf(sNorm);
+        const beforeMatch = cNorm.slice(0, normIdx);
+        const matchLineStart = beforeMatch.lastIndexOf('\n') + 1;
+        const matchLineEnd = normIdx + sNorm.length;
+        // 在原始 content 中找對應的行範圍
+        const origLines = content.split('\n');
+        const normLines = cNorm.split('\n');
+        const startLine = beforeMatch.split('\n').length - 1;
+        const searchLineCount = search.split('\n').length;
+        const origSlice = origLines.slice(startLine, startLine + searchLineCount).join('\n');
+        result = content.replace(origSlice, () => replace);
+      } else {
+        const preview = search.slice(0, 80).replace(/\n/g, "\\n");
+        throw new Error(`比對失敗：找不到 search 區塊（前 80 字元：${preview}）`);
+      }
     }
-
-    // 用函式形式避免 replace 的 $ 特殊字元解析（$&, $', $` 等）
-    let result = content.replace(search, () => replace);
 
     // 還原原始換行風格
     if (hasCRLF) result = result.replace(/\n/g, "\r\n");
@@ -402,14 +421,28 @@ export async function handle(name, args) {
         const search = normalize(diff.search);
         const replace = normalize(diff.replace);
 
-        if (!content.includes(search)) {
-          const preview = search.slice(0, 80).replace(/\n/g, "\\n");
-          results.push(`❌ ${diff.path}：比對失敗（前 80 字元：${preview}）`);
-          continue;
+        let result;
+        if (content.includes(search)) {
+          result = content.replace(search, () => replace);
+        } else {
+          // Fallback：縮排容錯比對
+          const indentNorm = s => s.replace(/^[ \t]+/gm, m => m.replace(/\t/g, '    ').replace(/ {2,}/g, ss => ' '.repeat(ss.length)));
+          const cNorm = indentNorm(content);
+          const sNorm = indentNorm(search);
+          if (cNorm.includes(sNorm)) {
+            const normIdx = cNorm.indexOf(sNorm);
+            const beforeMatch = cNorm.slice(0, normIdx);
+            const origLines = content.split('\n');
+            const startLine = beforeMatch.split('\n').length - 1;
+            const searchLineCount = search.split('\n').length;
+            const origSlice = origLines.slice(startLine, startLine + searchLineCount).join('\n');
+            result = content.replace(origSlice, () => replace);
+          } else {
+            const preview = search.slice(0, 80).replace(/\n/g, "\\n");
+            results.push(`❌ ${diff.path}：比對失敗（前 80 字元：${preview}）`);
+            continue;
+          }
         }
-
-        // 用函式形式避免 replace 的 $ 特殊字元解析（$&, $', $` 等）
-        let result = content.replace(search, () => replace);
         if (hasCRLF) result = result.replace(/\n/g, "\r\n");
 
         await fs.writeFile(fullPath, result, "utf-8");
