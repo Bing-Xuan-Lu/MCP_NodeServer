@@ -24,13 +24,13 @@ const TOOLS = {
   'run_php_script_batch':   { dept:'PHP & SFTP 部署', title:'批次執行多個 PHP 腳本', desc:'循序執行多支 PHP 腳本，適合測試、migration 批次跑。支援 container 參數在 Docker 容器內執行。', usage:'run_php_script_batch {container:"dev-php84", scripts:[{path:"..."}]}', tools:[] },
 
   'sftp_connect':           { dept:'PHP & SFTP 部署', title:'設定 SFTP 連線', desc:'設定後同一次對話內的所有操作都會使用此連線。支援 preset 參數一鍵載入已儲存的連線 + 路徑對應。', usage:'sftp_connect {preset:"my_project"} 或 sftp_connect {host:"...", user:"..."}', tools:[] },
-  'sftp_upload':            { dept:'PHP & SFTP 部署', title:'上傳檔案/目錄', desc:'上傳本機檔案或整個目錄到遠端伺服器。若已載入 preset，可只傳相對路徑。', usage:'sftp_upload {local_path:"...", remote_path:"..."} 或 sftp_upload {local_path:"app/file.php"}', tools:[] },
+  'sftp_upload':            { dept:'PHP & SFTP 部署', title:'上傳檔案/目錄', desc:'上傳本機檔案或整個目錄到遠端伺服器。若已載入 preset，可只傳相對路徑。內建 drift 偵測：遠端自上次下載後有變動或未曾下載過快照會被擋下，需 force: true 才允許覆蓋。', usage:'sftp_upload {local_path:"...", remote_path:"...", force?:bool}', tools:[] },
   'sftp_preset':            { dept:'PHP & SFTP 部署', title:'管理部署 Preset', desc:'儲存/列出/刪除 SFTP 部署 preset（連線資訊 + local_base/remote_base 路徑對應 + excludes 排除清單），重啟後仍保留。', usage:'sftp_preset {action:"save", preset_name:"my_project", host:"...", user:"...", local_base:"D:\\\\Project\\\\xxx", remote_base:"/var/www/html_xxx/"}', tools:[] },
-  'sftp_download':          { dept:'PHP & SFTP 部署', title:'下載檔案/目錄', desc:'從遠端伺服器下載檔案或目錄到本機。', usage:'sftp_download {remote_path:"...", local_path:"..."}', tools:[] },
+  'sftp_download':          { dept:'PHP & SFTP 部署', title:'下載檔案/目錄', desc:'從遠端伺服器下載檔案或目錄到本機。單檔下載時自動記錄遠端 mtime/size 快照，供後續 sftp_upload 做 drift 偵測。', usage:'sftp_download {remote_path:"...", local_path:"..."}', tools:[] },
   'sftp_list':              { dept:'PHP & SFTP 部署', title:'列出遠端目錄', desc:'列出遠端目錄內容（檔名、類型、大小、修改時間）。', usage:'sftp_list {remote_path:"..."}', tools:[] },
   'sftp_delete':            { dept:'PHP & SFTP 部署', title:'刪除遠端檔案', desc:'刪除遠端檔案或目錄（支援遞迴刪除）。', usage:'sftp_delete {remote_path:"..."}', tools:[] },
   'sftp_list_batch':        { dept:'PHP & SFTP 部署', title:'批次列出遠端目錄', desc:'共用一條連線，一次列出多個目錄內容。', usage:'sftp_list_batch {remote_paths:["..."]}', tools:[] },
-  'sftp_upload_batch':      { dept:'PHP & SFTP 部署', title:'批次上傳檔案/目錄', desc:'共用一條連線，一次上傳多組檔案或目錄到遠端。', usage:'sftp_upload_batch {items:[{local_path:"...",remote_path:"..."}]}', tools:[] },
+  'sftp_upload_batch':      { dept:'PHP & SFTP 部署', title:'批次上傳檔案/目錄', desc:'共用一條連線，一次上傳多組檔案或目錄到遠端。單檔項目會套用 drift 偵測（無快照或遠端已變動會被略過），可用 force: true 一次覆蓋所有項目。', usage:'sftp_upload_batch {items:[{local_path:"...",remote_path:"..."}], force?:bool}', tools:[] },
   'sftp_download_batch':    { dept:'PHP & SFTP 部署', title:'批次下載檔案/目錄', desc:'共用一條連線，一次從遠端下載多組檔案或目錄。', usage:'sftp_download_batch {items:[{remote_path:"...",local_path:"..."}]}', tools:[] },
   'sftp_delete_batch':      { dept:'PHP & SFTP 部署', title:'批次刪除遠端檔案', desc:'共用一條連線，一次刪除多個遠端檔案或目錄。', usage:'sftp_delete_batch {items:[{remote_path:"..."}]}', tools:[] },
 
