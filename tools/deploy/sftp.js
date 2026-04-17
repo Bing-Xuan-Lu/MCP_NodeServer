@@ -60,6 +60,77 @@ function checkCommandSafety(command) {
 let currentSftp = null;
 
 // ============================================
+// 記憶體狀態：遠端檔案快照（drift 偵測用）
+// key: `${host}:${remote_path}` → { mtime, size, at }
+// ============================================
+const remoteSnapshots = new Map();
+
+function snapKey(host, remotePath) {
+  return `${host}::${remotePath}`;
+}
+
+function saveSnapshot(host, remotePath, stat) {
+  remoteSnapshots.set(snapKey(host, remotePath), {
+    mtime: stat.modifyTime ?? stat.mtime ?? 0,
+    size:  stat.size ?? 0,
+    at:    Date.now(),
+  });
+}
+
+function getSnapshot(host, remotePath) {
+  return remoteSnapshots.get(snapKey(host, remotePath)) || null;
+}
+
+/**
+ * 上傳前 drift 檢查
+ * @returns {{ ok: true } | { ok: false, reason: string, hint: string[] }}
+ */
+async function checkRemoteDrift(client, host, remotePath, force) {
+  let remoteStat;
+  try {
+    remoteStat = await client.stat(remotePath);
+  } catch {
+    return { ok: true, firstUpload: true };  // 遠端不存在 → 首次上傳
+  }
+
+  const snap = getSnapshot(host, remotePath);
+  const curMtime = remoteStat.modifyTime ?? remoteStat.mtime ?? 0;
+  const curSize  = remoteStat.size ?? 0;
+
+  if (!snap) {
+    if (force) return { ok: true, noSnapshot: true };
+    return {
+      ok: false,
+      reason: `⚠️ 遠端已有此檔案但本 session 未曾下載過快照，可能覆蓋他人改動：${remotePath}`,
+      hint: [
+        `先呼叫 sftp_download 取得遠端版本並比對差異`,
+        `確認本機版本包含遠端最新改動後，加上 force: true 重新上傳`,
+      ],
+    };
+  }
+
+  const drift = curMtime !== snap.mtime || curSize !== snap.size;
+  if (drift) {
+    if (force) return { ok: true, drifted: true };
+    const ago = Math.round((Date.now() - snap.at) / 1000);
+    return {
+      ok: false,
+      reason:
+        `⚠️ 遠端自上次下載（${ago}s 前）後已被修改：${remotePath}\n` +
+        `  快照 mtime=${snap.mtime} size=${snap.size}\n` +
+        `  目前 mtime=${curMtime} size=${curSize}`,
+      hint: [
+        `可能有第三方（或其他 session）修改過此檔案`,
+        `先 sftp_download 重新同步遠端版本，合併你的改動後再上傳`,
+        `若確定要覆蓋遠端版本，加上 force: true 重新呼叫`,
+      ],
+    };
+  }
+
+  return { ok: true };
+}
+
+// ============================================
 // 工具定義
 // ============================================
 export const definitions = [
@@ -89,6 +160,7 @@ export const definitions = [
       properties: {
         local_path:  { type: "string", description: "本機路徑（相對 basePath 或絕對路徑；若有 preset 可傳相對於 local_base 的路徑）" },
         remote_path: { type: "string", description: "遠端目標絕對路徑（若有 preset 且省略，自動用 remote_base + local_path 組合）" },
+        force:       { type: "boolean", description: "強制覆蓋。預設 false：若遠端存在但本 session 未下載過，或自下載後 mtime/size 有變動，會被擋下要求先確認" },
       },
       required: ["local_path"],
     },
@@ -152,6 +224,7 @@ export const definitions = [
           },
           description: "上傳項目陣列，每項含 local_path 與 remote_path",
         },
+        force: { type: "boolean", description: "強制覆蓋所有項目（略過 drift 偵測）。預設 false" },
       },
       required: ["items"],
     },
@@ -540,12 +613,28 @@ export async function handle(name, args) {
           content: [{ type: "text", text: `✅ 目錄上傳完成\n本機: ${localAbs}\n遠端: ${remotePath}${presetNote}` }],
         };
       } else {
+        // Drift 偵測（單檔）
+        const drift = await checkRemoteDrift(client, check.config.host, remotePath, args.force);
+        if (!drift.ok) return errorResp(drift.reason, drift.hint);
+
         // 自動建立遠端目錄
         const remoteDir = remotePath.replace(/\/[^/]+$/, "");
         if (remoteDir) await client.mkdir(remoteDir, true).catch(() => {});
         await client.put(localAbs, remotePath);
+
+        // 上傳後刷新快照（避免下次誤判為 drift）
+        try {
+          const newStat = await client.stat(remotePath);
+          saveSnapshot(check.config.host, remotePath, newStat);
+        } catch {}
+
+        const flags = [];
+        if (drift.firstUpload) flags.push("🆕 首次上傳");
+        if (drift.drifted) flags.push("⚠️ 已強制覆蓋（遠端有變動）");
+        if (drift.noSnapshot) flags.push("⚠️ 已強制覆蓋（無快照）");
+        const flagLine = flags.length ? `\n${flags.join(" / ")}` : "";
         return {
-          content: [{ type: "text", text: `✅ 檔案上傳完成\n本機: ${localAbs}\n遠端: ${remotePath}${presetNote}` }],
+          content: [{ type: "text", text: `✅ 檔案上傳完成\n本機: ${localAbs}\n遠端: ${remotePath}${flagLine}${presetNote}` }],
         };
       }
     } catch (err) {
@@ -584,8 +673,9 @@ export async function handle(name, args) {
       } else {
         fs.mkdirSync(path.dirname(localAbs), { recursive: true });
         await client.get(args.remote_path, localAbs);
+        saveSnapshot(check.config.host, args.remote_path, remoteInfo);
         return {
-          content: [{ type: "text", text: `✅ 檔案下載完成\n遠端: ${args.remote_path}\n本機: ${localAbs}` }],
+          content: [{ type: "text", text: `✅ 檔案下載完成\n遠端: ${args.remote_path}\n本機: ${localAbs}\n📸 已記錄遠端快照（後續上傳會偵測 drift）` }],
         };
       }
     } catch (err) {
@@ -722,16 +812,31 @@ export async function handle(name, args) {
           const stat = fs.statSync(localAbs);
           if (stat.isDirectory()) {
             await client.uploadDir(localAbs, remotePath);
+            results.push(`✅ ${localPath} → ${remotePath}`);
+            okCount++;
           } else {
+            // Drift 偵測（單檔）
+            const drift = await checkRemoteDrift(client, check.config.host, remotePath, args.force);
+            if (!drift.ok) {
+              results.push(`⚠️ ${localPath} → ${remotePath}：遠端有變動（未加 force），已略過`);
+              skipCount++;
+              continue;
+            }
+
             // 自動建立遠端目錄（若不存在）
             const remoteDir = remotePath.replace(/\/[^/]+$/, "");
             if (remoteDir) {
               await client.mkdir(remoteDir, true).catch(() => {});
             }
             await client.put(localAbs, remotePath);
+            try {
+              const newStat = await client.stat(remotePath);
+              saveSnapshot(check.config.host, remotePath, newStat);
+            } catch {}
+            const tag = drift.firstUpload ? " 🆕" : (drift.drifted || drift.noSnapshot) ? " ⚠️覆蓋" : "";
+            results.push(`✅ ${localPath} → ${remotePath}${tag}`);
+            okCount++;
           }
-          results.push(`✅ ${localPath} → ${remotePath}`);
-          okCount++;
         } catch (err) {
           results.push(`❌ ${localPath} → ${remotePath}：${err.message}`);
         }
@@ -780,6 +885,7 @@ export async function handle(name, args) {
           } else {
             fs.mkdirSync(path.dirname(localAbs), { recursive: true });
             await client.get(item.remote_path, localAbs);
+            saveSnapshot(check.config.host, item.remote_path, remoteInfo);
           }
           results.push(`✅ ${item.remote_path} → ${item.local_path}`);
           okCount++;
