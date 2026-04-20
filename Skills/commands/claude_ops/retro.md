@@ -120,6 +120,30 @@ Glob pattern="~/.claude/projects/*/memory/MEMORY.md"
 
 → 有 → 列為 Tool 面向候選，寫入報告並詢問是否加入 improvements_backlog.md
 
+**⚠️ 使用率自省（每次 retro 必做，零例外）**：
+
+回顧對話中是否有「該用既有 MCP 工具 / Skill 卻沒用，改用 Bash / Read / Grep / 手工流程」的情況。這類遺漏本身不是 Tool bug，而是 **Hook 偵測漏洞**——代表現有 hook 沒能在 PreToolUse 階段攔下錯誤工具選擇。
+
+| 實際使用 | 本該使用 | Hook 改善方向 |
+| --- | --- | --- |
+| Bash `docker exec mysql` | `execute_sql` | repetition-detector L1 `bash_wrong_tool` 擴充 pattern |
+| Bash `docker exec php` | `run_php_script` / `run_php_code` | 同上 |
+| Grep 散搜 PHP class/method | `symbol_index` / `class_method_lookup` | L2.4 `grep_php_symbol` 擴充 |
+| Read 大檔多次分段 | 一次讀完（Read 預設 2000 行） | L5 `token_waste_detection` 加規則 |
+| 逐檔 Edit 相同替換 | `apply_diff_batch` / sed | L2.7 `edit_batch_replace` 已覆蓋，檢查是否觸發 |
+| 手動重複流程 3+ 次 | 既有 Skill / 新建 Skill | 提議新 hook 或 Skill |
+
+**判斷原則**：若使用者在對話中糾正過「為什麼不用 X 工具」，或 Claude 自己在檢討時發現「當時該用 X」，**一律列為 Hook 強化候選**，不要只寫進 Memory 算了——Memory 是給 Claude 自己看的，hook 才能在下次強制攔下錯誤行為。
+
+**產出格式**：
+
+```
+🪝 Hook 強化建議：
+  - 位置：hooks/repetition-detector.js L{層級}
+  - 觸發：{具體 pattern 或條件}
+  - 原因：本次對話出現 {次數} 次該用 {工具} 卻用 {替代} 的情況
+```
+
 #### D — MCP Backlog 面向
 
 **只在非 MCP 專案對話中執行此面向。**

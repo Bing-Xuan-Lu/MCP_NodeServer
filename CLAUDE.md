@@ -32,10 +32,10 @@ MCP_NodeServer/
 │   │   ├── pdf.js       ← read_pdf_file, read_pdf_files_batch (.pdf → Markdown/Text)
 │   │   └── images.js    ← read_image, read_images_batch（圖片讀取 + 縮放，支援 PNG/JPG/WebP/GIF/SVG）
 │   ├── data/            ← 資料庫（DB）
-│   │   └── database.js  ← set_database, load_db_connection, get_current_db, get_db_schema, execute_sql, get_db_schema_batch, execute_sql_batch
+│   │   └── database.js  ← set_database, load_db_connection, get_current_db, get_db_schema, execute_sql, get_db_schema_batch, execute_sql_batch, schema_diff
 │   ├── deploy/          ← 部署與版控工具（遠端操作、DB migration）
 │   │   ├── sftp.js      ← sftp_connect, sftp_upload, sftp_download, sftp_list, sftp_delete, sftp_*_batch, sftp_preset
-│   │   ├── php.js       ← run_php_script, run_php_test, send_http_request, tail_log, send_http_requests_batch, run_php_script_batch
+│   │   ├── php.js       ← run_php_script, run_php_code, run_php_test, send_http_request, tail_log, send_http_requests_batch, run_php_script_batch
 │   │   ├── git.js       ← git_status, git_diff, git_log, git_stash_ops
 │   │   ├── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
 │   │   └── flyway.js    ← flyway_info, flyway_migrate, flyway_validate, flyway_repair, flyway_baseline（需 dev-flyway Docker，選用）

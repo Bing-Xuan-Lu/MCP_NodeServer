@@ -872,14 +872,25 @@ const PATTERNS = [
       const glob = entry.args?.glob || '';
 
       // 偵測搜尋 PHP class/method 的 pattern
+      // 放寬 PHP context：路徑含 .php、常見 PHP 目錄名、或專案目錄（dbox/project/src/app）
       const isPhpContext = /\.php/i.test(glob) || /\.php/i.test(filePath) ||
-        /admin|model|controller|cls\b/i.test(filePath);
+        /admin|model|controller|cls\b|service|repository|src\b|app\b|project|dbox/i.test(filePath);
       if (!isPhpContext) return null;
 
-      // 搜尋 class 名稱、method 呼叫、extends/implements
-      const isSymbolSearch = /(::|->|extends|implements|new\s+|class\s+|function\s+)/i.test(pattern) ||
-        /^[A-Z][a-zA-Z]+$/.test(pattern); // PascalCase = likely class name
-      if (!isSymbolSearch) return null;
+      // 拆解 alternation（a|b|c），任一子項像 symbol 就算命中
+      const looksLikeSymbol = (s) =>
+        /^[A-Z][a-zA-Z0-9]+$/.test(s) ||           // PascalCase: OrderModel
+        /^[a-z]+[A-Z][a-zA-Z0-9]*$/.test(s) ||     // camelCase method: grantBonus, orderComplete
+        /^[a-z]+(?:_[a-z0-9]+){1,}$/.test(s);      // snake_case function: grant_bonus（2+ 段）
+      const hasSymbolOperator = (p) =>
+        /(::|->|extends|implements|new\s+|class\s+|function\s+)/i.test(p);
+      const detectSymbolSearch = (p) => {
+        if (hasSymbolOperator(p)) return true;
+        const alts = p.split('|').map(s => s.trim()).filter(Boolean);
+        return alts.some(a => looksLikeSymbol(a));
+      };
+
+      if (!detectSymbolSearch(pattern)) return null;
 
       // 累計：統計歷史中同樣是 PHP symbol search 的 Grep，跨不同路徑
       const prevSymbolGreps = history.filter(h => {
@@ -887,9 +898,9 @@ const PATTERNS = [
         const hp = h.args?.pattern || '';
         const hPath = h.args?.path || '';
         const hGlob = h.args?.glob || '';
-        const hPhp = /\.php/i.test(hGlob) || /\.php/i.test(hPath) || /admin|model|controller|cls\b/i.test(hPath);
-        const hSym = /(::|->|extends|implements|new\s+|class\s+|function\s+)/i.test(hp) || /^[A-Z][a-zA-Z]+$/.test(hp);
-        return hPhp && hSym;
+        const hPhp = /\.php/i.test(hGlob) || /\.php/i.test(hPath) ||
+          /admin|model|controller|cls\b|service|repository|src\b|app\b|project|dbox/i.test(hPath);
+        return hPhp && detectSymbolSearch(hp);
       });
       const uniquePaths = new Set(prevSymbolGreps.map(h => h.args?.path || 'cwd'));
       uniquePaths.add(filePath || 'cwd');
