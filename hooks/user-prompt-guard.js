@@ -335,7 +335,11 @@ process.stdin.on('end', () => {
     if (!scenario) { process.exit(0); }
 
     const missing = getMissing(prompt, scenario.needed);
-    if (missing.length === 0) { process.exit(0); }
+    const provided = scenario.needed.length - missing.length;
+    // 只有「缺多數」才擋：提供資訊 < 一半時才 block，避免 URL+錯誤訊息已齊全仍被要求補 PHP 檔名
+    // 例：3 項需求只給 1 項 → 擋；3 項給 2 項 → 放行；2 項給 1 項 → 放行
+    const threshold = Math.ceil(scenario.needed.length / 2);
+    if (provided >= threshold) { process.exit(0); }
 
     emitGuard(
       `[Prompt Guard] 偵測到「${scenario.name}」任務，缺少以下關鍵資訊：\n` +

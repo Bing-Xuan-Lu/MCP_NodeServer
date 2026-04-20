@@ -175,6 +175,24 @@ export const definitions = [
       required: ["queries"],
     },
   },
+  {
+    name: "schema_diff",
+    description: "比對兩個資料庫的資料表欄位差異（TYPE / IS_NULLABLE / DEFAULT / KEY / EXTRA / COMMENT）。輸入 source_db / target_db 連線名稱與 table_pattern（支援 LIKE），回傳欄位級對照表，免手刻 information_schema query。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        source_db: { type: "string", description: "來源資料庫連線名稱（需先 set_database）" },
+        target_db: { type: "string", description: "目標資料庫連線名稱（需先 set_database）" },
+        table_pattern: { type: "string", description: "資料表 LIKE pattern，例如 tbl_project_allmono% 或 % 代表全部", default: "%" },
+        ignore: {
+          type: "array",
+          items: { type: "string", enum: ["COMMENT", "DEFAULT", "EXTRA", "KEY"] },
+          description: "忽略的比對欄位（預設全比）",
+        },
+      },
+      required: ["source_db", "target_db"],
+    },
+  },
 ];
 
 // ============================================
@@ -603,5 +621,91 @@ export async function handle(name, args) {
     } finally {
       await conn.end();
     }
+  }
+
+  // ── schema_diff ──
+  if (name === "schema_diff") {
+    const srcCheck = requireDb(args.source_db);
+    if (!srcCheck.ok) return srcCheck.error;
+    const tgtCheck = requireDb(args.target_db);
+    if (!tgtCheck.ok) return tgtCheck.error;
+
+    const pattern = args.table_pattern || "%";
+    const ignore = new Set(args.ignore || []);
+    const compareFields = ["COLUMN_TYPE", "IS_NULLABLE", "COLUMN_DEFAULT", "COLUMN_KEY", "EXTRA", "COLUMN_COMMENT"]
+      .filter(f => {
+        if (ignore.has("COMMENT") && f === "COLUMN_COMMENT") return false;
+        if (ignore.has("DEFAULT") && f === "COLUMN_DEFAULT") return false;
+        if (ignore.has("EXTRA") && f === "EXTRA") return false;
+        if (ignore.has("KEY") && f === "COLUMN_KEY") return false;
+        return true;
+      });
+
+    async function fetchSchema(config) {
+      const conn = await mysql.createConnection(config);
+      try {
+        const [rows] = await conn.execute(
+          `SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, EXTRA, COLUMN_COMMENT
+           FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = ? AND TABLE_NAME LIKE ?
+           ORDER BY TABLE_NAME, ORDINAL_POSITION`,
+          [config.database, pattern]
+        );
+        const map = new Map();
+        for (const r of rows) {
+          if (!map.has(r.TABLE_NAME)) map.set(r.TABLE_NAME, new Map());
+          map.get(r.TABLE_NAME).set(r.COLUMN_NAME, r);
+        }
+        return map;
+      } finally {
+        await conn.end();
+      }
+    }
+
+    let srcMap, tgtMap;
+    try {
+      [srcMap, tgtMap] = await Promise.all([fetchSchema(srcCheck.config), fetchSchema(tgtCheck.config)]);
+    } catch (err) {
+      return { isError: true, content: [{ type: "text", text: `讀取 schema 失敗: ${err.message}` }] };
+    }
+
+    const allTables = new Set([...srcMap.keys(), ...tgtMap.keys()]);
+    const report = [];
+    const srcLabel = srcCheck.config.database;
+    const tgtLabel = tgtCheck.config.database;
+    let diffCount = 0, sameCount = 0;
+
+    for (const table of [...allTables].sort()) {
+      const srcCols = srcMap.get(table);
+      const tgtCols = tgtMap.get(table);
+      if (!srcCols) { report.push(`\n━━ ${table} ━━\n  ❌ 僅存在於 [${tgtLabel}]`); diffCount++; continue; }
+      if (!tgtCols) { report.push(`\n━━ ${table} ━━\n  ❌ 僅存在於 [${srcLabel}]`); diffCount++; continue; }
+
+      const allCols = new Set([...srcCols.keys(), ...tgtCols.keys()]);
+      const tableDiffs = [];
+      for (const col of allCols) {
+        const s = srcCols.get(col);
+        const t = tgtCols.get(col);
+        if (!s) { tableDiffs.push(`  + ${col}: 僅 [${tgtLabel}] 有 → ${t.COLUMN_TYPE}`); continue; }
+        if (!t) { tableDiffs.push(`  - ${col}: 僅 [${srcLabel}] 有 → ${s.COLUMN_TYPE}`); continue; }
+        const fieldDiffs = [];
+        for (const f of compareFields) {
+          if (String(s[f] ?? "") !== String(t[f] ?? "")) {
+            fieldDiffs.push(`${f}: [${srcLabel}]=${JSON.stringify(s[f])} ≠ [${tgtLabel}]=${JSON.stringify(t[f])}`);
+          }
+        }
+        if (fieldDiffs.length) tableDiffs.push(`  ~ ${col}\n      ${fieldDiffs.join("\n      ")}`);
+      }
+      if (tableDiffs.length) {
+        report.push(`\n━━ ${table} ━━\n${tableDiffs.join("\n")}`);
+        diffCount++;
+      } else {
+        sameCount++;
+      }
+    }
+
+    const summary = `📊 Schema Diff [${srcLabel}] vs [${tgtLabel}]  pattern="${pattern}"\n  比對表數：${allTables.size}（✅ 相同 ${sameCount} / ⚠️ 差異 ${diffCount}）${ignore.size ? `\n  忽略欄位：${[...ignore].join(", ")}` : ""}`;
+    const body = diffCount === 0 ? "\n\n✅ 所有資料表欄位定義完全一致。" : report.join("\n");
+    return { content: [{ type: "text", text: summary + body }] };
   }
 }

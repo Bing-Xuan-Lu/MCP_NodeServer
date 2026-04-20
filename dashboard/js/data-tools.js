@@ -15,8 +15,10 @@ const TOOLS = {
   'execute_sql':            { dept:'檔案系統 & 資料庫', title:'執行 SQL 指令', desc:'執行 DDL/DML，支援多條語句以分號分隔逐條執行。', usage:'execute_sql {sql:"..."}', tools:[] },
   'get_db_schema_batch':    { dept:'檔案系統 & 資料庫', title:'批次查看多張資料表結構', desc:'一次查看多張表的 Schema，減少 tool call。', usage:'get_db_schema_batch {table_names:["..."]}', tools:[] },
   'execute_sql_batch':      { dept:'檔案系統 & 資料庫', title:'批次執行多組獨立 SQL', desc:'各自獨立連線執行，互不影響，不會因某條失敗而中斷。', usage:'execute_sql_batch {queries:[{sql:"..."}]}', tools:[] },
+  'schema_diff':            { dept:'檔案系統 & 資料庫', title:'比對兩個資料庫的欄位差異', desc:'給兩個連線名稱 + table_pattern，回傳欄位級 diff（TYPE / IS_NULLABLE / DEFAULT / KEY / EXTRA / COMMENT）。免手刻 information_schema query。', usage:'schema_diff {source_db:"db_a", target_db:"db_b", table_pattern:"tbl_%"}', tools:[] },
 
   'run_php_script':         { dept:'PHP & SFTP 部署', title:'執行 PHP 腳本', desc:'在伺服器上執行 PHP 腳本 (CLI 模式)，並回傳輸出結果。支援 container 參數在 Docker 容器內執行。', usage:'run_php_script {path:"...", container:"dev-php84"}', tools:[] },
+  'run_php_code':           { dept:'PHP & SFTP 部署', title:'直接執行 PHP 程式碼', desc:'直接傳入 PHP code string 執行（透過 stdin），免建暫存檔。適合快速 debug / 探測 PHP 行為。自動補 <?php 標籤，支援 container 參數在 Docker 內執行。', usage:'run_php_code {code:"echo PHP_VERSION;", container:"dev-php84"}', tools:[] },
   'run_php_test':           { dept:'PHP & SFTP 部署', title:'執行 PHP 測試', desc:'自動建立測試環境 (Session/Config) 並執行 PHP 腳本。支援 container 參數在 Docker 容器內執行。', usage:'run_php_test {targetPath:"...", container:"dev-php84"}', tools:[] },
   'send_http_request':      { dept:'PHP & SFTP 部署', title:'發送 HTTP 請求', desc:'發送 GET/POST 請求，支援 Multipart 實體檔案上傳。', usage:'send_http_request {url:"...", method:"..."}', tools:[] },
   'tail_log':               { dept:'PHP & SFTP 部署', title:'讀取 Log 最後 N 行', desc:'讀取檔案最後 N 行 (適用於查看 PHP Error Log)。支援 container 參數讀取 Docker 容器內的 log。', usage:'tail_log {path:"/var/log/apache2/error.log", container:"dev-php84"}', tools:[] },

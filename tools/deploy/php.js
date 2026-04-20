@@ -86,6 +86,19 @@ export const definitions = [
     },
   },
   {
+    name: "run_php_code",
+    description: "直接執行 PHP code string（免建暫存檔）。程式碼透過 stdin 傳入 PHP CLI，省掉 Write → run → rm 三步驟。自動補 <?php 標籤。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        code: { type: "string", description: "PHP 程式碼（可含或不含 <?php 開頭，會自動補上）" },
+        container: { type: "string", description: "選填：Docker 容器名稱（如 dev-php84），有值時在容器內執行" },
+        timeout: { type: "number", description: "執行逾時毫秒數（預設 30000）", default: 30000 },
+      },
+      required: ["code"],
+    },
+  },
+  {
     name: "send_http_request",
     description: "發送 HTTP 請求。支援 Multipart 實體檔案上傳、Cookie Jar session 持久化（save_cookies_as / cookie_jar）。",
     inputSchema: {
@@ -230,6 +243,48 @@ export async function handle(name, args) {
       };
     } catch (error) {
       return { isError: true, content: [{ type: "text", text: `執行失敗: ${error.message}` }] };
+    }
+  }
+
+  if (name === "run_php_code") {
+    const timeout = args.timeout || 30000;
+    let code = args.code;
+    if (!/^\s*<\?php/.test(code)) code = "<?php\n" + code;
+
+    try {
+      let cmd, label = "";
+      if (args.container) {
+        const err = await checkContainer(args.container);
+        if (err) return err;
+        cmd = `docker exec -i ${args.container} php`;
+        label = ` [${args.container}]`;
+      } else {
+        cmd = `php`;
+      }
+
+      const { stdout, stderr } = await new Promise((resolve, reject) => {
+        const proc = exec(cmd, { timeout }, (err, stdout, stderr) => {
+          if (err && err.code !== 1 && err.killed !== true) {
+            err.stdout = stdout;
+            err.stderr = stderr;
+            return reject(err);
+          }
+          resolve({ stdout, stderr });
+        });
+        proc.stdin.end(code);
+      });
+
+      return {
+        content: [{
+          type: "text",
+          text: `📝 PHP 執行結果${label}：\n${stdout}${stderr ? `\n⚠️ 錯誤輸出：\n${stderr}` : ""}`,
+        }],
+      };
+    } catch (error) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: `執行失敗: ${error.message}${error.stdout ? `\nstdout: ${error.stdout}` : ""}${error.stderr ? `\nstderr: ${error.stderr}` : ""}` }],
+      };
     }
   }
 
