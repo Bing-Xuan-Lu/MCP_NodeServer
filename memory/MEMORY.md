@@ -28,6 +28,7 @@
 | --- | --- |
 | [feedback/playwright/feedback_playwright_screenshot.md](feedback/playwright/feedback_playwright_screenshot.md) | 截圖存 screenshot/ 不放根目錄 |
 | [feedback/playwright/feedback_playwright_ops.md](feedback/playwright/feedback_playwright_ops.md) | 快取清除、禁平行 Agent、卡住停止、禁 taskkill、動態連結展開、Background Agent 必須預授權所有 browser_* 工具 |
+| [feedback/playwright/feedback_popup_screenshot.md](feedback/playwright/feedback_popup_screenshot.md) | 截 popup 用 browser_interact screenshot + hide_selectors 隱藏浮動客服/chat widget |
 
 ### Feedback — Deploy
 | 檔案 | 說明 |
@@ -43,6 +44,8 @@
 | [feedback/workflow/feedback_skill_frontmatter.md](feedback/workflow/feedback_skill_frontmatter.md) | Skill frontmatter token 節省規則：何時加、description 只寫觸發詞一行 |
 | [feedback/workflow/feedback_batch_replace.md](feedback/workflow/feedback_batch_replace.md) | 多檔相同替換用 sed/node 批次處理，不逐一 Edit |
 | [feedback/workflow/feedback_ast_tools_priority.md](feedback/workflow/feedback_ast_tools_priority.md) | PHP 函式查詢必須用 AST 工具，禁 Grep 散搜（Hook L2.4 強制） |
+| [feedback/workflow/feedback_popup_style_reuse.md](feedback/workflow/feedback_popup_style_reuse.md) | 改 popup/彈窗前必須 Grep 既有 class 沿用骨架，禁自刻 inline style |
+| [feedback/workflow/feedback_batch_regex_php.md](feedback/workflow/feedback_batch_regex_php.md) | PHP 檔禁砍逗號 regex（誤切函式參數列），改走 Grep+apply_diff 或 AST |
 
 ### Feedback — Tooling
 | 檔案 | 說明 |

@@ -544,7 +544,39 @@ const BATCH_HINTS = {
 // warnOnFirst: true  = 有明確替代工具，第一次就該用對的（Layer 1: Wrong Tool）
 // warnOnFirst: false = 偶爾用 Bash 合理，重複才需提醒（Layer 2: Repetition）
 // block: true        = 直接阻擋（exit 2），強制使用 MCP 工具，不給機會
+//
+// Fallback override：命令內含 `# mcp-fallback: <reason>` 即放行（不 block、不警告）
+// 用於 MCP 工具真的不適用的場景（如下載二進位、環境探測），保留審計軌跡
+const MCP_FALLBACK_RE = /#\s*mcp-fallback\s*:/i;
+
+// Block 例外白名單：命中即降為純警告（不 block）
+// 用於明確合法的 Bash 用途，避免誤傷
+const BASH_BLOCK_ALLOWLIST = [
+  /--version\b/,                                  // 版本探測
+  /\s-h\b|\s--help\b/,                            // help
+  /github\.com\/[^\s]+\/releases\//i,             // GitHub releases 下載
+  /ghcr\.io\//i,                                  // 容器 registry
+  /\blocalhost[:\/]/i,                            // 本機探測
+  /\b127\.0\.0\.1[:\/]/,                          // 本機探測
+];
+
+function isBashAllowed(command) {
+  if (!command) return false;
+  if (MCP_FALLBACK_RE.test(command)) return true;
+  return BASH_BLOCK_ALLOWLIST.some(re => re.test(command));
+}
+
 const BASH_PATTERNS = [
+  {
+    // docker cp：檔案傳輸，無對應 MCP 工具（與 docker exec 不同），不警告也不擋
+    // silent=true：L1/L2 不輸出訊息，僅取 bashSig 供 L3 同類去重
+    regex: /^\s*docker\s+cp\b/i,
+    signature: 'bash:docker-cp',
+    hint: '',
+    warnOnFirst: false,
+    block: false,
+    silent: true,
+  },
   {
     regex: /docker\s+exec\s+\S+\s+mysql/i,
     signature: 'bash:docker-mysql',
@@ -555,9 +587,9 @@ const BASH_PATTERNS = [
   {
     regex: /docker\s+exec\s+\S+\s+php\b/i,
     signature: 'bash:docker-php',
-    hint: 'run_php_script / run_php_script_batch（MCP 工具）',
+    hint: 'run_php_script / run_php_script_batch / run_php_code（MCP 工具）',
     warnOnFirst: true,
-    block: false,
+    block: true,
   },
   {
     regex: /docker\s+exec\s+\S+\s+python/i,
@@ -571,7 +603,7 @@ const BASH_PATTERNS = [
     signature: 'bash:direct-mysql',
     hint: 'set_database + execute_sql / execute_sql_batch（MCP 工具）',
     warnOnFirst: true,
-    block: false,
+    block: true,
   },
   {
     regex: /\b(cat|head|tail)\s+/i,
@@ -622,7 +654,8 @@ const BASH_PATTERNS = [
     regex: /\bcurl\s+/i,
     signature: 'bash:curl',
     hint: 'send_http_request / send_http_requests_batch（MCP 工具，支援 cookie session）',
-    warnOnFirst: false,
+    warnOnFirst: true,
+    block: true,
   },
   {
     regex: /\becho\s+.*[>]/i,
@@ -634,7 +667,7 @@ const BASH_PATTERNS = [
     regex: /\bwget\s+/i,
     signature: 'bash:wget',
     hint: 'WebFetch（內建）或 send_http_request（MCP 工具，支援 cookie session）',
-    warnOnFirst: false,
+    warnOnFirst: true,
   },
   {
     regex: /\bwc\s+(-l\s+)?/i,
@@ -771,6 +804,13 @@ function getCategoryKey(entry) {
     return `dom_compare:${a}:${b}`;
   }
 
+  // browser_take_screenshot：同 URL 不同 filename 視為不同類（多 popup 驗證場景）
+  if (tool === 'browser_take_screenshot') {
+    const ref = entry.args?.ref || entry.args?.url || '';
+    const filename = entry.args?.filename || '';
+    return `${tool}:${ref}:${filename}`;
+  }
+
   // Playwright browser 操作：tool + ref/url 組合
   if (tool.startsWith('browser_')) {
     const ref = entry.args?.ref || entry.args?.url || '';
@@ -817,20 +857,28 @@ const PATTERNS = [
       if (shortName(entry.tool) !== 'Bash') return null;
       const cmd = entry.args?.command || '';
       const pat = matchBashPattern(cmd);
-      if (!pat || !pat.warnOnFirst) return null;
+      if (!pat || !pat.warnOnFirst || pat.silent) return null;
+
+      // Fallback override / 白名單：放行
+      if (isBashAllowed(cmd)) {
+        const reason = MCP_FALLBACK_RE.test(cmd) ? 'mcp-fallback 註解' : '白名單命中';
+        process.stderr.write(`[bash_wrong_tool] allow (${pat.signature}): ${reason}\n`);
+        return null;
+      }
 
       if (pat.block) {
         return {
           block: true,
-          message: `[Wrong Tool] ❌ BLOCKED：Bash 執行「${pat.signature}」被阻擋。\n` +
-                   `  → 必須改用：${pat.hint}\n` +
-                   `  → 此類操作已被強制禁止使用 Bash，請改用 MCP 工具。\n`,
+          message: `[L1 Wrong Tool] ❌ BLOCKED (sig=${pat.signature})\n` +
+                   `  → 請改用 MCP 工具：${pat.hint}\n` +
+                   `  → 此類 Bash 操作已強制禁止。若真有理由必須用 Bash，` +
+                   `在命令尾加 \`# mcp-fallback: <reason>\` 即可放行（會留審計紀錄）。\n`,
         };
       }
 
-      return `[Wrong Tool] ⚠️ 偵測到 Bash 執行「${pat.signature}」，但有專用工具可用。\n` +
+      return `[L1 Wrong Tool] ⚠️ Bash 執行「${pat.signature}」有專用工具可用。\n` +
              `  → 建議改用：${pat.hint}\n` +
-             `  → 專用工具省 token、支援 batch、輸出結構化，請優先使用。\n`;
+             `  → 專用工具省 token、支援 batch、輸出結構化。\n`;
     },
   },
   {
@@ -841,7 +889,7 @@ const PATTERNS = [
       // warnOnFirst 的已被 Layer 1 處理，這裡只管 warnOnFirst=false
       const cmd = entry.args?.command || '';
       const pat = matchBashPattern(cmd);
-      if (pat?.warnOnFirst) return null;
+      if (pat?.warnOnFirst || pat?.silent) return null;
 
       const count = history.filter(h => h.bashSig === entry.bashSig).length + 1;
       if (count < 2) return null;
@@ -994,15 +1042,21 @@ const PATTERNS = [
       if (tool !== 'Edit') return null;
 
       const oldStr = (entry.args?.old_string || '').trim();
-      if (!oldStr) return null;
+      const newStr = (entry.args?.new_string || '').trim();
+      if (!oldStr && !newStr) return null;
 
-      // 找歷史中 old_string 相同（或 old+new 都相同）的 Edit，但不同檔案
+      // 找歷史中 old_string 或 new_string 相同的 Edit，但不同檔案
+      // （token rename 類型：每檔 context 不同但替換目標相同也要算）
       const currentFile = entry.args?.file_path || '';
       const sameReplace = history.filter(h => {
         if (shortName(h.tool) !== 'Edit') return false;
         const hOld = (h.args?.old_string || '').trim();
+        const hNew = (h.args?.new_string || '').trim();
         const hFile = h.args?.file_path || '';
-        return hOld === oldStr && hFile !== currentFile;
+        if (hFile === currentFile) return false;
+        const oldMatch = oldStr && hOld === oldStr;
+        const newMatch = newStr && hNew === newStr;
+        return oldMatch || newMatch;
       });
 
       const count = sameReplace.length + 1; // 含本次
@@ -1077,6 +1131,166 @@ const PATTERNS = [
       }
 
       return null;
+    },
+  },
+  {
+    // Layer 2.85: Bulk Text Replace — 同一檔案多個不同 search 替換，提示改用 run_php_code preg_replace
+    id: 'bulk_text_replace',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      const editTools = new Set(['Edit', 'apply_diff']);
+      if (!editTools.has(tool)) return null;
+
+      const filePath = (entry.args?.file_path || entry.args?.path || '').replace(/\\/g, '/').toLowerCase();
+      if (!filePath) return null;
+
+      const currSearch = ((entry.args?.old_string || entry.args?.search) || '').trim();
+      if (!currSearch) return null;
+
+      const sameFile = history.filter(h => {
+        if (!editTools.has(shortName(h.tool))) return false;
+        const hp = (h.args?.file_path || h.args?.path || '').replace(/\\/g, '/').toLowerCase();
+        return hp === filePath;
+      });
+
+      const searches = new Set();
+      for (const h of sameFile) {
+        const s = ((h.args?.old_string || h.args?.search) || '').trim();
+        if (s) searches.add(s);
+      }
+      searches.add(currSearch);
+
+      if (searches.size < 5) return null;
+
+      const fname = filePath.split('/').pop();
+      return `[Bulk Replace] ⚠️ 對 ${fname} 已累計 ${searches.size} 個不同文字替換。\n` +
+             `  → 考慮改用 run_php_code 跑 preg_replace / str_replace 一次改完（省 tool call 來回）。\n` +
+             `  → 若替換是結構化的且需跨檔，用 apply_diff_batch 合併送出。\n`;
+    },
+  },
+  {
+    // Layer 5.1: Read Fragment — 同一檔案多次不同 offset 碎讀，或 20 次內 Read 過多
+    id: 'read_fragment_detection',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'Read' && tool !== 'read_file') return null;
+
+      const filePath = (entry.args?.file_path || entry.args?.path || '').replace(/\\/g, '/').toLowerCase();
+
+      // 條件 A：同檔 ≥3 次不同 offset
+      if (filePath) {
+        const sameFileReads = history.filter(h => {
+          const t = shortName(h.tool);
+          if (t !== 'Read' && t !== 'read_file') return false;
+          const hp = (h.args?.file_path || h.args?.path || '').replace(/\\/g, '/').toLowerCase();
+          return hp === filePath;
+        });
+
+        const offsets = new Set();
+        for (const h of sameFileReads) {
+          offsets.add(String(h.args?.offset ?? 0));
+        }
+        offsets.add(String(entry.args?.offset ?? 0));
+
+        const count = sameFileReads.length + 1;
+        if (count >= 3 && offsets.size >= 3) {
+          const fname = filePath.split('/').pop();
+          return `[Read Fragment] ⚠️ 對 ${fname} 已碎讀 ${count} 次（${offsets.size} 個不同 offset）。\n` +
+                 `  → 改用 Grep 定位關鍵字後再 Read 精準段落，或用 run_php_code / class_method_lookup 批次取。\n` +
+                 `  → Read 預設可讀 2000 行，若檔案 ≤2000 行應一次讀完。\n`;
+        }
+      }
+
+      // 條件 B：最近 20 次 tool call 中 Read ≥15
+      const recent = history.slice(-19);
+      const readCount = recent.filter(h => {
+        const t = shortName(h.tool);
+        return t === 'Read' || t === 'read_file';
+      }).length + 1;
+      if (readCount >= 15) {
+        return `[Read Fragment] ⚠️ 最近 20 次呼叫中有 ${readCount} 次 Read。\n` +
+               `  → 是否過度依賴讀檔？改用 Grep/class_method_lookup/symbol_index 可大幅省 token。\n`;
+      }
+
+      return null;
+    },
+  },
+  {
+    // Layer 2.9: PHP DB Cursor Trap — 寫入 PHP 時偵測 while($x = $db->getNext()) 外層對同一 $db 做 execute/execNext
+    //   錯誤範例：while ($row = $db->getNext()) { $db->execute("..."); ... }
+    //   這會讓內層 query 覆蓋外層 cursor，導致外層迴圈只跑一次或行為異常。
+    id: 'php_db_cursor_trap',
+    detect: (entry) => {
+      const tool = shortName(entry.tool);
+      const writeTools = new Set(['Edit', 'write', 'create_file', 'apply_diff']);
+      if (!writeTools.has(tool)) return null;
+
+      const filePath = entry.args?.file_path || entry.args?.path || '';
+      if (!/\.php$/i.test(filePath)) return null;
+
+      // 蒐集所有可能包含程式碼的字串欄位
+      const fields = [
+        entry.args?.new_string, entry.args?.content, entry.args?.code,
+        entry.args?.diff, entry.args?.replace, entry.args?.search,
+      ];
+      const code = fields.filter(s => typeof s === 'string').join('\n');
+      if (!code) return null;
+
+      // while ($var = $db->getNext()) { ... $db->execute( / $db->execNext( ... }
+      // 用 [\s\S]*? 跨行，限制外層 block 體內
+      const re = /while\s*\(\s*\$(\w+)\s*=\s*\$(\w+)\s*->\s*getNext\s*\(\s*\)\s*\)\s*\{([\s\S]*?)\}/g;
+      let m;
+      while ((m = re.exec(code)) !== null) {
+        const dbVar = m[2];
+        const body = m[3];
+        const innerRe = new RegExp(`\\$${dbVar}\\s*->\\s*(execute|execNext)\\s*\\(`);
+        if (innerRe.test(body)) {
+          return {
+            block: true,
+            message: `[DB Cursor Trap] \u274C BLOCKED\uFF1A\u5075\u6E2C\u5230 while (\\$x = \\$${dbVar}->getNext()) \u5916\u5C64\u8FF4\u5708\u5167\u53C8\u5C0D\u540C\u4E00\u500B \\$${dbVar} \u505A\u65B0 query\u3002\n` +
+                     `  \u2192 \u5916\u5C64 cursor \u6703\u88AB\u5167\u5C64 query \u8986\u84CB\uFF0C\u8FF4\u5708\u53EA\u6703\u8DD1\u4E00\u6B21\u6216\u884C\u70BA\u7570\u5E38\u3002\n` +
+                     `  \u2192 \u4FEE\u6B63\u65B9\u5F0F\uFF1A\u5148\u7528\u5916\u5C64 while \u628A\u7D50\u679C\u6536\u9032 array\uFF0C\u8FF4\u5708\u7D50\u675F\u5F8C\u518D foreach \u8A72 array \u505A\u5167\u5C64 query\u3002\n` +
+                     `  \u2192 \u6216\u6539\u7528\u7368\u7ACB DB handle\uFF08\u5982 \\$db2\uFF09\u505A\u5167\u5C64 query\u3002\n`,
+          };
+        }
+      }
+      return null;
+    },
+  },
+  {
+    // Layer 2.95: DB Schema Change Smoke Test Reminder
+    //   偵測 execute_sql/execute_sql_batch 內含 DROP COLUMN/DROP VIEW/ALTER TABLE，
+    //   注入煙霧測試清單提醒（列表頁 / detail / add / 前台 ajax 四類必測）。
+    id: 'db_schema_change_reminder',
+    detect: (entry) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'execute_sql' && tool !== 'execute_sql_batch') return null;
+
+      const collectSql = () => {
+        const parts = [];
+        if (typeof entry.args?.sql === 'string') parts.push(entry.args.sql);
+        if (typeof entry.args?.query === 'string') parts.push(entry.args.query);
+        if (Array.isArray(entry.args?.queries)) {
+          for (const q of entry.args.queries) {
+            if (typeof q === 'string') parts.push(q);
+            else if (q?.sql) parts.push(q.sql);
+          }
+        }
+        return parts.join('\n');
+      };
+      const sql = collectSql();
+      if (!sql) return null;
+
+      const ddlRe = /\b(DROP\s+(COLUMN|VIEW|TABLE|INDEX)|ALTER\s+TABLE|RENAME\s+COLUMN|CREATE\s+OR\s+REPLACE\s+VIEW)\b/i;
+      if (!ddlRe.test(sql)) return null;
+
+      const m = sql.match(ddlRe);
+      return `[DB Schema] ⚠️ 偵測到 DDL 變更（${m[0]}）。本輪結束前請完成煙霧測試四類：\n` +
+             `  1. 後台 list.php（各分類/狀態）\n` +
+             `  2. 後台 update.php?id=N（實體 detail 頁）\n` +
+             `  3. 後台 add.php（如有）\n` +
+             `  4. 前台 ajax endpoint（curl / Playwright）\n` +
+             `  → 踩坑紀錄：只測 list 不測 detail 漏過 SQL 殘留欄位引用，會在使用者點進去時炸 500。\n`;
     },
   },
   {

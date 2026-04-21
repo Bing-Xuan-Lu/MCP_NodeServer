@@ -75,8 +75,25 @@ export function validateSchemaRequired(schema, args) {
  */
 export function validateArgs(schema, args) {
   const merged = applySchemaDefaults(schema, args);
+  coerceSchemaArrays(schema, merged);
   validateSchemaRequired(schema, merged);
   return merged;
+}
+
+/**
+ * 對所有 schema 標記 type:"array" 的欄位做正規化（原地修改）。
+ * 修掉「MCP client 傳 JSON 字串，Node 直接當字串 iterate 導致逐字元 ENOENT」的 bug。
+ */
+export function coerceSchemaArrays(schema, args) {
+  const props = schema?.properties;
+  if (!props || !args) return;
+  for (const [key, def] of Object.entries(props)) {
+    if (def?.type === "array" && args[key] !== undefined && args[key] !== null) {
+      if (!Array.isArray(args[key])) {
+        args[key] = normalizeArrayArg(args[key]);
+      }
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -289,4 +306,30 @@ export function safeJsonParse(jsonStr, fallback = null) {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * 正規化陣列參數：容忍 JSON 字串 / 單值 / undefined。
+ * 用於 *_batch 工具避免「陣列被序列化成字串後被逐字元迭代」的 bug。
+ *
+ * - 已是陣列 → 原樣回傳
+ * - 字串 → 嘗試 JSON.parse；成功且為陣列回傳之，否則包成單元素陣列
+ * - 物件 → 包成單元素陣列
+ * - null/undefined → 空陣列
+ */
+export function normalizeArrayArg(val) {
+  if (Array.isArray(val)) return val;
+  if (val == null) return [];
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+        return [parsed];
+      } catch { /* fall through */ }
+    }
+    return [val];
+  }
+  return [val];
 }
