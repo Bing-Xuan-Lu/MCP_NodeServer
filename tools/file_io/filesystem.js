@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { resolveSecurePath } from "../../config.js";
-import { validateArgs } from "../_shared/utils.js";
+import { validateArgs, normalizeArrayArg } from "../_shared/utils.js";
 
 // 防 Reward Hacking：保護測試相關檔案，防止 Claude 為了讓測試通過而修改測試本身
 const PROTECTED_PATTERNS = [
@@ -153,6 +153,7 @@ export const definitions = [
         path: { type: "string" },
         search: { type: "string" },
         replace: { type: "string" },
+        occurrence: { type: "string", enum: ["first", "all"], description: "替換第一個匹配或全部匹配，預設 first" },
       },
       required: ["path", "search", "replace"],
     },
@@ -171,6 +172,7 @@ export const definitions = [
               path: { type: "string", description: "檔案路徑" },
               search: { type: "string", description: "搜尋字串" },
               replace: { type: "string", description: "取代字串" },
+              occurrence: { type: "string", enum: ["first", "all"], description: "替換第一個或全部匹配，預設 first" },
             },
             required: ["path", "search", "replace"],
           },
@@ -236,6 +238,7 @@ export async function handle(name, args) {
   if (name === "read_files_batch") {
     const maxLines = args.summary_lines || 200;
     const results = [];
+    args.paths = normalizeArrayArg(args.paths);
     for (const p of args.paths) {
       try {
         const fullPath = resolveSecurePath(p);
@@ -255,6 +258,7 @@ export async function handle(name, args) {
 
   if (name === "list_files_batch") {
     const results = [];
+    args.paths = normalizeArrayArg(args.paths);
     for (const p of args.paths) {
       try {
         const fullPath = resolveSecurePath(p || ".");
@@ -360,11 +364,21 @@ export async function handle(name, args) {
     const content = normalize(raw);
     const search = normalize(args.search);
     const replace = normalize(args.replace);
+    const occurrence = args.occurrence === "all" ? "all" : "first";
 
     let result;
+    let matchCount = 0;
+    let replacedCount = 0;
     if (content.includes(search)) {
       // 精確比對成功
-      result = content.replace(search, () => replace);
+      matchCount = content.split(search).length - 1;
+      if (occurrence === "all") {
+        result = content.split(search).join(replace);
+        replacedCount = matchCount;
+      } else {
+        result = content.replace(search, () => replace);
+        replacedCount = 1;
+      }
     } else {
       // Fallback：縮排容錯比對（tab↔space 正規化）
       const indentNorm = s => s.replace(/^[ \t]+/gm, m => m.replace(/\t/g, '    ').replace(/ {2,}/g, ss => ' '.repeat(ss.length)));
@@ -382,7 +396,14 @@ export async function handle(name, args) {
         const startLine = beforeMatch.split('\n').length - 1;
         const searchLineCount = search.split('\n').length;
         const origSlice = origLines.slice(startLine, startLine + searchLineCount).join('\n');
-        result = content.replace(origSlice, () => replace);
+        matchCount = content.split(origSlice).length - 1;
+        if (occurrence === "all") {
+          result = content.split(origSlice).join(replace);
+          replacedCount = matchCount;
+        } else {
+          result = content.replace(origSlice, () => replace);
+          replacedCount = 1;
+        }
       } else {
         const preview = search.slice(0, 80).replace(/\n/g, "\\n");
         throw new Error(`比對失敗：找不到 search 區塊（前 80 字元：${preview}）`);
@@ -399,7 +420,13 @@ export async function handle(name, args) {
     const addedLines = replace.split("\n").length;
     const delta = addedLines - removedLines;
     const deltaStr = delta === 0 ? "±0" : delta > 0 ? `+${delta}` : `${delta}`;
-    return { content: [{ type: "text", text: `✅ ${args.path}（第 ${startLine} 行，-${removedLines} +${addedLines} 行，淨 ${deltaStr}）` }] };
+    const unprocessed = matchCount - replacedCount;
+    const isPartial = unprocessed > 0;
+    const icon = isPartial ? "⚠️" : "✅";
+    const occNote = matchCount > 1
+      ? `（匹配 ${matchCount} 處，已處理 ${replacedCount}${isPartial ? `，剩 ${unprocessed} 處未處理，如需全部替換請傳 occurrence:"all"` : ""}）`
+      : "";
+    return { content: [{ type: "text", text: `${icon} ${args.path}（第 ${startLine} 行，-${removedLines} +${addedLines} 行，淨 ${deltaStr}）${occNote}` }] };
   }
 
   if (name === "apply_diff_batch") {
@@ -409,6 +436,7 @@ export async function handle(name, args) {
     const normalize = (s) => s.replace(/\r\n/g, "\n");
     const results = [];
     let okCount = 0;
+    let partialCount = 0;
 
     for (const diff of args.diffs) {
       try {
@@ -420,10 +448,20 @@ export async function handle(name, args) {
         const content = normalize(raw);
         const search = normalize(diff.search);
         const replace = normalize(diff.replace);
+        const occurrence = diff.occurrence === "all" ? "all" : "first";
 
         let result;
+        let matchCount = 0;
+        let replacedCount = 0;
         if (content.includes(search)) {
-          result = content.replace(search, () => replace);
+          matchCount = content.split(search).length - 1;
+          if (occurrence === "all") {
+            result = content.split(search).join(replace);
+            replacedCount = matchCount;
+          } else {
+            result = content.replace(search, () => replace);
+            replacedCount = 1;
+          }
         } else {
           // Fallback：縮排容錯比對
           const indentNorm = s => s.replace(/^[ \t]+/gm, m => m.replace(/\t/g, '    ').replace(/ {2,}/g, ss => ' '.repeat(ss.length)));
@@ -436,7 +474,14 @@ export async function handle(name, args) {
             const startLine = beforeMatch.split('\n').length - 1;
             const searchLineCount = search.split('\n').length;
             const origSlice = origLines.slice(startLine, startLine + searchLineCount).join('\n');
-            result = content.replace(origSlice, () => replace);
+            matchCount = content.split(origSlice).length - 1;
+            if (occurrence === "all") {
+              result = content.split(origSlice).join(replace);
+              replacedCount = matchCount;
+            } else {
+              result = content.replace(origSlice, () => replace);
+              replacedCount = 1;
+            }
           } else {
             const preview = search.slice(0, 80).replace(/\n/g, "\\n");
             results.push(`❌ ${diff.path}：比對失敗（前 80 字元：${preview}）`);
@@ -451,15 +496,25 @@ export async function handle(name, args) {
         const addedLines = replace.split("\n").length;
         const delta = addedLines - removedLines;
         const deltaStr = delta === 0 ? "±0" : delta > 0 ? `+${delta}` : `${delta}`;
-        results.push(`✅ ${diff.path}（第 ${startLine} 行，-${removedLines} +${addedLines} 行，淨 ${deltaStr}）`);
+        const unprocessed = matchCount - replacedCount;
+        const isPartial = unprocessed > 0;
+        const icon = isPartial ? "⚠️" : "✅";
+        const occNote = matchCount > 1
+          ? `（匹配 ${matchCount}，處理 ${replacedCount}${isPartial ? `，剩 ${unprocessed} 未處理，如需全部替換請傳 occurrence:"all"` : ""}）`
+          : "";
+        results.push(`${icon} ${diff.path}（第 ${startLine} 行，-${removedLines} +${addedLines} 行，淨 ${deltaStr}）${occNote}`);
         okCount++;
+        if (isPartial) partialCount++;
       } catch (err) {
         results.push(`❌ ${diff.path}：${err.message}`);
       }
     }
 
+    const partialNote = partialCount > 0
+      ? `\n⚠️ 其中 ${partialCount} 項有多重匹配未全替換（預設 occurrence:"first"），請檢視 ⚠️ 標記的檔案是否需補跑 occurrence:"all"。`
+      : "";
     return {
-      content: [{ type: "text", text: `批次修改完成：${okCount}/${args.diffs.length} 成功\n\n${results.join("\n")}` }],
+      content: [{ type: "text", text: `批次修改完成：${okCount}/${args.diffs.length} 成功${partialNote}\n\n${results.join("\n")}` }],
     };
   }
 }

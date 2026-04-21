@@ -82,6 +82,7 @@ export const definitions = [
               state: { type: "string", enum: ["visible", "hidden", "attached"], description: "wait_for 的目標狀態(預設 visible)" },
               full_page: { type: "boolean", description: "screenshot 是否全頁截圖(預設 false)" },
               filename: { type: "string", description: "screenshot 存檔路徑(選填,設定後存檔而非回傳 base64)" },
+              hide_selectors: { type: "array", items: { type: "string" }, description: "screenshot 用:截圖前暫時把這些選擇器 display:none(浮動客服、chat widget、fixed banner 等),截完自動還原,避免遮擋 popup/內容" },
               data: {
                 type: "string",
                 enum: ["text", "html", "value", "attribute", "boundingBox", "styles", "all"],
@@ -337,11 +338,12 @@ export const definitions = [
   },
   {
     name: "browser_restore_session",
-    description: "還原先前儲存的瀏覽器 session，回傳 cookies 陣列，可直接傳入 browser_interact / page_audit 的 cookies 參數跳過登入。",
+    description: "還原先前儲存的瀏覽器 session，回傳 cookies 陣列，可直接傳入 browser_interact / page_audit 的 cookies 參數跳過登入。若傳 target_url 會檢查 session domain 是否匹配，避免把 A 站 cookies 套到 B 站沒反應。",
     inputSchema: {
       type: "object",
       properties: {
         session_key: { type: "string", description: "session 識別名稱，預設 'default'" },
+        target_url: { type: "string", description: "選填：要套用 session 的目標 URL，會與 session 的 domain/cookie_domains 比對，不匹配會警告" },
       },
     },
   },
@@ -659,17 +661,39 @@ async function handleBrowserInteract(args) {
 
           case "screenshot": {
             let buf;
-            if (action.selector) {
-              // 元素級截圖
-              const el = await page.$(action.selector);
-              if (el) {
-                buf = await el.screenshot();
+            const hideSels = Array.isArray(action.hide_selectors) ? action.hide_selectors : [];
+            if (hideSels.length > 0) {
+              await page.evaluate((sels) => {
+                window.__hiddenForShot = [];
+                for (const sel of sels) {
+                  document.querySelectorAll(sel).forEach((el) => {
+                    window.__hiddenForShot.push({ el, prev: el.style.visibility });
+                    el.style.visibility = "hidden";
+                  });
+                }
+              }, hideSels).catch(() => {});
+            }
+            try {
+              if (action.selector) {
+                const el = await page.$(action.selector);
+                if (el) {
+                  buf = await el.screenshot();
+                } else {
+                  results.push({ action: label, ok: false, error: `找不到選擇器: ${action.selector}` });
+                  break;
+                }
               } else {
-                results.push({ action: label, ok: false, error: `找不到選擇器: ${action.selector}` });
-                break;
+                buf = await page.screenshot({ fullPage: action.full_page || false });
               }
-            } else {
-              buf = await page.screenshot({ fullPage: action.full_page || false });
+            } finally {
+              if (hideSels.length > 0) {
+                await page.evaluate(() => {
+                  for (const rec of (window.__hiddenForShot || [])) {
+                    rec.el.style.visibility = rec.prev || "";
+                  }
+                  window.__hiddenForShot = [];
+                }).catch(() => {});
+              }
             }
 
             if (action.filename) {
@@ -1593,9 +1617,17 @@ async function handleSaveSession(args) {
       sessionStorage: Object.fromEntries(Object.entries(sessionStorage)),
     }));
 
+    // 從 URL 自動推導 domain label（取 hostname）；cookies 涵蓋的 domains 一併記錄
+    const pageDomain = (() => {
+      try { return new URL(url).hostname; } catch { return ""; }
+    })();
+    const cookieDomains = [...new Set(cookies.map(c => (c.domain || "").replace(/^\./, "")).filter(Boolean))];
+
     const sessionData = {
       saved_at: new Date().toISOString(),
       url,
+      domain: pageDomain,
+      cookie_domains: cookieDomains,
       cookies,
       localStorage: storages.localStorage,
       sessionStorage: storages.sessionStorage,
@@ -1611,10 +1643,11 @@ async function handleSaveSession(args) {
       content: [{
         type: "text",
         text: `✅ Session 已儲存：${sessionPath}\n` +
+          `  domain: ${pageDomain}${cookieDomains.length ? `（cookies: ${cookieDomains.join(", ")}）` : ""}\n` +
           `  cookies: ${cookies.length} 個\n` +
           `  localStorage keys: ${Object.keys(storages.localStorage).length}\n` +
           `  sessionStorage keys: ${Object.keys(storages.sessionStorage).length}\n\n` +
-          `下次對話呼叫 browser_restore_session {session_key: "${session_key}"} 即可還原。`,
+          `下次對話呼叫 browser_restore_session {session_key: "${session_key}", target_url: "${url}"} 即可還原。`,
       }],
     };
   } catch (err) {
@@ -1627,7 +1660,7 @@ async function handleSaveSession(args) {
 // browser_restore_session 實作
 // ============================================
 async function handleRestoreSession(args) {
-  const { session_key = "default" } = args;
+  const { session_key = "default", target_url } = args;
   const sessionPath = path.join(SESSION_DIR, `${session_key}.json`);
 
   try {
@@ -1636,14 +1669,33 @@ async function handleRestoreSession(args) {
 
     const age = Math.round((Date.now() - new Date(sessionData.saved_at).getTime()) / 1000 / 60);
     const cookies = sessionData.cookies || [];
+    const savedDomain = sessionData.domain || "(未記錄)";
+    const cookieDomains = sessionData.cookie_domains || [];
+
+    // Domain 匹配檢查
+    let domainWarn = "";
+    if (target_url) {
+      try {
+        const targetHost = new URL(target_url).hostname;
+        const matches = [savedDomain, ...cookieDomains].some(d => {
+          if (!d) return false;
+          return targetHost === d || targetHost.endsWith("." + d) || d.endsWith("." + targetHost);
+        });
+        if (!matches) {
+          domainWarn = `\n⚠️ Domain 不匹配：target_url 是 ${targetHost}，但 session 儲存自 ${savedDomain}${cookieDomains.length ? `（cookies: ${cookieDomains.join(", ")}）` : ""}。套用後可能無效，建議重新登入並儲存新 session。\n`;
+        }
+      } catch {}
+    }
 
     return {
       content: [{
         type: "text",
         text: `✅ Session 還原成功（${session_key}，${age} 分鐘前儲存）\n` +
+          `  domain: ${savedDomain}${cookieDomains.length ? `（cookies: ${cookieDomains.join(", ")}）` : ""}\n` +
           `  cookies: ${cookies.length} 個\n` +
-          `  localStorage keys: ${Object.keys(sessionData.localStorage || {}).length}\n\n` +
-          `cookies 已回傳，直接傳入 browser_interact / page_audit 的 cookies 參數：\n` +
+          `  localStorage keys: ${Object.keys(sessionData.localStorage || {}).length}\n` +
+          domainWarn +
+          `\ncookies 已回傳，直接傳入 browser_interact / page_audit 的 cookies 參數：\n` +
           JSON.stringify(cookies.map(c => ({ name: c.name, value: c.value, domain: c.domain, path: c.path })), null, 2),
       }],
       // 方便呼叫端直接取用

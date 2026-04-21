@@ -49,12 +49,56 @@ function isTestFile(filePath) {
   return n.includes('test') || n.includes('spec') || n.includes('_test.') || n.includes('.test.');
 }
 
+// 將主機路徑轉為 dev-php84 容器內路徑（D:\Project → /var/www/html）
+function toContainerPath(hostPath) {
+  const normalized = hostPath.replace(/\\/g, '/');
+  const m = normalized.match(/^[dD]:\/Project\/(.+)$/);
+  return m ? `/var/www/html/${m[1]}` : null;
+}
+
+function runPhpLint(filePath) {
+  const containerPath = toContainerPath(filePath);
+  if (!containerPath) return null; // 非 D:\Project 下，跳過
+  try {
+    const result = execSync(
+      `docker exec dev-php84 php -l "${containerPath}" 2>&1`,
+      { timeout: 8000, encoding: 'utf-8' }
+    );
+    return { ok: result.includes('No syntax errors'), output: result.trim() };
+  } catch (e) {
+    // exec 非零離開 → e.stdout 有 php -l 訊息
+    const out = (e.stdout || e.message || '').trim();
+    return { ok: false, output: out };
+  }
+}
+
+// 從不同工具的 tool_input 萃取所有受影響的檔案路徑
+function extractAffectedFiles(toolName, toolInput) {
+  if (!toolInput) return [];
+  const files = [];
+  // Write / Edit
+  if (toolInput.file_path) files.push(toolInput.file_path);
+  // apply_diff (MCP: path)
+  if (toolInput.path && typeof toolInput.path === 'string') files.push(toolInput.path);
+  // apply_diff_batch (MCP: diffs[].path)
+  if (Array.isArray(toolInput.diffs)) {
+    for (const d of toolInput.diffs) if (d?.path) files.push(d.path);
+  }
+  // create_file_batch (MCP: files[].path)
+  if (Array.isArray(toolInput.files)) {
+    for (const f of toolInput.files) if (f?.path) files.push(f.path);
+  }
+  return [...new Set(files)];
+}
+
 let input = '';
 process.stdin.on('data', chunk => { input += chunk; });
 process.stdin.on('end', () => {
   try {
     const data = JSON.parse(input);
-    const filePath = data.tool_input?.file_path || '';
+    const toolName = data.tool_name || '';
+    const affected = extractAffectedFiles(toolName, data.tool_input);
+    const filePath = data.tool_input?.file_path || affected[0] || '';
     if (!filePath) { process.exit(0); }
 
     const tiers = loadRiskTiers();
@@ -85,27 +129,25 @@ process.stdin.on('end', () => {
       );
     }
 
-    // PHP 非測試檔 → 「事故→測試」提醒 + docker php -l 語法驗證
-    if (ext === '.php' && !isTestFile(filePath)) {
-      if (!isHigh) {
+    // PHP 非測試檔 → 「事故→測試」提醒 + docker php -l 語法驗證（批次涵蓋所有受影響 .php）
+    const phpFiles = affected.filter(p => p.toLowerCase().endsWith('.php') && !isTestFile(p));
+    if (ext === '.php' && !isTestFile(filePath) && !isHigh) {
+      messages.push(
+        `[LLM Judge] 💡 ${basename} 已修改 — 若此改動修復了 bug，記得同步新增測試案例（事故→測試習慣）`
+      );
+    }
+    if (phpFiles.length > 0) {
+      const lintResults = phpFiles.map(p => ({ p, r: runPhpLint(p) })).filter(x => x.r !== null);
+      const failed = lintResults.filter(x => !x.r.ok);
+      const passed = lintResults.filter(x => x.r.ok);
+      if (failed.length > 0) {
         messages.push(
-          `[LLM Judge] 💡 ${basename} 已修改 — 若此改動修復了 bug，記得同步新增測試案例（事故→測試習慣）`
+          `[LLM Judge] ❌ PHP 語法錯誤（${failed.length}/${lintResults.length} 檔）：\n` +
+          failed.map(x => `  • ${path.basename(x.p)}: ${x.r.output.split('\n').slice(-2).join(' ').trim()}`).join('\n') +
+          `\n⚠️ 批次 regex / apply_diff_batch 常見坑：逗號 regex 誤切函式參數列、產生孤立 }/endif/$$var。請立即修復再繼續。`
         );
-      }
-      // PHP 語法驗證（需要 docker php container）
-      try {
-        const winPath = filePath.replace(/\//g, '\\');
-        const result = execSync(
-          `docker exec php_runner php -l "${winPath}" 2>&1`,
-          { timeout: 8000, encoding: 'utf-8' }
-        );
-        if (result.includes('No syntax errors')) {
-          messages.push(`[LLM Judge] ✅ PHP 語法驗證通過：${basename}`);
-        } else {
-          messages.push(`[LLM Judge] ❌ PHP 語法錯誤：\n${result.trim()}`);
-        }
-      } catch (phpErr) {
-        // docker 未啟動或其他錯誤 → 靜默跳過
+      } else if (passed.length > 0) {
+        messages.push(`[LLM Judge] ✅ PHP 語法驗證通過（${passed.length} 檔）`);
       }
     }
 

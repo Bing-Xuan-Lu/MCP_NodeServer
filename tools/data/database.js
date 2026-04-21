@@ -2,7 +2,8 @@ import mysql from "mysql2/promise";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
-import { validateArgs } from "../_shared/utils.js";
+import { validateArgs, normalizeArrayArg } from "../_shared/utils.js";
+import { resolveSecurePath } from "../../config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_CONFIG_FILE = path.join(__dirname, "..", ".mcp_db_config.json");
@@ -118,18 +119,18 @@ export const definitions = [
   },
   {
     name: "execute_sql",
-    description: "執行 SQL 指令 (DDL/DML)，支援多條語句以分號分隔、逐條執行。DELETE/UPDATE/DROP/TRUNCATE 需加 confirm: true。可指定 database 切換連線。",
+    description: "執行 SQL 指令 (DDL/DML)，支援多條語句以分號分隔、逐條執行。可用 sql（字串）或 file（讀取本機 SQL 檔）擇一傳入。DELETE/UPDATE/DROP/TRUNCATE 需加 confirm: true。可指定 database 切換連線。",
     inputSchema: {
       type: "object",
       properties: {
-        sql: { type: "string" },
+        sql: { type: "string", description: "SQL 字串（與 file 擇一）" },
+        file: { type: "string", description: "SQL 檔案路徑（相對 basePath 或絕對路徑，與 sql 擇一）" },
         database: { type: "string", description: "指定資料庫名稱（不傳則用預設連線）" },
         confirm: {
           type: "boolean",
           description: "對 DELETE/UPDATE/DROP/TRUNCATE 必須明確傳 true，表示已確認操作不是為了規避測試失敗",
         },
       },
-      required: ["sql"],
     },
   },
   {
@@ -485,7 +486,18 @@ export async function handle(name, args) {
     const check = requireDb(args.database);
     if (!check.ok) return check.error;
 
-    const statements = splitSQL(args.sql);
+    let sqlText = args.sql;
+    if (!sqlText && args.file) {
+      try {
+        const fullPath = path.isAbsolute(args.file) ? args.file : resolveSecurePath(args.file);
+        sqlText = await fs.readFile(fullPath, "utf-8");
+      } catch (err) {
+        return errorResp(`讀取 SQL 檔失敗：${err.message}`, ["確認檔案路徑正確，或授權該路徑（grant_path_access）"]);
+      }
+    }
+    if (!sqlText) return errorResp("需傳入 sql 或 file 參數");
+
+    const statements = splitSQL(sqlText);
 
     // 危險語句預檢
     const dangerList = [];
@@ -569,6 +581,37 @@ export async function handle(name, args) {
   if (name === "execute_sql_batch") {
     const check = requireDb(args.database);
     if (!check.ok) return check.error;
+
+    // 容錯：若傳 sql（execute_sql 風格）而非 queries，自動包成陣列
+    if (!args.queries && typeof args.sql === "string") {
+      args.queries = [{ sql: args.sql, label: args.label }];
+    }
+    args.queries = normalizeArrayArg(args.queries);
+    if (!Array.isArray(args.queries) || args.queries.length === 0) {
+      return {
+        isError: true,
+        content: [{ type: "text", text: "❌ queries 必須是非空陣列。用法：queries: [{sql: '...'}, {sql: '...'}] 或 queries: ['SELECT ...', 'SELECT ...']" }],
+      };
+    }
+    const normalized = [];
+    for (let i = 0; i < args.queries.length; i++) {
+      const raw = args.queries[i];
+      let sql, label;
+      if (typeof raw === "string") {
+        sql = raw;
+      } else if (raw && typeof raw === "object") {
+        sql = raw.sql ?? raw.query;
+        label = raw.label;
+      }
+      if (typeof sql !== "string" || !sql.trim()) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: `❌ queries[${i}] 缺少 sql 欄位或非字串（收到：${JSON.stringify(raw)?.slice(0, 120)}）` }],
+        };
+      }
+      normalized.push({ sql, label });
+    }
+    args.queries = normalized;
 
     // 危險語句預檢（所有批次項目）
     const dangerList = [];

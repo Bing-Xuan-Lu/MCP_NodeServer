@@ -24,7 +24,7 @@ import { HOME } from '../env.js';
 const GLOBAL_RISK_TIERS = path.join(HOME, '.claude', 'risk-tiers.json');
 
 // ── 方案 A+B 設定 ────────────────────────────────────────
-const BATCH_LIMIT = 5;  // 超過 N 個不同檔案 → 阻擋
+const BATCH_LIMIT = 8;  // 超過 N 個不同檔案 → 阻擋（正當重構常需 6-8 檔）
 const STATE_DIR = path.join(os.tmpdir(), 'claude-write-guard');
 const STATE_FILE = path.join(STATE_DIR, 'state.json');
 
@@ -186,11 +186,12 @@ process.stdin.on('end', () => {
     // ── 方案 A：Prompt Guard 連動阻擋 ───────────────────
     const state = loadState();
     if (state.promptGuardActive) {
-      process.stdout.write(
-        `[Write Guard] ❌ BLOCKED：Prompt Guard 已提醒「請先詢問使用者補充資訊」，` +
-        `但尚未詢問就直接嘗試 Edit/Write。\n` +
-        `  → 請先回覆使用者、取得所需資訊後再修改檔案。\n`
-      );
+      const msg =
+        `[Write Guard] ❌ BLOCKED (reason=prompt_guard_active)：Prompt Guard 已提醒「請先詢問使用者補充資訊」，` +
+        `但尚未詢問就直接嘗試 Edit/Write ${filename}。\n` +
+        `  → 請先回覆使用者、取得所需資訊後再修改檔案。\n`;
+      process.stdout.write(msg);
+      process.stderr.write(msg);
       process.exit(2);
     }
 
@@ -201,11 +202,14 @@ process.stdin.on('end', () => {
     }
     if (state.files.length > BATCH_LIMIT && !state.batchAcked) {
       saveState(state);
-      process.stdout.write(
-        `[Write Guard] ❌ BLOCKED：已連續修改 ${state.files.length} 個不同檔案（上限 ${BATCH_LIMIT}）。\n` +
-        `  → 請先暫停，向使用者確認是否要繼續批次修改。\n` +
-        `  → 使用者確認後，呼叫新一輪修改即會重置計數。\n`
-      );
+      const pending = state.files.length - BATCH_LIMIT;
+      const msg =
+        `[Write Guard] ❌ BLOCKED (reason=batch_ack_required)：已連續修改 ${state.files.length} 個不同檔案（上限 ${BATCH_LIMIT}，pending=${pending}）。\n` +
+        `  → 這是 batch ack gate，不是工具錯誤。請先向使用者說明將繼續修改哪些檔案並取得確認。\n` +
+        `  → 使用者回覆後呼叫下一次 Edit/Write 即會重置計數繼續執行。\n` +
+        `  → 累積檔案清單（前 10）：${state.files.slice(0, 10).join(', ')}${state.files.length > 10 ? '…' : ''}\n`;
+      process.stdout.write(msg);
+      process.stderr.write(msg);
       process.exit(2);
     }
     saveState(state);
