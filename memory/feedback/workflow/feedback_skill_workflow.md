@@ -31,7 +31,7 @@ type: feedback
 - 所有公開 Skill MD 必須放在對應部門子資料夾（`_skill_template.md` 例外）
 - 公開 Skill 上限 60 個；超過前用 `/skill_audit` 審查合併
 - 公開 Skill MD 禁止寫入客戶真實資訊，一律使用 `{ProjectFolder}`、`module_a` 等佔位符
-- **`localhost` 不可帶 port**（`localhost:8084` ✗ → `localhost` ✓），port 是專案特定的
+- **`localhost` 不可帶 port**（`localhost` ✗ → `localhost` ✓），port 是專案特定的
 - 公開 Skill 路徑必須參數化（絕對路徑會因機器不同而失效，改用 Glob 搜尋或相對路徑）
 - 從其他專案新增 Skill 後，必須掃一遍確認無洩漏
 - `_internal` Skill 可自由寫入客戶真實資訊

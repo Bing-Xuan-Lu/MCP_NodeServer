@@ -1097,24 +1097,17 @@ const PATTERNS = [
       uniquePaths.add(filePath || 'cwd');
       const count = prevSymbolGreps.length + 1;
 
-      if (count >= 2 && uniquePaths.size >= 2) {
-        // 2+ 次跨路徑：強警告
-        return `[PHP Symbol] ⚠️ 已用 Grep 搜尋 PHP symbol ${count} 次（跨 ${uniquePaths.size} 個路徑）。\n` +
-               `  🛑 請停止 Grep 掃描，改用 MCP AST 工具（精確、省 token）：\n` +
-               `  → find_usages：找「誰呼叫了這個 method」「哪裡用到這個 class」\n` +
-               `  → class_method_lookup：直接取得 method 原始碼\n` +
-               `  → trace_logic：追蹤函式的完整控制流（if/switch 分支、子呼叫展開）\n` +
-               `  → find_hierarchy：找繼承鏈（extends / implements）\n` +
-               `  Grep 只適合搜「變數名」「字串常數」等純文字定位。\n`;
-      }
-
-      return `[PHP Symbol] 💡 偵測到用 Grep 搜尋 PHP class/method「${pattern.substring(0, 40)}」。\n` +
-             `  PHP 關係型查詢請改用 MCP AST 工具（精確、零 token）：\n` +
-             `  → find_usages：找「誰呼叫了這個 method」「哪裡用到這個 class」\n` +
-             `  → class_method_lookup：直接取得 method 原始碼\n` +
-             `  → trace_logic：追蹤函式的控制流（if/switch/迴圈分支展開）\n` +
-             `  → find_hierarchy：找繼承鏈（extends / implements）\n` +
-             `  Grep 只適合搜「變數名」「字串常數」等純文字定位。\n`;
+      // 不論是否 explicit PHP scope，偵測到 PHP context + symbol pattern 一律 block
+      return {
+        block: true,
+        message:
+          `[PHP Symbol] ❌ Grep PHP symbol「${pattern.substring(0, 50)}」→ 改用 MCP AST 工具：\n` +
+          `  → class_method_lookup：直接取得 method 原始碼\n` +
+          `  → find_usages：找誰呼叫了這個 method / 哪裡用到這個 class\n` +
+          `  → trace_logic：追蹤函式控制流（if/switch 分支展開）\n` +
+          `  → find_hierarchy：找繼承鏈（extends / implements）\n` +
+          `  Grep 只搜純文字（變數名、字串常數、SQL 欄位名）。\n`,
+      };
     },
   },
   {
