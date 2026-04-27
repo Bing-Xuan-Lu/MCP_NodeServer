@@ -247,5 +247,5 @@ MEMORY.md 行數：{M}
 - 合併時保留所有獨特規則，不可丟失任何 feedback 內容
 - `reference_*` 類檔案通常不合併（各自獨立用途）
 - `_private/` 目錄下的檔案不審計
-- 清理完成後建議執行 `/memory_sync push` 同步回 Git
+- 清理完成後建議執行 `/claude_sync push memory` 同步回 Git
 - Step 6 角色整合只在使用者同意後才修改 `_config.json`

@@ -64,7 +64,7 @@
 - `/retro` — 對話回顧：收割 Memory、Skill、Tool 改善
 - `/skill_audit` — 審查 Skill 耦合與重疊，建議合併或淘汰
 - `/harness_audit` — 審計 Claude Code 工具設置，產生評分報告
-- `/memory_sync` — 同步 Git memory/ 與本機 Claude 記憶（pull/push/status）
+- `/claude_sync` — 同步本機 Claude 狀態（memory + hooks）與專案 Git（pull/push/status，範圍 all/memory/hooks/global）
 - `/memory_audit` — 審計與整理 Claude 記憶系統（死連結、孤兒、重複、過時偵測）
 - `/settings_cleanup` — 掃描並整理 settings.json 權限規則，合併重複、移除垃圾
 - `/hook_complaints` — 查閱與處理其他專案 session 回報的 hook 誤擋紀錄

@@ -253,6 +253,24 @@ async function main() {
       }
     } catch (e) {}
 
+    // 10. PHP AST 工具速查（只在偵測到 PHP 專案時注入）
+    try {
+      const isPhpProject = (() => {
+        if (fs.existsSync(path.join(cwd, 'composer.json'))) return true;
+        try {
+          const top = fs.readdirSync(cwd, { withFileTypes: true });
+          if (top.some(e => e.isFile() && e.name.endsWith('.php'))) return true;
+          const phpDirs = ['cls', 'model', 'controller', 'service', 'trait', 'app', 'src'];
+          return top.some(e => e.isDirectory() && phpDirs.includes(e.name.toLowerCase()));
+        } catch { return false; }
+      })();
+      if (isPhpProject) {
+        output.push(
+          `\n[PHP] 定位 class/method 用 AST 工具（class_method_lookup / find_usages / symbol_index / find_hierarchy / trace_logic），Grep 只搜變數/字串/註解。違反會 BLOCK。`
+        );
+      }
+    } catch (e) {}
+
     // 11. Codemap 偵測 — 有 codemap 才能高效除錯
     const codemapCandidates = [
       path.join(cwd, 'docs', 'CODEMAPS'),

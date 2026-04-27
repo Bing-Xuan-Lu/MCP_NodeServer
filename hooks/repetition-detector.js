@@ -606,6 +606,56 @@ const BASH_PATTERNS = [
     block: true,
   },
   {
+    // Bash grep 對 .php 檔 → BLOCK（規避 L2.4/L2.4b/L2.4c PHP symbol 偵測的常見手法）
+    // 必須放在 bash:read-file 之前，否則 `grep ... | head` 會先命中 head pattern
+    regex: /\b(grep|rg|findstr)\b.*\.php\b/i,
+    signature: 'bash:grep-php',
+    hint: 'PHP 符號定位請用 AST 工具：class_method_lookup / find_usages / symbol_index / trace_logic。\n  純文字搜尋請用 Grep 工具帶 glob="*.php"。\n  禁 Bash grep .php — 規避 PHP symbol hook 偵測。',
+    warnOnFirst: true,
+    block: true,
+  },
+  {
+    // Bash grep 對 PHP 專案目錄（cls / model / controller / service / repository / trait）→ BLOCK
+    regex: /\b(grep|rg|findstr)\b[^|]*\b(cls|model|controller|service|repository|trait)s?\b/i,
+    signature: 'bash:grep-php-dir',
+    hint: 'PHP 目錄符號查詢請用 AST 工具：class_method_lookup / find_usages / symbol_index。',
+    warnOnFirst: true,
+    block: true,
+  },
+  {
+    // rg --type php → BLOCK（同等於指定 PHP 檔，但無 .php 字面）
+    regex: /\brg\b[^|]*--type\s+php\b/i,
+    signature: 'bash:rg-type-php',
+    hint: '改用 AST 工具或 Grep 工具 type="php"。',
+    warnOnFirst: true,
+    block: true,
+  },
+  {
+    // Node 自寫 file-read-and-grep → BLOCK（規避 PHP symbol 偵測的繞道路徑）
+    regex: /\bnode\b[^|]*-e\b[^|]*\b(readFile(Sync)?|fs\.read)[^|]*\.php\b/i,
+    signature: 'bash:node-grep-php',
+    hint: 'PHP 符號用 AST 工具：class_method_lookup / find_usages / symbol_index。禁用 node 自寫 grep 繞道。',
+    warnOnFirst: true,
+    block: true,
+  },
+  {
+    // awk / sed 對 .php 檔 → BLOCK
+    regex: /\b(awk|sed)\b[^|]*\.php\b/i,
+    signature: 'bash:awk-sed-php',
+    hint: 'PHP 處理請用 AST 工具（讀取）+ apply_diff（修改），不要 awk/sed。',
+    warnOnFirst: true,
+    block: true,
+  },
+  {
+    // PowerShell Select-String 對 .php → BLOCK
+    // 雙向：Select-String 後接 .php，或 .php 透過 pipe 餵給 Select-String
+    regex: /\bSelect-String\b.*\.php\b|\.php\b.*\bSelect-String\b/i,
+    signature: 'bash:powershell-grep-php',
+    hint: 'PHP 符號用 AST 工具，不要透過 PowerShell Select-String 規避。',
+    warnOnFirst: true,
+    block: true,
+  },
+  {
     regex: /\b(cat|head|tail)\s+/i,
     signature: 'bash:read-file',
     hint: 'Read 工具（內建，支援 offset/limit，不需 Bash）',
@@ -758,6 +808,18 @@ function getCategoryKey(entry) {
     return `Edit:${filePath}:${oldStr}`;
   }
 
+  // ssh_exec：依命令前 80 字元分類（不同指令不互相累積，避免診斷型連發誤擋）
+  if (tool === 'ssh_exec') {
+    const cmd = (entry.args?.command || '').trim().slice(0, 80);
+    return cmd ? `ssh_exec:${cmd}` : 'ssh_exec';
+  }
+
+  // run_php_code：依程式碼前 80 字元分類（不同 snippet 不視為重複）
+  if (tool === 'run_php_code') {
+    const code = (entry.args?.code || '').trim().slice(0, 80);
+    return code ? `run_php_code:${code}` : 'run_php_code';
+  }
+
   // execute_sql：依 SQL 語句類型（SELECT/UPDATE/INSERT/DELETE）+ 表名分類
   //   不同操作目的不應累積為「重複」（如查詢→驗證→更新是正常流程）
   if (tool === 'execute_sql') {
@@ -854,7 +916,9 @@ const PATTERNS = [
     //   block: false → exit 0 警告，允許但提醒（cat/grep/find/sed 等）
     id: 'bash_wrong_tool',
     detect: (entry, _history) => {
-      if (shortName(entry.tool) !== 'Bash') return null;
+      // 同時涵蓋 Bash 與 PowerShell — PowerShell 工具是常見的繞道路徑
+      const t = shortName(entry.tool);
+      if (t !== 'Bash' && t !== 'PowerShell') return null;
       const cmd = entry.args?.command || '';
       const pat = matchBashPattern(cmd);
       if (!pat || !pat.warnOnFirst || pat.silent) return null;
@@ -879,6 +943,53 @@ const PATTERNS = [
       return `[L1 Wrong Tool] ⚠️ Bash 執行「${pat.signature}」有專用工具可用。\n` +
              `  → 建議改用：${pat.hint}\n` +
              `  → 專用工具省 token、支援 batch、輸出結構化。\n`;
+    },
+  },
+  {
+    // Layer 1.5: Ghost Tool — 偵測文字內容中提到已刪除 / 已改名的工具名稱（共通黑名單）
+    // 黑名單檔：~/.claude/hooks/ghost-tools.json（hot-reload，每次觸發重讀）
+    id: 'ghost_tool_reference',
+    detect: (entry, _history) => {
+      const SCAN_TOOLS = new Set(['Edit', 'Write', 'apply_diff', 'create_file', 'agent_coord']);
+      const tool = shortName(entry.tool);
+      if (!SCAN_TOOLS.has(tool)) return null;
+
+      // agent_coord 只掃 post 動作的 message
+      if (tool === 'agent_coord' && entry.args?.action !== 'post') return null;
+
+      let ghostMap;
+      try {
+        const ghostPath = path.join(HOME, '.claude', 'hooks', 'ghost-tools.json');
+        ghostMap = JSON.parse(fs.readFileSync(ghostPath, 'utf-8'));
+      } catch {
+        return null;
+      }
+
+      const fields = [
+        entry.args?.new_string,
+        entry.args?.content,
+        entry.args?.message,
+        entry.args?.search,
+        entry.args?.replace,
+        entry.args?.old_string,
+      ].filter(v => typeof v === 'string');
+      if (fields.length === 0) return null;
+      const haystack = fields.join('\n');
+
+      const hits = [];
+      for (const [ghost, hint] of Object.entries(ghostMap)) {
+        if (ghost.startsWith('_')) continue;
+        const re = new RegExp(`\\b${ghost.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`);
+        if (re.test(haystack)) hits.push({ ghost, hint });
+      }
+      if (hits.length === 0) return null;
+
+      const lines = [`[Ghost Tool] \u26A0\uFE0F \u5075\u6E2C\u5230\u5F15\u7528\u4E86\u5DF2\u522A\u9664 / \u5DF2\u6539\u540D\u7684\u5DE5\u5177\uFF1A`];
+      for (const { ghost, hint } of hits) {
+        lines.push(`  - \`${ghost}\` \u2192 ${hint}`);
+      }
+      lines.push(`  \u2192 \u8ACB\u6838\u5C0D\u5F8C\u4FEE\u6B63\uFF0C\u5225\u8B93\u5E7B\u89BA\u5BEB\u9032\u6A94\u6848/\u8A0A\u606F\u3002`);
+      return lines.join('\n') + '\n';
     },
   },
   {
@@ -940,6 +1051,23 @@ const PATTERNS = [
 
       if (!detectSymbolSearch(pattern)) return null;
 
+      // 升級為 BLOCK：當 Grep 明確指定 PHP scope + symbol pattern → 第 1 次就擋
+      // 「明確 PHP scope」三種情況：
+      //   1. glob 含 .php（如 *.php）
+      //   2. type=php
+      //   3. path 是單一 .php 檔（如 cls/model/foo.class.php）— 比 glob 更明確
+      const explicitPhpScope =
+        /\*?\.php\b/i.test(glob) ||
+        entry.args?.type === 'php' ||
+        /\.php$/i.test(filePath);
+      if (explicitPhpScope) {
+        return {
+          block: true,
+          message:
+            `[PHP Symbol] ❌ Grep PHP scope+symbol「${pattern.substring(0, 50)}」→ 改 class_method_lookup / find_usages / symbol_index。Grep 只搜純文字。\n`,
+        };
+      }
+
       // 累計：統計歷史中同樣是 PHP symbol search 的 Grep，跨不同路徑
       const prevSymbolGreps = history.filter(h => {
         if (shortName(h.tool) !== 'Grep') return false;
@@ -972,6 +1100,90 @@ const PATTERNS = [
              `  → trace_logic：追蹤函式的控制流（if/switch/迴圈分支展開）\n` +
              `  → find_hierarchy：找繼承鏈（extends / implements）\n` +
              `  Grep 只適合搜「變數名」「字串常數」等純文字定位。\n`;
+    },
+  },
+  {
+    // Layer 2.4c: Grep PHP Structural Pattern — 高信心 PHP 結構語法 → 直接 BLOCK
+    //   只針對後端 PHP 程式：glob/path 必須含 .php 或常見 PHP 目錄
+    //   只擋明確的「結構語法」：function xxx / class xxx / extends / implements / ->method( / ::method(
+    //   純文字搜尋（變數名、字串、註解）不會誤觸
+    id: 'grep_php_structural_block',
+    detect: (entry, _history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'Grep') return null;
+
+      const pattern = entry.args?.pattern || '';
+      const filePath = entry.args?.path || '';
+      const glob = entry.args?.glob || '';
+      const type = entry.args?.type || '';
+
+      // 排除：glob/type 明確指定非 PHP 副檔名 → 一律放行（前端/其他語言不誤擋）
+      const NON_PHP_EXTS = /\.(js|mjs|cjs|ts|tsx|jsx|vue|svelte|css|scss|sass|less|html?|htm|json|md|mdx|py|go|rs|rb|java|kt|swift|c|cpp|cs|sh|yaml|yml|xml|toml)\b/i;
+      const NON_PHP_TYPES = new Set(['js','mjs','cjs','ts','tsx','jsx','vue','svelte','css','scss','sass','less','html','htm','json','md','py','go','rust','ruby','java','kotlin','swift','c','cpp','csharp','shell','yaml','xml','toml']);
+      if (NON_PHP_EXTS.test(glob) || NON_PHP_TYPES.has(type)) return null;
+
+      // 必須是 PHP 後端程式 context
+      const isPhpContext =
+        /\.php/i.test(glob) || /\.php/i.test(filePath) || type === 'php' ||
+        /admin|model|controller|cls\b|service|repository|src\b|app\b|project|dbox|trait/i.test(filePath);
+      if (!isPhpContext) return null;
+
+      // 高信心 PHP 結構 pattern — 只保留 PHP 獨有語法，避免誤擋 .php 內的 inline JS
+      // 移除 function/class/extends/implements/new — 這些 JS/TS/Vue 也用
+      // 注意：user 傳入的 pattern 是 regex 字串，括號可能是 \( 或 (
+      const STRUCTURAL = [
+        { re: /->\s*\w+\s*\\?\(/,             hint: '->method(' },
+        { re: /::\s*\w+\s*\\?\(/,             hint: '::method(' },
+        { re: /\babstract\s+(public|protected|private|function)/i, hint: 'abstract method' },
+        { re: /\b(public|protected|private)\s+(static\s+)?function\s+\w+/i, hint: 'visibility + function' },
+      ];
+      const hit = STRUCTURAL.find(s => s.re.test(pattern));
+      if (!hit) return null;
+
+      return {
+        block: true,
+        message:
+          `[PHP Symbol] ❌ Grep PHP 結構語法「${hit.hint}」→ 改 class_method_lookup / find_usages / symbol_index。要搜純文字請去掉結構符號（如 \`->foo(\` → \`foo\`）。\n`,
+      };
+    },
+  },
+  {
+    // Layer 2.4b: Grep+Read on Same PHP File — 同一 PHP 檔反覆 Grep+Read 拼湊 method
+    //   觸發：對同一 .php / Trait / Class 檔在最近 8 步內累計 Grep+Read ≥ 3 次
+    //   建議改用 class_method_lookup 一次拿完整 method
+    id: 'grep_read_same_php_file',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'Grep' && tool !== 'Read' && tool !== 'read_file') return null;
+
+      // 取當前操作的目標 PHP 檔
+      const currentFile = entry.args?.path || entry.args?.file_path || '';
+      if (!/\.php$/i.test(currentFile)) return null;
+
+      // 最近 8 步內，對同一檔的 Grep + Read 操作
+      const recent = history.slice(-8);
+      const sameFileOps = recent.filter(h => {
+        const t = shortName(h.tool);
+        if (t !== 'Grep' && t !== 'Read' && t !== 'read_file') return false;
+        const f = h.args?.path || h.args?.file_path || '';
+        return f === currentFile;
+      });
+      const count = sameFileOps.length + 1;
+      if (count < 3) return null;
+
+      // 必須包含至少 1 次 Grep 和 1 次 Read（純 Read 多段不算這個模式）
+      const allOps = [...sameFileOps, entry];
+      const hasGrep = allOps.some(h => shortName(h.tool) === 'Grep');
+      const hasRead = allOps.some(h => ['Read', 'read_file'].includes(shortName(h.tool)));
+      if (!hasGrep || !hasRead) return null;
+
+      const fileName = currentFile.split(/[\\/]/).pop();
+      return `[PHP Symbol] ⚠️ 對同一 PHP 檔 ${fileName} 已 Grep+Read ${count} 次拼湊邏輯。\n` +
+             `  🛑 停止這個模式 — 改用 MCP AST 工具一次拿完整資訊：\n` +
+             `  → class_method_lookup(class_name, method_name)：直接取得整個 method 原始碼\n` +
+             `  → trace_logic：追蹤完整控制流（含子呼叫展開）\n` +
+             `  → find_usages：找呼叫關係\n` +
+             `  CLAUDE.md 規定：定位 PHP 符號一律走 AST，禁 Grep+Read 暴力拼湊。\n`;
     },
   },
   {
@@ -1112,6 +1324,12 @@ const PATTERNS = [
       // 不同區塊分散修改：閾值加倍（8→15 警告，12→20 block）
       const warnAt = isMultiBlock ? 8 : 5;
       const blockAt = isMultiBlock ? 15 : 8;
+
+      // 早期 hint：multi-block 第 3 次時輕量提示改用 apply_diff_batch（不警告、不阻擋）
+      if (isMultiBlock && count === 3 && tool === 'Edit') {
+        const fname = filePath.split('/').pop();
+        return `[Same File Edit] \u{1F4A1} ${fname} \u5DF2\u7528 Edit \u6539\u4E86 3 \u500B\u4E0D\u540C\u533A\u584A\uFF0C\u5EFA\u8B70\u5269\u9918\u4FEE\u6539\u6539\u7528 apply_diff_batch \u4E00\u6B21\u9001\u5B8C\uFF08\u7701 token \u4E26\u907F\u514D\u5F8C\u7E8C\u89F8\u767C L2.8 \u963B\u64CB\uFF09\u3002\n`;
+      }
 
       if (count >= blockAt) {
         const fname = filePath.split('/').pop();
