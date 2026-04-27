@@ -253,6 +253,17 @@ async function main() {
       }
     } catch (e) {}
 
+    // 9b. MCP 工具優先順序速查（每次 session 都注入）
+    output.push(
+      `\n[MCP Tools] 工具優先順序（違反 L1/L2.4c 會 BLOCK）：\n` +
+      `  DB 操作    → execute_sql / get_db_schema（禁 Bash docker exec mysql）\n` +
+      `  PHP 執行   → run_php_script / run_php_code（禁 Bash docker exec php）\n` +
+      `  PHP 符號   → class_method_lookup / symbol_index / find_usages（禁 Grep PHP 結構語法）\n` +
+      `  檔案讀寫   → Read / Edit / Glob / Grep（禁 cat/head/tail/find via Bash）\n` +
+      `  HTTP 請求  → send_http_request（禁 curl via Bash）\n` +
+      `  SFTP/SSH   → sftp_upload / ssh_exec MCP 工具`
+    );
+
     // 10. PHP AST 工具速查（只在偵測到 PHP 專案時注入）
     try {
       const isPhpProject = (() => {

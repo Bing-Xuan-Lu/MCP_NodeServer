@@ -58,7 +58,10 @@ MCP_NodeServer/
 │   ├── repetition-detector.js ← PreToolUse：11層偵測（錯誤工具、散搜、低效、重複、同檔連修、自動修復），支援成本追蹤、Slack通知、debug模式
 │   ├── refactor-advisor.js ← PreToolUse(Edit|Write|apply_diff)：PHP 程式碼品質偵測（13項 SOLID + Clean Code 規則）
 │   ├── pre-compact.js   ← PreCompact：context 壓縮前存快照 + 踩坑偵測
-│   └── write-guard.js   ← PreToolUse(Write|Edit)：敏感檔案寫入警告 + JS/CSS 修改時提醒 bump version
+│   ├── write-guard.js   ← PreToolUse(Write|Edit)：敏感檔案寫入警告 + JS/CSS 修改時提醒 bump version
+│   ├── llm-judge.js     ← PostToolUse(Write|Edit)：高/中風險檔案自我審查清單 + PHP docker lint + JS/CSS bump version 提醒
+│   ├── user-prompt-guard.js ← UserPromptSubmit：模糊指令偵測（全域強制）+ 場景缺上下文提醒（前端/後端/QC/Playwright）
+│   └── skill-router.js  ← UserPromptSubmit：Skill 關鍵字偵測，依分數自動建議相關 Skill
 ├── skills/index.js      ← MCP Prompts 路由（注意：小寫 skills，不是 Skills）
 └── Skills/              ← Skill MD 檔
     ├── *_agent.md       ← MCP Prompts 內容
