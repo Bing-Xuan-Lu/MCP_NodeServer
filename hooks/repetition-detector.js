@@ -1060,7 +1060,22 @@ const PATTERNS = [
         /\*?\.php\b/i.test(glob) ||
         entry.args?.type === 'php' ||
         /\.php$/i.test(filePath);
-      if (explicitPhpScope) {
+
+      // SQL 欄位名搜尋白名單：純 snake_case 詞 + 無 PHP 結構符號 + 無 CamelCase
+      // 合法用途：找「哪些 PHP 檔的 SQL 字串有用到此欄位」— 屬純文字搜尋
+      const isPureSnakeCaseField = (p) => {
+        const alts = p.split('|').map(s => s.trim()).filter(Boolean);
+        if (alts.length === 0) return false;
+        const phpStructural = /(::|->|\bfunction\b|\bclass\b|\bextends\b|\bimplements\b|\bnew\s)/i;
+        if (phpStructural.test(p)) return false;
+        return alts.every(a =>
+          /^[a-z][a-z0-9_]*$/.test(a) &&
+          !/^[A-Z]/.test(a) &&
+          !/[a-z][A-Z]/.test(a)
+        );
+      };
+
+      if (explicitPhpScope && !isPureSnakeCaseField(pattern)) {
         return {
           block: true,
           message:
