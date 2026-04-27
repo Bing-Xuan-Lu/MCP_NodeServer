@@ -48,7 +48,7 @@ MCP_NodeServer/
 │   │   ├── bookmarks.js ← Chrome 書籤管理（12 個工具）
 │   │   ├── agent_coord.js ← agent_coord（多 Agent 協調：post/poll/status/delete/archive/suggest_dispatch）
 │   │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
-│   │   ├── php_class.js ← class_method_lookup（PHP 原始碼直接定位）
+│   │   ├── php_class.js ← class_method_lookup（PHP 原始碼直接定位，自動解析 use Trait）
 │   │   └── php_symbol.js ← symbol_index, find_usages, find_hierarchy, find_dependencies, trace_logic（PHP AST 符號索引 + 邏輯追蹤）
 │   └── utils/           ← 通用工具與比對
 │       ├── image_diff.js ← image_diff（設計稿 vs 截圖像素級比對）

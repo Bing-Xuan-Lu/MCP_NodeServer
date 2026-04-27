@@ -130,7 +130,7 @@ MCP_NodeServer/
 │   ├── agent_coord.js   ← agent_coord（多 Agent 協調：post/poll/status/delete/archive，JSON 檔案持久化）
 │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
 │   ├── css_tools.js     ← css_specificity_check, css_computed_winner（CSS specificity 分析與活頁面規則勝出查詢）
-│   ├── php_class.js     ← class_method_lookup（PHP class/method 原始碼直接定位）
+│   ├── php_class.js     ← class_method_lookup（PHP class/method 原始碼直接定位，自動解析 use Trait）
 │   ├── php_symbol.js    ← symbol_index, find_usages, find_hierarchy, find_dependencies, trace_logic（PHP AST 符號索引、交叉引用、邏輯追蹤）
 │   └── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
 ├── skills/index.js      ← MCP Prompts 路由

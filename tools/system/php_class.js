@@ -70,34 +70,56 @@ async function handleClassMethodLookup(args) {
   // 解析 class 資訊
   const classInfo = parseClassInfo(lines);
 
+  // 解析 trait 方法（遞迴讀 use Trait; 引入的 trait 檔）
+  const traitMethods = await collectTraitMethods(projectPath, classInfo.traits);
+
   if (method_name) {
-    // 指定 method：回傳該方法完整原始碼
-    const method = findMethod(lines, method_name);
+    // 指定 method：先找本檔，找不到再找 trait
+    let method = findMethod(lines, method_name);
+    let methodSourceFile = filePath;
+    let methodSourceLines = lines;
+    let methodSourceTrait = null;
+
     if (!method) {
-      // 列出所有方法讓使用者知道有哪些
-      const overview = classInfo.methods
-        .map(m => `  L${String(m.line).padStart(4)} | ${m.visibility} ${m.name}(${m.params})`)
-        .join("\n");
-      return {
-        content: [{
-          type: "text",
-          text: `❌ 在 ${relPath} 中找不到方法 "${method_name}"。\n\n可用方法：\n${overview}`,
-        }],
-      };
+      // 在 trait 中找
+      for (const tm of traitMethods) {
+        const found = findMethod(tm.lines, method_name);
+        if (found) {
+          method = found;
+          methodSourceFile = tm.filePath;
+          methodSourceLines = tm.lines;
+          methodSourceTrait = tm.traitName;
+          break;
+        }
+      }
     }
 
+    if (!method) {
+      const ownOverview = classInfo.methods
+        .map(m => `  L${String(m.line).padStart(4)} | ${m.visibility} ${m.name}(${m.params})  [${classInfo.name}]`)
+        .join("\n");
+      const traitOverview = traitMethods.flatMap(tm =>
+        tm.methods.map(m => `  L${String(m.line).padStart(4)} | ${m.visibility} ${m.name}(${m.params})  [${tm.traitName}]`)
+      ).join("\n");
+      const sections = [`❌ 在 ${classInfo.name}（含 trait）中找不到方法 "${method_name}"。`];
+      if (ownOverview) sections.push(`\n本身方法：\n${ownOverview}`);
+      if (traitOverview) sections.push(`\nTrait 方法：\n${traitOverview}`);
+      return { content: [{ type: "text", text: sections.join("\n") }] };
+    }
+
+    const sourceRel = path.relative(CONFIG.basePath, methodSourceFile).replace(/\\/g, "/");
     const result = {
-      file: relPath,
+      file: sourceRel,
       class: classInfo.name,
       extends: classInfo.extends,
       method: method_name,
       line_start: method.startLine,
       line_end: method.endLine,
+      ...(methodSourceTrait ? { source_trait: methodSourceTrait } : {}),
     };
 
     if (include_body) {
-      // 帶行號的原始碼
-      const codeLines = lines.slice(method.startLine - 1, method.endLine);
+      const codeLines = methodSourceLines.slice(method.startLine - 1, method.endLine);
       result.code = codeLines
         .map((l, i) => `${String(method.startLine + i).padStart(4)} | ${l}`)
         .join("\n");
@@ -107,43 +129,85 @@ async function handleClassMethodLookup(args) {
 
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   } else {
-    // 未指定 method：回傳 class 概覽
-    const result = {
-      file: relPath,
-      class: classInfo.name,
-      extends: classInfo.extends,
-      implements: classInfo.implements,
-      traits: classInfo.traits,
-      total_lines: lines.length,
-      methods_overview: classInfo.methods.map(m => ({
-        line: m.line,
-        visibility: m.visibility,
-        method: m.name,
-        params: m.params,
-        ...(m.isStatic ? { static: true } : {}),
-      })),
-    };
-
-    // 表格格式
-    const table = classInfo.methods
+    // 未指定 method：回傳 class 概覽（含 trait 方法）
+    const ownMethodsTable = classInfo.methods
       .map(m => {
         const vis = m.visibility === "public" ? "pub" : m.visibility === "protected" ? "pro" : "pri";
         const stat = m.isStatic ? " static" : "";
-        return `  L${String(m.line).padStart(4)} | ${vis}${stat} ${m.name}(${m.params})`;
+        return `  L${String(m.line).padStart(4)} | ${vis}${stat} ${m.name}(${m.params})  [${classInfo.name}]`;
       })
       .join("\n");
+
+    const traitMethodsTable = traitMethods.flatMap(tm =>
+      tm.methods.map(m => {
+        const vis = m.visibility === "public" ? "pub" : m.visibility === "protected" ? "pro" : "pri";
+        const stat = m.isStatic ? " static" : "";
+        return `  L${String(m.line).padStart(4)} | ${vis}${stat} ${m.name}(${m.params})  [${tm.traitName}]`;
+      })
+    ).join("\n");
+
+    const totalMethods = classInfo.methods.length + traitMethods.reduce((s, tm) => s + tm.methods.length, 0);
+    const traitFilesInfo = traitMethods.map(tm =>
+      `  - ${tm.traitName} → ${path.relative(CONFIG.basePath, tm.filePath).replace(/\\/g, "/")} (${tm.methods.length} methods)`
+    ).join("\n");
 
     const header = [
       `File: ${relPath} (${lines.length} lines)`,
       `Class: ${classInfo.name}${classInfo.extends ? ` extends ${classInfo.extends}` : ""}`,
       ...(classInfo.implements ? [`Implements: ${classInfo.implements}`] : []),
-      ...(classInfo.traits.length > 0 ? [`Traits: ${classInfo.traits.join(", ")}`] : []),
-      `\nMethods (${classInfo.methods.length}):`,
-      table,
+      ...(classInfo.traits.length > 0 ? [`Traits (use): ${classInfo.traits.join(", ")}`] : []),
+      ...(traitFilesInfo ? [`\nTrait 來源檔：\n${traitFilesInfo}`] : []),
+      `\nMethods (${totalMethods} total: ${classInfo.methods.length} 本身 + ${totalMethods - classInfo.methods.length} traits):`,
+      ownMethodsTable,
+      ...(traitMethodsTable ? [traitMethodsTable] : []),
     ].join("\n");
 
     return { content: [{ type: "text", text: header }] };
   }
+}
+
+// ============================================
+// Trait 解析
+// ============================================
+async function findTraitFile(projectPath, traitName) {
+  // 優先位置
+  const primaryPaths = [
+    path.join(projectPath, "cls", "model", "traits", `${traitName}.php`),
+    path.join(projectPath, "cls", "traits", `${traitName}.php`),
+    path.join(projectPath, "traits", `${traitName}.php`),
+    path.join(projectPath, "cls", "model", `${traitName}.php`),
+  ];
+  for (const p of primaryPaths) {
+    try { await fs.access(p); return p; } catch {}
+  }
+  // 廣域搜尋
+  const matches = await glob(`**/${traitName}.php`, {
+    cwd: projectPath,
+    nodir: true,
+    ignore: ["vendor/**", "node_modules/**", ".git/**", "uploads/**"],
+    maxDepth: 6,
+  });
+  return matches.length > 0 ? path.join(projectPath, matches[0]) : null;
+}
+
+async function collectTraitMethods(projectPath, traitNames) {
+  const result = [];
+  for (const traitName of traitNames) {
+    const tFile = await findTraitFile(projectPath, traitName);
+    if (!tFile) continue;
+    try {
+      const content = await fs.readFile(tFile, "utf-8");
+      const tLines = content.split(/\r?\n/);
+      const tInfo = parseClassInfo(tLines); // 對 trait 同樣有效（trait 與 class 結構相似）
+      result.push({
+        traitName,
+        filePath: tFile,
+        lines: tLines,
+        methods: tInfo.methods,
+      });
+    } catch {}
+  }
+  return result;
 }
 
 // ============================================
