@@ -207,6 +207,9 @@ const SCENE_SKIP_PATTERNS = [
   /分析|差距|架構|規劃.*系統|系統.*規劃/i,
 ];
 
+// 後端關鍵字：出現這些詞時，frontend 場景不適用（純後端問題誤判修正）
+const BACKEND_KEYWORDS = /列印|發票|運費|訂單金額|金額計算|計算錯|對帳|報表|匯出|匯入|寄信|寄送|發送|email|mail|寄出|簡訊|sms|通知|cron|排程|sql|資料庫|db.*?(查|寫|存|刪|更新)|後台.*?(邏輯|流程|計算|資料)|api.*?(回傳|參數|錯誤)|session|cookie|權限|登入.*?(失敗|錯誤)|缺少規格|規格.*?缺|消失|沒存到|未寫入|寫入失敗|資料.*?(不見|消失|遺失|錯)/i;
+
 const SCENARIOS = {
   frontend: {
     name: '前端樣式',
@@ -216,6 +219,7 @@ const SCENARIOS = {
       /responsive|rwd|手機版|斷點|breakpoint|畫面.*?(問題|壞掉|跑版)/i,
       /class.*?改|改.*?class|ui.*?問題|layout.*?問題|前台.*?(修|改|壞)/i,
     ],
+    excludeIf: BACKEND_KEYWORDS,
     needed: [
       { label: '頁面網址（localhost 帶 port）',     check: /http|localhost|127\.0\.0\.1|\.php.*\?|\/[a-z]+\.php/i },
       { label: '目標元素（class / id / 選擇器）',   check: /class=|#[a-z]|\.[a-z][\w-]+|選擇器|element|selector/i },
@@ -264,7 +268,9 @@ const SCENARIOS = {
 
 function detectScenario(prompt) {
   for (const [key, scenario] of Object.entries(SCENARIOS)) {
-    if (matchesAny(prompt, scenario.patterns)) return scenario;
+    if (!matchesAny(prompt, scenario.patterns)) continue;
+    if (scenario.excludeIf && scenario.excludeIf.test(prompt)) continue;
+    return scenario;
   }
   return null;
 }

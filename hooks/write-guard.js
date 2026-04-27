@@ -24,7 +24,7 @@ import { HOME } from '../env.js';
 const GLOBAL_RISK_TIERS = path.join(HOME, '.claude', 'risk-tiers.json');
 
 // ── 方案 A+B 設定 ────────────────────────────────────────
-const BATCH_LIMIT = 8;  // 超過 N 個不同檔案 → 阻擋（正當重構常需 6-8 檔）
+const BATCH_LIMIT = 15; // 超過 N 個不同檔案 → 阻擋（一輪對話實務上會動 8-12 檔，5 太低）
 const STATE_DIR = path.join(os.tmpdir(), 'claude-write-guard');
 const STATE_FILE = path.join(STATE_DIR, 'state.json');
 
@@ -186,12 +186,11 @@ process.stdin.on('end', () => {
     // ── 方案 A：Prompt Guard 連動阻擋 ───────────────────
     const state = loadState();
     if (state.promptGuardActive) {
-      const msg =
-        `[Write Guard] ❌ BLOCKED (reason=prompt_guard_active)：Prompt Guard 已提醒「請先詢問使用者補充資訊」，` +
-        `但尚未詢問就直接嘗試 Edit/Write ${filename}。\n` +
-        `  → 請先回覆使用者、取得所需資訊後再修改檔案。\n`;
-      process.stdout.write(msg);
-      process.stderr.write(msg);
+      process.stdout.write(
+        `[Write Guard] ❌ Edit/Write 暫時被擋（Prompt Guard 偵測到任務描述不完整）。\n` +
+        `  → 若是後端任務被誤判：直接改用 apply_diff（不受此限）即可繼續。\n` +
+        `  → 若任務確實需要更多資訊：先用純文字回覆使用者確認後再修改。\n`
+      );
       process.exit(2);
     }
 
@@ -201,15 +200,14 @@ process.stdin.on('end', () => {
       state.files.push(normalizedFile);
     }
     if (state.files.length > BATCH_LIMIT && !state.batchAcked) {
+      // 擋第一次 → 標記 batchAcked，下次放行（警告已送達使用者）
+      state.batchAcked = true;
       saveState(state);
-      const pending = state.files.length - BATCH_LIMIT;
-      const msg =
-        `[Write Guard] ❌ BLOCKED (reason=batch_ack_required)：已連續修改 ${state.files.length} 個不同檔案（上限 ${BATCH_LIMIT}，pending=${pending}）。\n` +
-        `  → 這是 batch ack gate，不是工具錯誤。請先向使用者說明將繼續修改哪些檔案並取得確認。\n` +
-        `  → 使用者回覆後呼叫下一次 Edit/Write 即會重置計數繼續執行。\n` +
-        `  → 累積檔案清單（前 10）：${state.files.slice(0, 10).join(', ')}${state.files.length > 10 ? '…' : ''}\n`;
-      process.stdout.write(msg);
-      process.stderr.write(msg);
+      process.stdout.write(
+        `[Write Guard] ❌ BLOCKED：已連續修改 ${state.files.length} 個不同檔案（上限 ${BATCH_LIMIT}）。\n` +
+        `  → 請先暫停，向使用者確認是否要繼續批次修改。\n` +
+        `  → 已自動 ack；若使用者確認繼續，下一次修改會放行。否則請停下。\n`
+      );
       process.exit(2);
     }
     saveState(state);

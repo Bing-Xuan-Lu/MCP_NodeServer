@@ -9,7 +9,7 @@ Skill 的 YAML frontmatter（name + description）決定是否出現在 system-r
 ## 規則
 
 ### 不加 frontmatter（冷）
-- 使用者一定會手動打 `/name` 的 skill（如 `/retro`、`/git_commit`、`/memory_sync`）
+- 使用者一定會手動打 `/name` 的 skill（如 `/retro`、`/git_commit`、`/claude_sync`）
 - 純參考檔 / template（如 `field_types`、`upgrade_rules`、`report_template`）
 - Agent prompt（如 `logic_agent`、`uiux_agent`）
 - `_internal/` 全部冷儲存，不部署到 `~/.claude/commands/`
