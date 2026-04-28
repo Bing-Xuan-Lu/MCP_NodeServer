@@ -16,6 +16,7 @@ const TOOLS = {
   'get_db_schema_batch':    { dept:'檔案系統 & 資料庫', title:'批次查看多張資料表結構', desc:'一次查看多張表的 Schema，減少 tool call。', usage:'get_db_schema_batch {table_names:["..."]}', tools:[] },
   'execute_sql_batch':      { dept:'檔案系統 & 資料庫', title:'批次執行多組獨立 SQL', desc:'各自獨立連線執行，互不影響，不會因某條失敗而中斷。', usage:'execute_sql_batch {queries:[{sql:"..."}]}', tools:[] },
   'schema_diff':            { dept:'檔案系統 & 資料庫', title:'比對兩個資料庫的欄位差異', desc:'給兩個連線名稱 + table_pattern，回傳欄位級 diff（TYPE / IS_NULLABLE / DEFAULT / KEY / EXTRA / COMMENT）。免手刻 information_schema query。', usage:'schema_diff {source_db:"db_a", target_db:"db_b", table_pattern:"tbl_%"}', tools:[] },
+  'mysql_log_tail':         { dept:'檔案系統 & 資料庫', title:'MySQL 錯誤殘留 / general_log 監控', desc:'recent_errors 從 performance_schema 撈最近失敗 SQL（含 ER_* 錯誤碼），免設定即可用；enable/disable_general_log 切 general_log（TABLE 模式）；tail_general_log 讀 mysql.general_log。SQL 雙狀態 bug 後驗證殘留錯誤好用。', usage:'mysql_log_tail {action:"recent_errors", since_minutes:30}', tools:[] },
 
   'run_php_script':         { dept:'PHP & SFTP 部署', title:'執行 PHP 腳本', desc:'在伺服器上執行 PHP 腳本 (CLI 模式)，並回傳輸出結果。支援 container 參數在 Docker 容器內執行。', usage:'run_php_script {path:"...", container:"dev-php84"}', tools:[] },
   'run_php_code':           { dept:'PHP & SFTP 部署', title:'直接執行 PHP 程式碼', desc:'直接傳入 PHP code string 執行（透過 stdin），免建暫存檔。適合快速 debug / 探測 PHP 行為。自動補 <?php 標籤，支援 container 參數在 Docker 內執行。', usage:'run_php_code {code:"echo PHP_VERSION;", container:"dev-php84"}', tools:[] },

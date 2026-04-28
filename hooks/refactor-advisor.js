@@ -15,6 +15,7 @@
  *  10. Clean Code：單字母變數名
  *  11. Clean Code：函式參數過多
  *  12. Clean Code：魔術數字
+ *  13. 雙狀態 SESSION 分支提醒（登入/未登入兩條 SQL 路徑同步維護）
  *
  * 偵測到問題時注入提醒，要求 Claude 先評估重構再動手修改。
  * 非阻擋式（exit 0），僅輸出建議。
@@ -372,6 +373,34 @@ function analyzePhpFile(filePath) {
       type: 'magic_numbers',
       message: 'Clean Code: \u9B54\u8853\u6578\u5B57 ' + details + ' \u2014 \u61C9\u62BD\u51FA\u70BA\u5E38\u6578\uFF08const STATUS_ACTIVE = 1\uFF09',
     });
+  }
+
+  // ── 13. 雙狀態 SESSION 分支：含登入/未登入分支的 method，提醒兩路徑都要測 ──
+  // 路徑與 session pattern 可由環境變數覆寫（不寫死 cls/model）：
+  //   CLAUDE_DUAL_STATE_PATH_REGEX   — 限定觸發路徑（預設：所有 .php）
+  //   CLAUDE_DUAL_STATE_SESSION_RE   — session 偵測 regex（預設：isset(\$_SESSION...）
+  const pathRe = process.env.CLAUDE_DUAL_STATE_PATH_REGEX;
+  const passPath = !pathRe || new RegExp(pathRe, 'i').test(filePath.replace(/\\/g, '/'));
+  if (passPath) {
+    const sessionReSrc = process.env.CLAUDE_DUAL_STATE_SESSION_RE
+      || 'if\\s*\\(\\s*!?\\s*isset\\s*\\(\\s*\\$_SESSION';
+    const sessionRe = new RegExp(sessionReSrc, 'gi');
+    const dualHits = [];
+    for (const fn of functions) {
+      const body = lines.slice(fn.startLine - 1, fn.endLine).join('\n');
+      sessionRe.lastIndex = 0;
+      if (sessionRe.test(body) && /\belse\b/.test(body)) {
+        dualHits.push(fn.name + '() L' + fn.startLine);
+      }
+    }
+    if (dualHits.length > 0) {
+      smells.push({
+        severity: 'medium',
+        type: 'dual_state_session_branch',
+        message: '雙狀態 SESSION 分支：' + dualHits.slice(0, 5).join(', ')
+          + ' — 修改 SQL 時請同步登入 / 未登入兩條路徑，並測試兩種狀態',
+      });
+    }
   }
 
   return { filePath, totalLines, functions: functions.length, classes: classes.length, smells };
