@@ -177,6 +177,24 @@ export const definitions = [
     },
   },
   {
+    name: "mysql_log_tail",
+    description: "MySQL 錯誤殘留檢查 / general_log 監控。action=recent_errors 預設：從 performance_schema.events_statements_history_long 撈最近失敗 SQL（含 ER_* 錯誤碼），免設定即可用。enable_general_log/disable_general_log 切換 general_log（output 設為 TABLE）。tail_general_log 讀 mysql.general_log 最近 N 筆。需要對應權限。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["recent_errors", "enable_general_log", "disable_general_log", "tail_general_log"],
+          description: "操作類型",
+          default: "recent_errors",
+        },
+        database: { type: "string", description: "指定資料庫連線（不傳則用預設）" },
+        limit: { type: "number", description: "回傳筆數上限", default: 50 },
+        since_minutes: { type: "number", description: "recent_errors / tail_general_log 回看分鐘數", default: 30 },
+      },
+    },
+  },
+  {
     name: "schema_diff",
     description: "比對兩個資料庫的資料表欄位差異（TYPE / IS_NULLABLE / DEFAULT / KEY / EXTRA / COMMENT）。輸入 source_db / target_db 連線名稱與 table_pattern（支援 LIKE），回傳欄位級對照表，免手刻 information_schema query。",
     inputSchema: {
@@ -282,6 +300,21 @@ function sqlErrorHints(err) {
     : isNoCol
     ? ["呼叫 get_db_schema 確認欄位名稱是否正確"]
     : ["確認 SQL 語句後重試"];
+}
+
+// ============================================
+// 內部：彙總 SQL 錯誤碼（用於批次執行後的錯誤摘要）
+// ============================================
+function summarizeSqlErrors(errorCodes) {
+  if (!errorCodes.length) return "";
+  const counts = new Map();
+  for (const code of errorCodes) {
+    counts.set(code, (counts.get(code) || 0) + 1);
+  }
+  const parts = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([c, n]) => `${c} x${n}`);
+  return `🚨 SQL 錯誤摘要：${errorCodes.length} 條失敗 [${parts.join(", ")}]\n`;
 }
 
 // ============================================
@@ -522,6 +555,7 @@ export async function handle(name, args) {
 
     const conn = await mysql.createConnection(check.config);
     const results = [];
+    const errorCodes = [];
     const dbLabel = check.config.database;
     try {
       for (let i = 0; i < statements.length; i++) {
@@ -541,12 +575,14 @@ export async function handle(name, args) {
         } catch (err) {
           const code = err.code ? ` [${err.code}]` : "";
           const sqlState = err.sqlState ? ` (SQLSTATE ${err.sqlState})` : "";
+          if (err.code) errorCodes.push(err.code);
           results.push(`[${i + 1}] ❌ 失敗${code}${sqlState}：${err.message}`);
           break;
         }
       }
       const header = dbPool.size > 1 ? `🗄️ [${dbLabel}]\n` : "";
-      return { content: [{ type: "text", text: header + results.join("\n\n") }] };
+      const summary = summarizeSqlErrors(errorCodes);
+      return { content: [{ type: "text", text: summary + header + results.join("\n\n") }] };
     } finally {
       await conn.end();
     }
@@ -636,6 +672,7 @@ export async function handle(name, args) {
 
     const conn = await mysql.createConnection(check.config);
     const results = [];
+    const errorCodes = [];
     const dbLabel = check.config.database;
     try {
       for (const q of args.queries) {
@@ -656,11 +693,113 @@ export async function handle(name, args) {
         } catch (err) {
           const code = err.code ? ` [${err.code}]` : "";
           const sqlState = err.sqlState ? ` (SQLSTATE ${err.sqlState})` : "";
+          if (err.code) errorCodes.push(err.code);
           results.push(`${label}: ❌${code}${sqlState} ${err.message}`);
         }
       }
       const header = dbPool.size > 1 ? `🗄️ [${dbLabel}]\n` : "";
-      return { content: [{ type: "text", text: header + results.join("\n") }] };
+      const summary = summarizeSqlErrors(errorCodes);
+      return { content: [{ type: "text", text: summary + header + results.join("\n") }] };
+    } finally {
+      await conn.end();
+    }
+  }
+
+  // ── mysql_log_tail ──
+  if (name === "mysql_log_tail") {
+    const check = requireDb(args.database);
+    if (!check.ok) return check.error;
+
+    const action = args.action || "recent_errors";
+    const limit = Math.max(1, Math.min(args.limit || 50, 500));
+    const sinceMin = Math.max(1, args.since_minutes || 30);
+    const conn = await mysql.createConnection(check.config);
+    const dbLabel = check.config.database;
+
+    try {
+      if (action === "recent_errors") {
+        // 從 performance_schema 撈最近失敗的 SQL（不需開 general_log）
+        try {
+          const [rows] = await conn.execute(
+            `SELECT EVENT_ID, MYSQL_ERRNO, RETURNED_SQLSTATE, MESSAGE_TEXT,
+                    LEFT(SQL_TEXT, 500) AS SQL_TEXT,
+                    CURRENT_SCHEMA,
+                    TIMER_END
+             FROM performance_schema.events_statements_history_long
+             WHERE MYSQL_ERRNO <> 0
+             ORDER BY EVENT_ID DESC
+             LIMIT ?`,
+            [limit]
+          );
+          if (!rows.length) {
+            return { content: [{ type: "text", text: `✅ [${dbLabel}] performance_schema 最近無 SQL 錯誤殘留` }] };
+          }
+          const codeCounts = new Map();
+          for (const r of rows) {
+            const k = r.RETURNED_SQLSTATE + "/" + r.MYSQL_ERRNO;
+            codeCounts.set(k, (codeCounts.get(k) || 0) + 1);
+          }
+          const summary = [...codeCounts.entries()].map(([k, n]) => `${k} x${n}`).join(", ");
+          const lines = rows.map(r =>
+            `[errno ${r.MYSQL_ERRNO} sqlstate ${r.RETURNED_SQLSTATE}] schema=${r.CURRENT_SCHEMA || "-"}\n  msg: ${r.MESSAGE_TEXT}\n  sql: ${(r.SQL_TEXT || "").replace(/\s+/g, " ").slice(0, 300)}`
+          );
+          return {
+            content: [{ type: "text", text: `🚨 [${dbLabel}] 最近 ${rows.length} 筆 SQL 錯誤（${summary}）\n\n${lines.join("\n\n")}` }],
+          };
+        } catch (err) {
+          return errorResp(`查詢 performance_schema 失敗：${err.message}`, [
+            "確認帳號有 SELECT performance_schema 權限",
+            "確認 performance_schema 已啟用 (SHOW VARIABLES LIKE 'performance_schema')",
+          ]);
+        }
+      }
+
+      if (action === "enable_general_log") {
+        try {
+          await conn.query(`SET GLOBAL log_output = 'TABLE'`);
+          await conn.query(`SET GLOBAL general_log = 'ON'`);
+          return { content: [{ type: "text", text: `✅ [${dbLabel}] general_log 已開啟（output=TABLE，寫入 mysql.general_log）。記得用完 disable_general_log 關閉。` }] };
+        } catch (err) {
+          return errorResp(`開啟 general_log 失敗：${err.message}`, ["需要 SUPER / SYSTEM_VARIABLES_ADMIN 權限"]);
+        }
+      }
+
+      if (action === "disable_general_log") {
+        try {
+          await conn.query(`SET GLOBAL general_log = 'OFF'`);
+          return { content: [{ type: "text", text: `✅ [${dbLabel}] general_log 已關閉` }] };
+        } catch (err) {
+          return errorResp(`關閉 general_log 失敗：${err.message}`);
+        }
+      }
+
+      if (action === "tail_general_log") {
+        try {
+          const [rows] = await conn.execute(
+            `SELECT event_time, command_type, LEFT(argument, 800) AS argument
+             FROM mysql.general_log
+             WHERE event_time >= NOW() - INTERVAL ? MINUTE
+             ORDER BY event_time DESC
+             LIMIT ?`,
+            [sinceMin, limit]
+          );
+          if (!rows.length) {
+            return { content: [{ type: "text", text: `[${dbLabel}] mysql.general_log 過去 ${sinceMin} 分鐘無紀錄（確認 general_log=ON 且 log_output=TABLE）` }] };
+          }
+          const lines = rows.map(r => {
+            const arg = typeof r.argument === "string" ? r.argument : (r.argument?.toString?.("utf-8") ?? "");
+            return `[${r.event_time}] ${r.command_type}: ${arg.replace(/\s+/g, " ").slice(0, 400)}`;
+          });
+          return { content: [{ type: "text", text: `📜 [${dbLabel}] mysql.general_log 最近 ${rows.length} 筆\n\n${lines.join("\n")}` }] };
+        } catch (err) {
+          return errorResp(`讀取 mysql.general_log 失敗：${err.message}`, [
+            "需要 SELECT mysql.general_log 權限",
+            "若 log_output=FILE 而非 TABLE，此 action 看不到（先 enable_general_log）",
+          ]);
+        }
+      }
+
+      return errorResp(`未知 action：${action}`);
     } finally {
       await conn.end();
     }

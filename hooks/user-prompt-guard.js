@@ -293,6 +293,28 @@ process.stdin.on('end', () => {
     // 每次使用者發話 → 重置 write-guard 的批次計數與 Prompt Guard 旗標
     wgSaveState(wgFreshState());
 
+    // ── CSS Trouble 偵測：使用者回報排版/跑版/樣式問題 → 強制下次 .css 寫入前先 inspect ──
+    const CSS_TROUBLE_PATTERNS = [
+      /排版.*?(?:有問題|壞|錯|怪|跑版|不對|亂)/,
+      /跑版|版面.*?(?:壞|跑|亂)|樣式.*?(?:壞|跑|亂|蓋)/,
+      /css.*?(?:沒生效|沒用|不work|蓋不掉|被蓋)/i,
+      /位置.*?(?:不對|偏|跑掉|歪)/,
+      /(?:沒有?生效|沒套到|沒吃到).*?(?:css|樣式|class)/i,
+      /(?:對齊|置中|靠左|靠右).*?(?:不對|失敗|沒用)/,
+    ];
+    if (CSS_TROUBLE_PATTERNS.some(p => p.test(prompt))) {
+      const wgState = wgLoadState();
+      wgState.cssInspectRequired = true;
+      wgSaveState(wgState);
+      process.stdout.write(
+        `[Prompt Guard] 🎯 偵測到 CSS 排版問題回報 — 已啟動 cssInspectRequired flag。\n` +
+        `  → 下次 .css/.scss 寫入前必須先執行 css_computed_winner / css_specificity_check / css_inspect 之一。\n` +
+        `  → 過去模式：使用者說「排版有問題」→ AI 直接 Edit CSS 加 !important → 跑版更嚴重。\n` +
+        `  → 新模式：先 inspect 拿事實 → 看誰贏 → 再決定改源頭 / 隔離 class / 提 specificity。\n` +
+        `  → flag 在 inspect 工具被呼叫後自動解除（由 repetition-detector 偵測 history）。\n\n`
+      );
+    }
+
     // ── Layer 0：模糊指令偵測（4 字起，優先於一切）──
     if (prompt.length >= VAGUE_MIN_LEN && !VAGUE_SKIP.some(p => p.test(prompt))) {
       const { score } = getVagueScore(prompt);
@@ -339,6 +361,18 @@ process.stdin.on('end', () => {
 
     const scenario = detectScenario(prompt);
     if (!scenario) { process.exit(0); }
+
+    // 前端樣式任務：在進 missing 判斷前先輸出「先 inspect 再改」提醒（非阻擋）
+    if (scenario.name === '前端樣式') {
+      process.stdout.write(
+        `[Prompt Guard] 💡 前端樣式任務提醒 — 改 CSS 前先 inspect，避免猜 specificity 反覆跑版：\n` +
+        `  ▸ mcp__css_computed_winner(url, selector, property)：直接看哪條規則「贏」，避免猜哪個樣式蓋過去\n` +
+        `  ▸ mcp__css_specificity_check(url, selector)：列出所有命中的規則 + specificity，找出該不該蓋\n` +
+        `  ▸ mcp__css_inspect(url, selector)：取 computed style + 來源檔行號\n` +
+        `  ▸ mcp__browser_interact 內建 evaluate：在 console 跑 getComputedStyle 即時驗證\n` +
+        `  → 規則：寧可多查 1 次也不要連改 5 次猜不中。看到要寫 !important 就停下查 specificity。\n\n`
+      );
+    }
 
     const missing = getMissing(prompt, scenario.needed);
     const provided = scenario.needed.length - missing.length;

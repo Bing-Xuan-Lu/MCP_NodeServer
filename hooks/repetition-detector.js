@@ -1036,17 +1036,31 @@ const PATTERNS = [
         /admin|model|controller|cls\b|service|repository|src\b|app\b|project|dbox/i.test(filePath);
       if (!isPhpContext) return null;
 
-      // 拆解 alternation（a|b|c），任一子項像 symbol 就算命中
+      // ── 高信心 PHP symbol 偵測（嚴格）──
+      // 過去版本對 alternation 中任一子項 looks-like-symbol 就 BLOCK，
+      // 導致 `tooltip|信用卡|payment_id|p_question` 這種 HTML/JS/字串混搜被誤殺。
+      // 新規則：alternation / 含中文 / kebab-case / HTML 屬性語法 → 一律視為純文字搜尋，不擋。
+      // 只在「pattern 含明確 PHP 結構符號」或「pattern 為單一 PHP 命名 token」時才判為 symbol search。
       const looksLikeSymbol = (s) =>
         /^[A-Z][a-zA-Z0-9]+$/.test(s) ||           // PascalCase: OrderModel
-        /^[a-z]+[A-Z][a-zA-Z0-9]*$/.test(s) ||     // camelCase method: grantBonus, orderComplete
-        /^[a-z]+(?:_[a-z0-9]+){1,}$/.test(s);      // snake_case function: grant_bonus（2+ 段）
+        /^[a-z]+[A-Z][a-zA-Z0-9]*$/.test(s) ||     // camelCase method: grantBonus
+        /^[a-z]+(?:_[a-z0-9]+){1,}$/.test(s);      // snake_case: grant_bonus（2+ 段）
       const hasSymbolOperator = (p) =>
-        /(::|->|extends|implements|new\s+|class\s+|function\s+)/i.test(p);
+        /(::|->\w|extends\s|implements\s|new\s+[A-Z]|class\s+[A-Z]|function\s+\w)/i.test(p);
+
       const detectSymbolSearch = (p) => {
+        if (!p) return false;
+        // 含 PHP 結構符號（->method、::, extends, function xxx, class Foo）→ 一律算 symbol
         if (hasSymbolOperator(p)) return true;
-        const alts = p.split('|').map(s => s.trim()).filter(Boolean);
-        return alts.some(a => looksLikeSymbol(a));
+        // alternation / 中文 / kebab / HTML 屬性 → 純文字搜尋，不算 symbol
+        const isTextLike =
+          /\|/.test(p) ||
+          /[一-鿿]/.test(p) ||
+          /[a-z0-9]-[a-z0-9]/i.test(p) ||
+          /\b(?:class|id|data-|aria-|style|href|src|name|type|value)\s*=/i.test(p);
+        if (isTextLike) return false;
+        // 純單一 token + 符合 PHP 命名 → 算 symbol
+        return looksLikeSymbol(p.trim());
       };
 
       if (!detectSymbolSearch(pattern)) return null;
@@ -1075,7 +1089,10 @@ const PATTERNS = [
         );
       };
 
-      if (explicitPhpScope && !isPureSnakeCaseField(pattern)) {
+      // 純 snake_case 欄位名（如 payment_id, complete_dt）→ SQL 欄位搜尋場景，放行
+      if (isPureSnakeCaseField(pattern)) return null;
+
+      if (explicitPhpScope) {
         return {
           block: true,
           message:
@@ -1252,6 +1269,110 @@ const PATTERNS = [
              `  → class_method_lookup：PHP 函式一次到位取得原始碼\n` +
              `  → find_usages：AST 精確搜尋 class/method 引用位置\n` +
              `  → CODEMAPS：查函式行號後 Read(offset, limit) 精準讀取\n`;
+    },
+  },
+  {
+    // Layer 2.10: CSS Inspect Gate — .css 寫入前必須先用 inspect 工具確認 specificity，
+    // 第一次 !important 就 BLOCK；trouble 詞觸發 cssInspectRequired 時連 .css Edit 都要先 inspect
+    id: 'css_inspect_gate',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      const writeTools = new Set(['Edit', 'Write', 'apply_diff', 'create_file']);
+      if (!writeTools.has(tool)) return null;
+
+      const filePath = (entry.args?.file_path || entry.args?.path || '').toLowerCase();
+      const isCss = filePath.endsWith('.css') || filePath.endsWith('.scss') || filePath.endsWith('.less');
+      if (!isCss) return null;
+
+      const countImportant = (s) => {
+        if (!s || typeof s !== 'string') return 0;
+        const m = s.match(/!important/gi);
+        return m ? m.length : 0;
+      };
+
+      // 偵測 inspect 工具是否已在本 session 執行過
+      const INSPECT_TOOLS = new Set([
+        'css_computed_winner', 'css_specificity_check', 'css_inspect',
+        'mcp__project-migration-assistant-pro__css_computed_winner',
+        'mcp__project-migration-assistant-pro__css_specificity_check',
+        'mcp__project-migration-assistant-pro__css_inspect',
+      ]);
+      const hasInspected = history.some(h => INSPECT_TOOLS.has(h.tool) || INSPECT_TOOLS.has(shortName(h.tool)));
+
+      // 讀 write-guard 共享 state（含 cssInspectRequired flag）
+      let cssInspectRequired = false;
+      try {
+        const wgFile = path.join(os.tmpdir(), 'claude-write-guard', 'state.json');
+        if (fs.existsSync(wgFile)) {
+          const wg = JSON.parse(fs.readFileSync(wgFile, 'utf-8'));
+          if (Date.now() - (wg.ts || 0) < 30 * 60 * 1000) cssInspectRequired = !!wg.cssInspectRequired;
+        }
+      } catch {}
+
+      // 計算本次新增的 !important
+      const newStr = entry.args?.new_string || entry.args?.content || '';
+      const oldStr = entry.args?.old_string || '';
+      const diff = entry.args?.diff || '';
+      const diffAdded = diff.split('\n').filter(l => l.startsWith('+') && !l.startsWith('+++')).join('\n');
+      const currDelta = Math.max(0, countImportant(newStr) + countImportant(diffAdded) - countImportant(oldStr));
+
+      const fname = filePath.split(/[\\/]/).pop();
+
+      // ── 防線 1：寫入新 !important 但未 inspect → BLOCK ──
+      if (currDelta > 0 && !hasInspected) {
+        return {
+          block: true,
+          message:
+            `[CSS Inspect Gate] ❌ BLOCKED：嘗試寫入 ${currDelta} 個 !important 到 ${fname}，但本 session 尚未執行 inspect 工具。\n` +
+            `  原因：!important 是反模式，通常代表 specificity 沒查清楚就硬蓋。第一次寫就要證明真的需要。\n` +
+            `  必要前置（擇一）：\n` +
+            `    ▸ mcp__css_computed_winner(url, selector, property) — 看哪條規則贏\n` +
+            `    ▸ mcp__css_specificity_check(url, selector) — 列出所有命中規則 + specificity\n` +
+            `    ▸ mcp__css_inspect(url, selector) — 取 computed style + 來源檔行號\n` +
+            `  替代修法（多數情況更乾淨）：\n` +
+            `    A. 改源頭規則（inspect 找到贏家後直接改它）\n` +
+            `    B. 獨立命名空間 .v3-xxx / .ui-2-xxx 隔離（避開全域繼承）\n` +
+            `    C. 提高自身選擇器 specificity（多包一層父 class）\n`,
+        };
+      }
+
+      // ── 防線 2：trouble flag 啟動 → 任何 .css 寫入都要先 inspect ──
+      if (cssInspectRequired && !hasInspected) {
+        return {
+          block: true,
+          message:
+            `[CSS Inspect Gate] ❌ BLOCKED：使用者剛回報「排版/跑版/樣式問題」，但尚未執行 inspect 工具。\n` +
+            `  原因：直接改 ${fname} 是猜測修法，過去常導致 !important 反覆疊加而跑版更嚴重。\n` +
+            `  必須先做（擇一）：\n` +
+            `    ▸ mcp__css_computed_winner(url, selector, property) — 找出真正贏的規則\n` +
+            `    ▸ mcp__css_specificity_check(url, selector) — 看 specificity 衝突\n` +
+            `    ▸ mcp__browser_interact 內 evaluate 跑 getComputedStyle\n` +
+            `  → inspect 完拿到事實後，cssInspectRequired flag 自動解除，可正常 Edit。\n`,
+        };
+      }
+
+      // ── 防線 1b：累計使用提醒（即使有 inspect 也還是要警告濫用）──
+      if (currDelta > 0 && hasInspected) {
+        let total = currDelta;
+        for (const h of history) {
+          const ht = shortName(h.tool);
+          if (!writeTools.has(ht)) continue;
+          const hp = (h.args?.file_path || h.args?.path || '').toLowerCase();
+          if (!hp.endsWith('.css') && !hp.endsWith('.scss') && !hp.endsWith('.less')) continue;
+          const hNew = countImportant(h.args?.new_string || h.args?.content || '');
+          const hOld = countImportant(h.args?.old_string || '');
+          const hDiff = h.args?.diff || '';
+          const hDiffAdd = hDiff.split('\n').filter(l => l.startsWith('+') && !l.startsWith('+++')).join('\n');
+          total += Math.max(0, hNew + countImportant(hDiffAdd) - hOld);
+        }
+        if (total >= 10) {
+          return `[CSS Overuse] ⚠️ 累計 ${total} 個 !important（本次 +${currDelta}）。\n` +
+                 `  → 已 inspect 過代表你看過 specificity 了，但還是堆這麼多代表該換策略：\n` +
+                 `  → 建議改用獨立命名空間 class（.v3-xxx）整段隔離，而非繼續疊 !important。\n`;
+        }
+      }
+
+      return null;
     },
   },
   {
