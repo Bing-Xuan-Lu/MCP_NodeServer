@@ -142,6 +142,48 @@ list_files 或 Glob 掃描：
 
 ---
 
+### 步驟 3b：死碼與 typo 偵測（PHP 專案）
+
+掃描 PHP class 結構時順帶執行：
+
+#### 死碼標記（0 引用 method）
+
+對每個 class 的 public method：
+
+```
+1. 用 symbol_index 列出所有 method
+2. 對每個 method 用 find_usages 統計呼叫次數
+3. 若呼叫次數 = 0 且非框架保留方法（__construct/__destruct/__call/__get/__set/Action/handle*）：
+   → 在 backend.md 標記為 ⚠️ DEAD: {ClassName}::{method}
+```
+
+#### Trait 拆分後的 typo 殘留
+
+當 class 有 `use Trait` 時：
+
+```
+1. 讀取 trait 檔案，列出 trait 內所有 method 名
+2. 在使用該 trait 的 class 內 grep 呼叫名（$this->xxx() / self::xxx()）
+3. 找出「呼叫名 vs trait method 名」的拼字差異候選：
+   - 編輯距離 ≤ 2（如 `pahment_chk` vs `payment_chk`）
+   - 或前綴/後綴一字之差
+   → 在 backend.md 標記為 🔤 TYPO 候選：{caller_file}:{line} 呼叫 `xxx`，疑似 trait method `yyy`
+```
+
+> **為什麼**：trait 拆分重構時容易留下舊呼叫名 typo，跑時才以 fatal 暴雷。靜態分析在 codemap 階段抓到。
+
+#### 在 backend.md 加區塊
+
+```markdown
+## ⚠️ Dead Code Candidates
+- {ClassName}::{method}  (file:line, 0 references)
+
+## 🔤 Typo Candidates (Trait migration residue)
+- {file}:{line} calls `{wrong_name}`, likely meant `{correct_name}` (in {trait})
+```
+
+---
+
 ### 步驟 4：差異偵測
 
 若 Codemaps 已存在：

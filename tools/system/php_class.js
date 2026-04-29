@@ -46,21 +46,26 @@ export const definitions = [
 async function handleClassMethodLookup(args) {
   const { project, class_name, method_name, include_body = true } = args;
 
-  // 搜尋 class 檔案
-  const projectPath = resolveSecurePath(project);
+  // 搜尋 class 檔案（含巢狀專案自動修正）
+  const rawPath = resolveSecurePath(project);
+  const resolved = await resolveNestedProject(rawPath);
+  const projectPath = resolved.path;
+  const pathHint = resolved.hint;
   const filePath = await findClassFile(projectPath, class_name);
 
   if (!filePath) {
-    return {
-      content: [{
-        type: "text",
-        text: `❌ 找不到 class "${class_name}"。\n搜尋範圍：\n` +
-          `  1. ${project}/cls/model/${class_name}.class.php\n` +
-          `  2. ${project}/**/${class_name}.class.php\n` +
-          `  3. ${project}/**/${class_name}.php\n` +
-          `  4. ${project}/cls/model/traits/*.php`,
-      }],
-    };
+    const lines = [`❌ 找不到 class "${class_name}"。`];
+    if (resolved.missing) {
+      lines.push(`⚠️ 專案路徑不存在：${rawPath}`);
+      lines.push(`   提示：請確認 project 參數是否需要包含父層資料夾（例：\`Parent/${project}\`）。`);
+    } else {
+      lines.push(`搜尋範圍：`);
+      lines.push(`  1. ${project}/cls/model/${class_name}.class.php`);
+      lines.push(`  2. ${project}/**/${class_name}.class.php`);
+      lines.push(`  3. ${project}/**/${class_name}.php`);
+      lines.push(`  4. ${project}/cls/model/traits/*.php`);
+    }
+    return { content: [{ type: "text", text: lines.join("\n") }] };
   }
 
   const content = await fs.readFile(filePath, "utf-8");
@@ -127,7 +132,10 @@ async function handleClassMethodLookup(args) {
       result.signature = method.signature;
     }
 
-    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    const text = pathHint
+      ? `${pathHint}\n${JSON.stringify(result, null, 2)}`
+      : JSON.stringify(result, null, 2);
+    return { content: [{ type: "text", text }] };
   } else {
     // 未指定 method：回傳 class 概覽（含 trait 方法）
     const ownMethodsTable = classInfo.methods
@@ -162,7 +170,7 @@ async function handleClassMethodLookup(args) {
       ...(traitMethodsTable ? [traitMethodsTable] : []),
     ].join("\n");
 
-    return { content: [{ type: "text", text: header }] };
+    return { content: [{ type: "text", text: pathHint ? `${pathHint}\n${header}` : header }] };
   }
 }
 
@@ -213,6 +221,33 @@ async function collectTraitMethods(projectPath, traitNames) {
 // ============================================
 // 檔案搜尋
 // ============================================
+/**
+ * 偵測 projectPath 不存在時，於 basePath 一層子目錄中搜尋相同名稱的巢狀專案
+ * 例：使用者輸入 `PG_Milestone_ERP_PHP` 但實際路徑是 `PG_Milestone_ERP/PG_Milestone_ERP_PHP`
+ */
+async function resolveNestedProject(projectPath) {
+  try { await fs.access(projectPath); return { path: projectPath, hint: null }; } catch {}
+  const projectName = path.basename(projectPath);
+  const parent = path.dirname(projectPath); // 通常是 basePath
+  try {
+    const entries = await fs.readdir(parent, { withFileTypes: true });
+    for (const ent of entries) {
+      if (!ent.isDirectory()) continue;
+      const candidate = path.join(parent, ent.name, projectName);
+      try {
+        const stat = await fs.stat(candidate);
+        if (stat.isDirectory()) {
+          return {
+            path: candidate,
+            hint: `⚠️ 自動修正路徑：原指定 \`${projectName}\` 不存在，已改用 \`${ent.name}/${projectName}\`。建議下次直接傳完整路徑。`,
+          };
+        }
+      } catch {}
+    }
+  } catch {}
+  return { path: projectPath, hint: null, missing: true };
+}
+
 async function findClassFile(projectPath, className) {
   // 優先路徑（最常見的位置）
   const primaryPaths = [

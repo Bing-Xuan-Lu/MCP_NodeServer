@@ -18,6 +18,18 @@ $ARGUMENTS
 
 ---
 
+## 可用工具
+
+| 工具 | 用途 |
+|------|------|
+| `Read` | 讀取 settings.json / settings.local.json |
+| `Write` | 重寫整理後的 settings.json |
+| `Glob` | 驗證 Read 規則路徑 / additionalDirectories 路徑是否存在 |
+| `Bash` | 列出 hooks command 路徑、驗證 .js hook 檔案存在 |
+| `Edit` | 局部修改（保留非 permissions 欄位時更安全） |
+
+---
+
 ## 執行步驟
 
 ### 步驟 1：讀取所有 settings 檔案

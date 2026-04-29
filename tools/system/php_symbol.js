@@ -351,19 +351,50 @@ async function buildIndex(projectPath, scanPaths, excludePatterns) {
   return index;
 }
 
+/**
+ * 偵測 projectPath 不存在時，於 basePath 一層子目錄中搜尋相同名稱的巢狀專案
+ * 例：使用者輸入 `PG_Milestone_ERP_PHP` 但實際路徑是 `PG_Milestone_ERP/PG_Milestone_ERP_PHP`
+ */
+async function resolveNestedProject(projectPath) {
+  try { await fs.access(projectPath); return { path: projectPath, hint: null }; } catch {}
+  const projectName = path.basename(projectPath);
+  const parent = path.dirname(projectPath);
+  try {
+    const entries = await fs.readdir(parent, { withFileTypes: true });
+    for (const ent of entries) {
+      if (!ent.isDirectory()) continue;
+      const candidate = path.join(parent, ent.name, projectName);
+      try {
+        const stat = await fs.stat(candidate);
+        if (stat.isDirectory()) {
+          return {
+            path: candidate,
+            hint: `⚠️ 自動修正路徑：原指定 \`${projectName}\` 不存在，已改用 \`${ent.name}/${projectName}\`。建議下次直接傳完整路徑。`,
+          };
+        }
+      } catch {}
+    }
+  } catch {}
+  return { path: projectPath, hint: null, missing: true };
+}
+
 /** 取得或建立索引 */
 async function getIndex(project, opts = {}) {
-  const projectPath = resolveSecurePath(project);
+  const rawPath = resolveSecurePath(project);
+  const resolved = await resolveNestedProject(rawPath);
+  const projectPath = resolved.path;
   const cacheKey = projectPath;
 
   if (!opts.force && indexCache.has(cacheKey)) {
     const cached = indexCache.get(cacheKey);
     if (Date.now() - cached.timestamp < INDEX_TTL) {
-      return cached.index;
+      return { ...cached.index, _pathHint: resolved.hint, _missing: resolved.missing };
     }
   }
 
   const index = await buildIndex(projectPath, opts.paths, opts.exclude);
+  index._pathHint = resolved.hint;
+  index._missing = resolved.missing;
   indexCache.set(cacheKey, { index, timestamp: Date.now() });
   return index;
 }
@@ -778,7 +809,18 @@ export async function handle(name, args) {
     const callCount = index.calls.length;
     const includeCount = index.includes.length;
 
-    const lines = [
+    const lines = [];
+    if (index._pathHint) lines.push(index._pathHint, ``);
+    if (index._missing) {
+      lines.push(`❌ 專案路徑不存在：${args.project}`);
+      lines.push(`   提示：請確認 project 參數是否需要包含父層資料夾（例：\`Parent/${args.project}\`）。`);
+      lines.push(``);
+    } else if (index.fileCount === 0) {
+      lines.push(`⚠️ 此路徑未找到任何 PHP 檔。可能原因：`);
+      lines.push(`   1. project 參數錯誤（缺父層？）；2. paths 參數限制過嚴；3. 檔案全在 vendor/ 等排除路徑下。`);
+      lines.push(``);
+    }
+    lines.push(
       `📊 Symbol Index: ${index.project}`,
       ``,
       `| 項目 | 數量 |`,
@@ -792,7 +834,7 @@ export async function handle(name, args) {
       `| 解析錯誤 | ${index.errors.length} |`,
       ``,
       `⏱️ 快取 4 小時，期間 find_usages / find_hierarchy / find_dependencies 免重建。`,
-    ];
+    );
 
     if (index.errors.length > 0 && index.errors.length <= 10) {
       lines.push(``, `**解析錯誤：**`);

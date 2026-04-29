@@ -14,6 +14,18 @@ description: 同步 Claude Code 本機執行狀態（~/.claude/memory + ~/.claud
 
 ---
 
+## 可用工具
+
+| 工具 | 用途 |
+|------|------|
+| `Glob` | 列出兩端的 memory/hooks 檔案清單 |
+| `Read` | 讀取檔案內容做差異比對 |
+| `Write` | 寫入新檔到目標端（pull/push 同步） |
+| `Edit` | MEMORY.md 索引行的合併 |
+| `Bash` | git pull / status / diff，本機 hooks 路徑檢查 |
+
+---
+
 ## 四個同步位置
 
 | 名稱 | 路徑 | 用途 |

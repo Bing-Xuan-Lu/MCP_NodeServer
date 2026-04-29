@@ -414,6 +414,37 @@ function getSessionHost(history) {
   return null;
 }
 
+/**
+ * 讀取最近 N 則使用者訊息（從 transcript JSONL 倒著讀，效能 OK）
+ * 返回 [{ts, text}, ...]，最新在前
+ */
+let _CURRENT_TRANSCRIPT_PATH = '';
+function readRecentUserMessages(limit = 5) {
+  if (!_CURRENT_TRANSCRIPT_PATH) return [];
+  try {
+    const raw = fs.readFileSync(_CURRENT_TRANSCRIPT_PATH, 'utf-8');
+    const lines = raw.trim().split(/\r?\n/);
+    const out = [];
+    for (let i = lines.length - 1; i >= 0 && out.length < limit; i--) {
+      try {
+        const obj = JSON.parse(lines[i]);
+        if (obj.type === 'user' && obj.message?.role === 'user') {
+          const c = obj.message.content;
+          let text = '';
+          if (typeof c === 'string') text = c;
+          else if (Array.isArray(c)) {
+            text = c.filter(x => x?.type === 'text').map(x => x.text || '').join('\n');
+          }
+          if (text.trim()) out.push({ ts: Date.parse(obj.timestamp || '') || 0, text });
+        }
+      } catch {}
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 // ── 記憶強制注入（Scatter Search 觸發時載入）──────
 
 const PROJECTS_DIR = path.join(HOME, '.claude', 'projects');
@@ -759,6 +790,54 @@ function matchBashPattern(command) {
   return null;
 }
 
+/**
+ * 從 grep PHP 命令解析符號，產出具體 AST 工具呼叫建議。
+ * 例：grep -rn "OrderModel::add" cls/ → 建議 class_method_lookup({class:"OrderModel", method:"add"})
+ */
+function buildPhpAstSuggestions(command) {
+  if (!command) return null;
+  // 抽取 grep/rg/findstr 的搜尋字串（雙引號、單引號、或裸字）
+  const m = command.match(/\b(?:grep|rg|findstr)\b\s+(?:[-]\S+\s+)*(?:"([^"]+)"|'([^']+)'|(\S+))/i);
+  if (!m) return null;
+  const pattern = (m[1] || m[2] || m[3] || '').trim();
+  if (!pattern) return null;
+
+  const lines = ['  → 具體 AST 工具呼叫：'];
+
+  // ClassName::method 或 ClassName->method
+  const cm = pattern.match(/([A-Z][A-Za-z0-9_]+)\s*(?:::|->)\s*([a-z_][A-Za-z0-9_]*)/);
+  if (cm) {
+    lines.push(`     class_method_lookup({ class_name: "${cm[1]}", method_name: "${cm[2]}" })`);
+    lines.push(`     find_usages({ symbol: "${cm[1]}::${cm[2]}" })`);
+    return lines.join('\n');
+  }
+
+  // function name(
+  const fn = pattern.match(/function\s+([a-z_][A-Za-z0-9_]*)/i);
+  if (fn) {
+    lines.push(`     symbol_index({ path: "<dir>" })  // 找出 function ${fn[1]} 所在檔`);
+    lines.push(`     find_usages({ symbol: "${fn[1]}" })`);
+    return lines.join('\n');
+  }
+
+  // class XXX
+  const cls = pattern.match(/class\s+([A-Z][A-Za-z0-9_]*)/);
+  if (cls) {
+    lines.push(`     find_hierarchy({ class_name: "${cls[1]}" })`);
+    lines.push(`     symbol_index({ path: "<file_or_dir>" })`);
+    return lines.join('\n');
+  }
+
+  // 純 identifier（可能是 method/function/symbol 名）
+  if (/^[a-zA-Z_][A-Za-z0-9_]*$/.test(pattern)) {
+    lines.push(`     find_usages({ symbol: "${pattern}" })`);
+    lines.push(`     symbol_index({ path: "<dir>" })  // 確認 ${pattern} 是 class/method/function`);
+    return lines.join('\n');
+  }
+
+  return null;
+}
+
 /** 取得 entry 的分類 key（用於同類偵測） */
 function getCategoryKey(entry) {
   const tool = shortName(entry.tool);
@@ -931,10 +1010,14 @@ const PATTERNS = [
       }
 
       if (pat.block) {
+        const suggestion = (pat.signature === 'bash:grep-php' || pat.signature === 'bash:grep-php-dir')
+          ? buildPhpAstSuggestions(cmd)
+          : null;
         return {
           block: true,
           message: `[L1 Wrong Tool] ❌ BLOCKED (sig=${pat.signature})\n` +
                    `  → 請改用 MCP 工具：${pat.hint}\n` +
+                   (suggestion ? suggestion + '\n' : '') +
                    `  → 此類 Bash 操作已強制禁止。若真有理由必須用 Bash，` +
                    `在命令尾加 \`# mcp-fallback: <reason>\` 即可放行（會留審計紀錄）。\n`,
         };
@@ -1481,6 +1564,48 @@ const PATTERNS = [
     },
   },
   {
+    // Layer 2.81: Confirm Requirements — 同檔 30 分鐘內 Edit ≥3 次 + 使用者訊息含
+    // 「不對 / 又 / 為什麼 / 不是 / 又錯」→ 強制先確認需求，避免「猜需求→改→被退→再猜」死循環
+    id: 'confirm_requirements_loop',
+    detect: (entry, _history) => {
+      const tool = shortName(entry.tool);
+      const editTools = new Set(['Edit', 'apply_diff', 'Write', 'create_file']);
+      if (!editTools.has(tool)) return null;
+
+      const filePath = (entry.args?.file_path || entry.args?.path || '').replace(/\\/g, '/').toLowerCase();
+      if (!filePath) return null;
+
+      // 條件 A：同檔 30 分鐘內 Edit ≥3 次（含本次）
+      const THIRTY_MIN = 30 * 60 * 1000;
+      const now = Date.now();
+      const recentSameFile = _history.filter(h => {
+        if (!editTools.has(shortName(h.tool))) return false;
+        const hp = (h.args?.file_path || h.args?.path || '').replace(/\\/g, '/').toLowerCase();
+        if (hp !== filePath) return false;
+        return (now - (h.ts || 0)) <= THIRTY_MIN;
+      });
+      const editCount = recentSameFile.length + 1;
+      if (editCount < 3) return null;
+
+      // 條件 B：最近 3 則使用者訊息有「不對/又/為什麼/不是/又錯/還是錯」
+      const TRIGGER_RE = /(不對|不是這樣|為什麼|又|還是錯|又錯|不要|錯了)/;
+      const recentMsgs = readRecentUserMessages(3);
+      const triggered = recentMsgs.some(m => TRIGGER_RE.test(m.text));
+      if (!triggered) return null;
+
+      const fname = filePath.split('/').pop();
+      return {
+        block: true,
+        message:
+          `[Confirm Requirements] ❌ BLOCKED：${fname} 30 分鐘內已被 Edit ${editCount} 次，` +
+          `且最近使用者訊息出現「不對/又/為什麼」等糾正詞。\n` +
+          `  → 你正在「猜需求 → 改 → 被退 → 再猜」死循環。\n` +
+          `  → 強制中斷：請用 1-3 句話總結你目前理解的需求，等使用者確認後再繼續修改。\n` +
+          `  → 使用者下次發送「不含糾正詞」的訊息（如「對」「就是這樣」「繼續」）後此 hook 會自動放行。\n`,
+      };
+    },
+  },
+  {
     // Layer 2.85: Bulk Text Replace — 同一檔案多個不同 search 替換，提示改用 run_php_code preg_replace
     id: 'bulk_text_replace',
     detect: (entry, history) => {
@@ -1721,10 +1846,28 @@ const PATTERNS = [
   {
     id: 'exact_same_call',
     detect: (entry, history) => {
-      const entryStr = JSON.stringify({ tool: entry.tool, args: entry.args });
-      const count = history.filter(h =>
-        JSON.stringify({ tool: h.tool, args: h.args }) === entryStr
-      ).length + 1;
+      // sftp_upload / sftp_upload_batch：把本機檔案 mtime 納入比對 key
+      // 迭代 debug 時同一路徑反覆 upload 但檔案內容已變，不該算重複
+      const fingerprint = (h) => {
+        const tool = shortName(h.tool);
+        if (tool === 'sftp_upload' || tool === 'sftp_upload_batch') {
+          const items = tool === 'sftp_upload_batch'
+            ? (h.args?.items || [])
+            : [h.args || {}];
+          const mtimes = items.map(it => {
+            const p = it.local_path;
+            if (!p) return '';
+            try {
+              const abs = path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
+              return `${p}@${fs.statSync(abs).mtimeMs}`;
+            } catch { return `${p}@?`; }
+          });
+          return JSON.stringify({ tool: h.tool, args: h.args, _mtimes: mtimes });
+        }
+        return JSON.stringify({ tool: h.tool, args: h.args });
+      };
+      const entryStr = fingerprint(entry);
+      const count = history.filter(h => fingerprint(h) === entryStr).length + 1;
       if (count < 5) return null;
       return {
         block: true,
@@ -1959,6 +2102,7 @@ process.stdin.on('end', () => {
     const sessionId = data.session_id || 'default';
     const toolName = data.tool_name || '';
     const toolInput = data.tool_input || {};
+    _CURRENT_TRANSCRIPT_PATH = data.transcript_path || '';
 
     const shortToolName = shortName(toolName);
     const logPath = getLogPath(sessionId);
