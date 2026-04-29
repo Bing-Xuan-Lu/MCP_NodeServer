@@ -70,73 +70,8 @@ browser_navigate(url: "{使用者貼的 AxShare URL}")
 ### S2：用 browser_evaluate 擷取完整內容
 
 > **核心方法**：AxShare 內容在 iframe 中，用 JS 直接從 iframe DOM 抽取比 snapshot 更完整。
-
-```
-browser_evaluate(script: `
-  // 收集所有 iframe + 主頁面的文字內容
-  const result = { title: document.title, sections: [] };
-
-  function extractFromDoc(doc, label) {
-    const section = { label, texts: [], tables: [], inputs: [], links: [] };
-
-    // 所有文字節點（排除 script/style）
-    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
-      acceptNode: n => {
-        const tag = n.parentElement?.tagName;
-        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') return NodeFilter.FILTER_REJECT;
-        const text = n.textContent.trim();
-        return text.length > 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-      }
-    });
-    let node;
-    while (node = walker.nextNode()) {
-      const text = node.textContent.trim();
-      if (text) section.texts.push(text);
-    }
-
-    // 表格
-    doc.querySelectorAll('table').forEach(t => {
-      const rows = Array.from(t.rows).map(r =>
-        Array.from(r.cells).map(c => c.textContent.trim())
-      );
-      if (rows.length > 0) section.tables.push(rows);
-    });
-
-    // 表單元素
-    doc.querySelectorAll('input,select,textarea').forEach(el => {
-      section.inputs.push({
-        tag: el.tagName.toLowerCase(),
-        type: el.type || '',
-        name: el.name || '',
-        placeholder: el.placeholder || '',
-        value: el.value || ''
-      });
-    });
-
-    // 連結
-    doc.querySelectorAll('a[href]').forEach(a => {
-      const text = a.textContent.trim();
-      if (text) section.links.push({ text, href: a.href });
-    });
-
-    result.sections.push(section);
-  }
-
-  // 主頁面
-  extractFromDoc(document, 'main');
-
-  // 所有 iframe
-  Array.from(document.querySelectorAll('iframe')).forEach((f, i) => {
-    try {
-      if (f.contentDocument?.body) {
-        extractFromDoc(f.contentDocument, 'iframe_' + i);
-      }
-    } catch(e) {} // cross-origin 跳過
-  });
-
-  return result;
-`)
-```
+>
+> 抽取腳本放在 `_axshare_spec_index/extract_iframe_script.md`，讀取後將「完整內容抽取」段落貼進 `browser_evaluate` 的 `script` 參數執行。
 
 ### S3：整理並輸出
 
@@ -191,26 +126,7 @@ browser_evaluate(script: `
 1. browser_navigate(url: "{AxShare 網址}")
 2. browser_snapshot() → 確認載入成功
 
-3. browser_evaluate(script: `
-     const frames = Array.from(document.querySelectorAll('iframe'));
-     const links = [];
-     frames.forEach(f => {
-       try {
-         f.contentDocument.querySelectorAll('a[href]').forEach(a => {
-           const text = a.textContent.trim();
-           const href = a.href;
-           if (text && href) links.push({ text, href });
-         });
-       } catch(e) {}
-     });
-     // fallback：從主頁面找 AxShare hash 格式連結
-     if (links.length === 0) {
-       document.querySelectorAll('a[href*="#p="],a[href*="#id="]').forEach(a => {
-         links.push({ text: a.textContent.trim(), href: a.href });
-       });
-     }
-     return links;
-   `)
+3. browser_evaluate(script: 讀取 `_axshare_spec_index/extract_iframe_script.md` 的「全站模式 nav 連結抽取」段落)
    → 取得完整頁面清單 [{ text: "頁面名稱", href: "完整URL" }, ...]
 ```
 

@@ -1,9 +1,105 @@
 import mysql from "mysql2/promise";
 import fs from "fs/promises";
 import path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { fileURLToPath } from "url";
 import { validateArgs, normalizeArrayArg } from "../_shared/utils.js";
 import { resolveSecurePath } from "../../config.js";
+
+const pExecFile = promisify(execFile);
+
+// ============================================
+// docker_exec / ssh+docker_exec 連線：包裝 mysql CLI 為 mysql2-相容介面
+// 用於容器內 DB 不對外開 port、需透過 docker exec 才能查詢的場景
+// ============================================
+const READONLY_RE = /^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b/i;
+
+function parseMysqlBatchOutput(stdout) {
+  // mysql --batch 輸出：第一行為欄位名（tab 分隔），後續為資料列
+  // NULL 顯示為字串 "NULL"
+  if (!stdout || !stdout.trim()) return [[], []];
+  const lines = stdout.replace(/\r\n/g, "\n").split("\n");
+  // 移除尾端空行
+  while (lines.length && lines[lines.length - 1] === "") lines.pop();
+  if (lines.length === 0) return [[], []];
+  const headers = lines[0].split("\t");
+  const rows = lines.slice(1).map((line) => {
+    const vals = line.split("\t");
+    const row = {};
+    headers.forEach((h, i) => {
+      const v = vals[i];
+      row[h] = v === "NULL" ? null : v === undefined ? null : v;
+    });
+    return row;
+  });
+  const fields = headers.map((name) => ({ name }));
+  return [rows, fields];
+}
+
+async function dockerExecRawQuery(config, sql) {
+  // 預設僅唯讀；config.allow_write=true 時放行寫入語句
+  // checkDangerousStmt + confirm 機制仍會在 execute_sql 入口把關 DELETE/UPDATE/DROP/TRUNCATE
+  if (!READONLY_RE.test(sql) && !config.allow_write) {
+    throw new Error(
+      `docker_exec 模式預設僅唯讀。` +
+      `要執行寫入（INSERT/ALTER/CREATE 等）請在 set_database 加 allow_write: true。收到語句：${sql.slice(0, 80)}`
+    );
+  }
+  const { container, db_user = "root", db_password = "", database = "" } = config;
+  if (!container) throw new Error(`docker_exec 模式需要 container 欄位（容器名稱）`);
+
+  const mysqlArgs = [
+    "exec", "-i", container, "mysql", "--batch", "--default-character-set=utf8mb4",
+    `-u${db_user}`,
+  ];
+  if (db_password) mysqlArgs.push(`-p${db_password}`);
+  if (database) mysqlArgs.push(database);
+  mysqlArgs.push("-e", sql);
+
+  let cmd, args;
+  if (config.ssh_host) {
+    // 透過 SSH 中繼：ssh user@host docker exec ...
+    // 使用陣列參數避免 shell injection；遠端命令需要 shell quoting
+    const target = config.ssh_user ? `${config.ssh_user}@${config.ssh_host}` : config.ssh_host;
+    // 把 docker exec 命令組合成單一字串給遠端 shell
+    const remoteCmd = ["docker"]
+      .concat(mysqlArgs)
+      .map((a) => `'${String(a).replace(/'/g, "'\\''")}'`)
+      .join(" ");
+    cmd = "ssh";
+    args = ["-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes"];
+    if (config.ssh_port) args.push("-p", String(config.ssh_port));
+    args.push(target, remoteCmd);
+  } else {
+    cmd = "docker";
+    args = mysqlArgs;
+  }
+
+  try {
+    const { stdout } = await pExecFile(cmd, args, { maxBuffer: 50 * 1024 * 1024 });
+    return parseMysqlBatchOutput(stdout);
+  } catch (err) {
+    const stderr = err.stderr || err.message;
+    throw new Error(`docker_exec 執行失敗：${stderr.slice(0, 500)}`);
+  }
+}
+
+/** 回傳 mysql2.Connection 介面相容物件，根據 connection_type 切換實作 */
+async function getQueryRunner(config) {
+  if (config.connection_type === "docker_exec") {
+    return {
+      _dockerExec: true,
+      query: async (sql) => dockerExecRawQuery(config, sql),
+      execute: async (sql) => dockerExecRawQuery(config, sql),
+      ping: async () => { await dockerExecRawQuery(config, "SELECT 1"); },
+      end: async () => {},
+    };
+  }
+  // 過濾 docker_exec 專屬欄位，避免污染 mysql2 設定
+  const { connection_type, container, db_user, db_password, ssh_host, ssh_user, ssh_port, ...mysqlConfig } = config;
+  return await mysql.createConnection(mysqlConfig);
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_CONFIG_FILE = path.join(__dirname, "..", ".mcp_db_config.json");
@@ -81,16 +177,32 @@ try {
 export const definitions = [
   {
     name: "set_database",
-    description: "設定資料庫連線。支援多連線：不同 database 各自儲存，最後設定的為預設連線。",
+    description: "設定資料庫連線。支援多連線：不同 database 各自儲存，最後設定的為預設連線。\n" +
+      "兩種模式：\n" +
+      "  1. 直連（預設）：填 host/port/user/password/database\n" +
+      "  2. docker_exec（容器內 DB 不對外 port）：填 connection_type=\"docker_exec\" + container + db_user + db_password + database；可選 ssh_host/ssh_user/ssh_port 透過 SSH 中繼。預設僅唯讀（SELECT/SHOW/DESCRIBE/EXPLAIN/WITH），要執行 INSERT/ALTER/CREATE 等寫入語句請加 allow_write: true（DELETE/UPDATE/DROP/TRUNCATE 仍需 confirm: true）。",
     inputSchema: {
       type: "object",
       properties: {
-        host: { type: "string", description: "資料庫主機", default: "127.0.0.1" },
-        port: { type: "number", description: "埠號", default: 3306 },
-        user: { type: "string", description: "使用者名稱", default: "root" },
-        password: { type: "string", description: "密碼" },
+        host: { type: "string", description: "資料庫主機（直連模式）", default: "127.0.0.1" },
+        port: { type: "number", description: "埠號（直連模式）", default: 3306 },
+        user: { type: "string", description: "使用者名稱（直連模式）", default: "root" },
+        password: { type: "string", description: "密碼（直連模式）" },
         database: { type: "string", description: "資料庫名稱" },
         remember: { type: "boolean", description: "是否記住此連線設定（密碼除外）供下次自動載入" },
+        connection_type: {
+          type: "string",
+          enum: ["direct", "docker_exec"],
+          description: "連線模式：direct（預設，host+port）或 docker_exec（透過 docker exec mysql CLI）。docker_exec 預設僅唯讀，要寫入需加 allow_write: true",
+          default: "direct",
+        },
+        container: { type: "string", description: "docker_exec 模式：mysql 容器名稱" },
+        db_user: { type: "string", description: "docker_exec 模式：DB 使用者名稱（預設 root）" },
+        db_password: { type: "string", description: "docker_exec 模式：DB 密碼" },
+        ssh_host: { type: "string", description: "docker_exec 模式：SSH 主機（選填，啟用 SSH 中繼）" },
+        ssh_user: { type: "string", description: "docker_exec 模式：SSH 使用者" },
+        ssh_port: { type: "number", description: "docker_exec 模式：SSH 埠（預設 22）" },
+        allow_write: { type: "boolean", description: "docker_exec 模式：放行 INSERT/UPDATE/DELETE/CREATE/ALTER 等寫入語句（DELETE/UPDATE/DROP/TRUNCATE 仍受 checkDangerousStmt + confirm 把關）。預設 false。", default: false },
       },
       required: ["database"],
     },
@@ -405,23 +517,42 @@ export async function handle(name, args) {
 
   // ── set_database ──
   if (name === "set_database") {
-    const dbConfig = {
-      host: args.host,
-      port: args.port,
-      user: args.user,
-      password: args.password || "",
-      database: args.database,
-    };
+    const isDockerExec = args.connection_type === "docker_exec";
+    const dbConfig = isDockerExec
+      ? {
+          connection_type: "docker_exec",
+          database: args.database,
+          container: args.container,
+          db_user: args.db_user || "root",
+          db_password: args.db_password || "",
+          ssh_host: args.ssh_host,
+          ssh_user: args.ssh_user,
+          ssh_port: args.ssh_port,
+          allow_write: args.allow_write === true,
+        }
+      : {
+          host: args.host,
+          port: args.port,
+          user: args.user,
+          password: args.password || "",
+          database: args.database,
+        };
+
+    if (isDockerExec && !dbConfig.container) {
+      return errorResp(`docker_exec 模式需要 container 欄位（容器名稱）。`, ["填入 container 參數後重試"]);
+    }
 
     // 測試連線
     let conn;
     try {
-      conn = await mysql.createConnection(dbConfig);
+      conn = await getQueryRunner(dbConfig);
       await conn.ping();
     } catch (err) {
       const isAuth = /Access denied|ER_ACCESS_DENIED/i.test(err.message);
       const hints = isAuth
         ? ["確認使用者名稱與密碼是否正確"]
+        : isDockerExec
+        ? ["確認 container 名稱、SSH 連線、容器內 mysql CLI 可用"]
         : ["確認 host、port、database 是否正確"];
       return errorResp(`連線失敗：${err.message}`, hints);
     } finally {
@@ -431,7 +562,16 @@ export async function handle(name, args) {
     dbPool.set(dbConfig.database, dbConfig);
     defaultDb = dbConfig.database;
 
-    let msg = `✅ 已連線到 ${dbConfig.database}@${dbConfig.host}:${dbConfig.port} (user: ${dbConfig.user})`;
+    const target = isDockerExec
+      ? `docker:${dbConfig.container}${dbConfig.ssh_host ? `@${dbConfig.ssh_host}` : ""}`
+      : `${dbConfig.host}:${dbConfig.port}`;
+    const userField = isDockerExec ? dbConfig.db_user : dbConfig.user;
+    let msg = `✅ 已連線到 ${dbConfig.database}@${target} (user: ${userField})`;
+    if (isDockerExec) {
+      msg += dbConfig.allow_write
+        ? `\n🐳 docker_exec 模式（allow_write: true）：寫入語句已放行；DELETE/UPDATE/DROP/TRUNCATE 仍需 confirm: true`
+        : `\n🐳 docker_exec 模式：僅唯讀（SELECT/SHOW/DESCRIBE/EXPLAIN/WITH）。需寫入請加 allow_write: true 重新 set_database`;
+    }
     if (dbPool.size > 1) {
       msg += `\n📊 目前共 ${dbPool.size} 個連線：${[...dbPool.keys()].join(", ")}（預設：${defaultDb}）`;
     }
@@ -499,7 +639,7 @@ export async function handle(name, args) {
     const check = requireDb(args.database);
     if (!check.ok) return check.error;
 
-    const conn = await mysql.createConnection(check.config);
+    const conn = await getQueryRunner(check.config);
     try {
       const [rows] = await conn.execute(`DESCRIBE ${args.table_name}`);
       return {
@@ -553,7 +693,7 @@ export async function handle(name, args) {
       };
     }
 
-    const conn = await mysql.createConnection(check.config);
+    const conn = await getQueryRunner(check.config);
     const results = [];
     const errorCodes = [];
     const dbLabel = check.config.database;
@@ -593,7 +733,7 @@ export async function handle(name, args) {
     const check = requireDb(args.database);
     if (!check.ok) return check.error;
 
-    const conn = await mysql.createConnection(check.config);
+    const conn = await getQueryRunner(check.config);
     const results = [];
     const dbLabel = check.config.database;
     try {
@@ -670,7 +810,7 @@ export async function handle(name, args) {
       };
     }
 
-    const conn = await mysql.createConnection(check.config);
+    const conn = await getQueryRunner(check.config);
     const results = [];
     const errorCodes = [];
     const dbLabel = check.config.database;
@@ -713,7 +853,7 @@ export async function handle(name, args) {
     const action = args.action || "recent_errors";
     const limit = Math.max(1, Math.min(args.limit || 50, 500));
     const sinceMin = Math.max(1, args.since_minutes || 30);
-    const conn = await mysql.createConnection(check.config);
+    const conn = await getQueryRunner(check.config);
     const dbLabel = check.config.database;
 
     try {
@@ -824,7 +964,7 @@ export async function handle(name, args) {
       });
 
     async function fetchSchema(config) {
-      const conn = await mysql.createConnection(config);
+      const conn = await getQueryRunner(config);
       try {
         const [rows] = await conn.execute(
           `SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, EXTRA, COLUMN_COMMENT
