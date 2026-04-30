@@ -136,16 +136,25 @@ process.stdin.on('end', () => {
         `[LLM Judge] 💡 ${basename} 已修改 — 若此改動修復了 bug，記得同步新增測試案例（事故→測試習慣）`
       );
     }
+    let phpLintFailed = false;
+    let phpLintErrorMsg = '';
     if (phpFiles.length > 0) {
       const lintResults = phpFiles.map(p => ({ p, r: runPhpLint(p) })).filter(x => x.r !== null);
       const failed = lintResults.filter(x => !x.r.ok);
       const passed = lintResults.filter(x => x.r.ok);
       if (failed.length > 0) {
-        messages.push(
-          `[LLM Judge] ❌ PHP 語法錯誤（${failed.length}/${lintResults.length} 檔）：\n` +
-          failed.map(x => `  • ${path.basename(x.p)}: ${x.r.output.split('\n').slice(-2).join(' ').trim()}`).join('\n') +
-          `\n⚠️ 批次 regex / apply_diff_batch 常見坑：逗號 regex 誤切函式參數列、產生孤立 }/endif/$$var。請立即修復再繼續。`
-        );
+        phpLintFailed = true;
+        phpLintErrorMsg =
+          `[PHP Lint Gate] ❌ BLOCKED：PHP 語法錯誤（${failed.length}/${lintResults.length} 檔）：\n` +
+          failed.map(x => {
+            const lines = x.r.output.split('\n').filter(l => l.trim());
+            const errLine = lines.find(l => /Parse error|syntax error/i.test(l)) || lines.slice(-1)[0] || '';
+            return `  • ${path.basename(x.p)}: ${errLine.trim()}`;
+          }).join('\n') +
+          `\n⚠️ 壞檔已寫入磁碟，禁止繼續其他操作（特別是 sftp_upload）。\n` +
+          `→ 立即修復語法錯誤後再進行下一步，否則上傳到測試機會直接 500。\n` +
+          `→ 常見坑：逗號 regex 誤切函式參數列、孤兒 } / endif / $var、apply_diff 多 block 邊界錯誤。\n`;
+        messages.push(phpLintErrorMsg);
       } else if (passed.length > 0) {
         messages.push(`[LLM Judge] ✅ PHP 語法驗證通過（${passed.length} 檔）`);
       }
@@ -159,6 +168,11 @@ process.stdin.on('end', () => {
     }
 
     if (messages.length > 0) {
+      // PHP lint 失敗 → 寫到 stderr + exit 2 阻擋後續操作（PostToolUse 規約）
+      if (phpLintFailed) {
+        process.stderr.write(messages.join('\n\n') + '\n');
+        process.exit(2);
+      }
       process.stdout.write(messages.join('\n\n') + '\n');
     }
 

@@ -20,6 +20,19 @@
       "patterns": ["怎麼.*壞了", "為什麼.*不對", "修.*bug", "fix.*bug", "版面.*問題"],
       "intents": ["幫我除錯", "debug 一下", "怎麼修這個 bug"]
     },
+    "bug_trace": {
+      "keywords": ["bug_trace", "trace bug", "追蹤 bug", "查 bug", "找根因", "ajax 失敗", "ajax 錯誤", "fatal error", "php warning"],
+      "patterns": [
+        "按.*?(?:沒反應|沒效|沒動|沒更新|沒變)",
+        "點.*?(?:沒反應|沒效|沒動|沒更新|沒變)",
+        "(?:刪除|新增|儲存|送出|提交).*?(?:沒.*?(?:反應|更新|消失|出現))",
+        "(?:前端|畫面|ui).*?(?:沒.*?更新|沒.*?變|沒.*?跳)",
+        "(?:backend|後端|db|資料庫).*?(?:有.*?(?:動|生效|寫入|刪除|更新)).*?(?:前端|畫面|ui).*?沒",
+        "ajax.*?(?:沒.*?回|失敗|錯誤|不對)",
+        "fatal\\s*error|<b>fatal|warning.*?php|php.*?notice"
+      ],
+      "intents": ["trace 一下", "查根因", "找根因", "為什麼.*?不正常"]
+    },
     "debug_session": {
       "keywords": ["除錯工作階段", "debug session", "debug_session", "繼續上次的 bug", "上次的除錯", "版本化除錯"],
       "patterns": ["繼續.*debug", "接著.*除錯", "debug.*v\\d+"],
