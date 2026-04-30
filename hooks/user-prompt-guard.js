@@ -291,7 +291,12 @@ process.stdin.on('end', () => {
     const prompt = (data.prompt || '').trim();
 
     // 每次使用者發話 → 重置 write-guard 的批次計數與 Prompt Guard 旗標
-    wgSaveState(wgFreshState());
+    // 同時保存 lastPrompt 供其他 hook (repetition-detector L2.83) 判斷情境
+    {
+      const fresh = wgFreshState();
+      fresh.lastPrompt = prompt.slice(0, 500);
+      wgSaveState(fresh);
+    }
 
     // ── CSS Trouble 偵測：使用者回報排版/跑版/樣式問題 → 強制下次 .css 寫入前先 inspect ──
     const CSS_TROUBLE_PATTERNS = [

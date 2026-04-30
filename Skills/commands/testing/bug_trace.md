@@ -61,8 +61,10 @@ $ARGUMENTS
 | 儲存失敗/SQL Error | Model | 查 class 的 add()/update() |
 | 頁面空白/500 | 頁面 PHP | 查入口檔案頂部 include 鏈 |
 | 列表顯示異常 | Model + DB | 查 getAll() SQL + 資料 |
-| AJAX 回傳錯誤 | API 端點 | 查 ajax/ 端點檔案 |
-| 排序/移動無效 | Model + DB | 查 changeOrder() + order_num 資料 |
+| AJAX 回傳錯誤 | API 端點 | **先走步驟 2.5 AJAX gate** |
+| **按了沒反應 / UI 沒更新** | API 端點 | **先走步驟 2.5 AJAX gate**（最常見：後端 fatal 噴 HTML，jQuery dataType:'json' 靜默不執行 success） |
+| **backend 已生效但前端沒變** | API 端點 | **先走步驟 2.5 AJAX gate** |
+| 排序/移動無效 | Model + DB | 若按鈕點了沒反應 → 先走步驟 2.5 AJAX gate |
 | 前台顯示不正確 | 前台 PHP + DB | 查前台頁面 + 對應查詢 |
 
 ---
@@ -95,11 +97,51 @@ $ARGUMENTS
 
 **注意：** 修正/更新記錄特別重要 — 近期的修正可能正是 Bug 的來源或相關上下文。
 
-若規格書檔案不存在，輸出 `（規格書未找到，跳過對照步驟）` 並直接進入步驟 3。
+若規格書檔案不存在，輸出 `（規格書未找到，跳過對照步驟）` 並直接進入步驟 2.5。
 
 ---
 
-### 步驟 3：呼叫鏈追蹤（最多 4 層）
+### 步驟 2.5：AJAX Gate（必做且不可省略）
+
+**觸發條件（任一即必做）：**
+- 症狀涉及「AJAX / 按鈕點了沒反應 / 前端沒更新但 backend 有變 / UI 沒重渲染」
+- 程式碼中發現 `$.ajax({...})` / `fetch()` / `XMLHttpRequest` 介於使用者操作與資料變更之間
+
+**必做動作（用 `send_http_request` 或 `run_php_code` curl 取 raw body）：**
+
+```text
+1. 取得實際 endpoint URL 與 POST payload（從程式碼或 Network 面板）
+2. send_http_request 呼叫該 endpoint，**取原始 200 body 文字**（不是解析後的 JSON）
+3. 檢查 body 第一個字元：
+   ▸ `{` 或 `[` 開頭 → 合法 JSON → 進前端追（reactivity / 事件綁定）
+   ▸ `<` 開頭 / 含 `<b>Fatal error</b>` / `<br />Warning` / `Notice:` → 根因在後端
+   ▸ HTTP 狀態 != 200 → 根因在後端（路由 / 權限 / 例外）
+```
+
+**判定後的動作分支：**
+
+| body 樣態 | 根因方向 | 後續步驟 |
+|----------|---------|---------|
+| 合法 JSON 且 `result=1` | 前端問題 | 進步驟 3 追前端（Vue reactivity / DOM / 事件綁定） |
+| HTML / Fatal / Warning | 後端問題 | 進步驟 3 但**只追後端 PHP**，禁止改前端 |
+| 非 200 | 後端問題 | 進步驟 3 追路由 / include / 權限 |
+| 空 body | 後端問題 | 進步驟 3 追 die() / exit() / output buffer |
+
+**🚫 禁止行為（拿到 raw body 之前一律禁止）：**
+- 修改任何前端檔案（footer.php / *.js / *.vue）
+- 改 Vue method / 事件綁定 / reactivity 寫法
+- 跑 Playwright 測互動（會被靜默失敗誤導）
+
+**為什麼這條是鐵律：** `dataType:'json'` + 後端非 200 / 非 JSON = jQuery `success` callback 靜默不執行，前端看起來「按了沒反應」，但根因在後端 fatal 把 HTML 噴進回應。先讀 raw body 一次就破案，跳過此步常導致 20+ 輪繞遠路。
+
+---
+
+### 步驟 3：呼叫鏈追蹤（最多 4 層；AJAX gate 已定向時 1-2 層即可）
+
+**追蹤層數動態調整：**
+- 步驟 2.5 AJAX gate 已定向到「後端 fatal」→ 直接 1 層（讀 endpoint PHP）即可，不要為了「嚴謹」多追 Vue / 前端
+- 步驟 2.5 已定向到「前端問題」→ 略過後端 Model/SQL 層
+- 一般症狀（無 AJAX gate 定向）→ 沿原本 4 層追蹤
 
 若專案有 codemap（`docs/CODEMAPS/backend.md`），先讀 codemap 定位函式行號。
 若無 codemap，用 `class_method_lookup` 或 `find_usages` 定位。
@@ -216,7 +258,9 @@ $ARGUMENTS
 
 - 每層追蹤限 1 次 tool call（用 class_method_lookup 一次到位，不要 Grep → Read 兩步）
 - 總 tool call 目標 ≤ 8 次（規格書 1-2 + 定位 1 + 追蹤 3 層 + DB 驗證 1 + 確認 1）
+- **AJAX 類 bug 經 gate 定向後，1 個 send_http_request + 1 個檔案讀取常常就破案**，不要為了「層數嚴謹」硬追到 4 層
 - **不修程式碼，只產出分析報告**。修復由使用者決定觸發
+- **AJAX gate 未通過前禁止修改任何前端檔案**（footer.php / *.js / *.vue / 事件綁定 / Vue method）
 - DB 驗證用 SELECT 唯讀查詢，禁止 UPDATE/DELETE
 - 若 4 層追蹤後仍無法判定根因，明確告知「需要更多資訊」而非猜測
 - 規格書不存在時不報錯，跳過對照步驟繼續追蹤

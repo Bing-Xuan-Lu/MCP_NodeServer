@@ -81,6 +81,53 @@ sftp_upload(local_path, remote_path)
 → 完成後顯示：✅ 上傳完成
 ```
 
+#### 4a：drift 偵測互動模式（禁盲 force）
+
+若 `sftp_upload_batch` 回傳「遠端有變動（未加 force），已略過 N 個檔」，**禁止**直接加 `force: true` 重傳。改走以下互動流程：
+
+**Step 1 — 自動下載 drift 檔到暫存區**
+
+```
+sftp_download_batch
+  items: [{ remote_path: "/var/www/.../X.php", local_path: "_tmp_remote/{preset}_drift/X.php" }, ...]
+```
+
+預設暫存路徑：
+- 跨 session 共用：`D:/tmp/{preset}_drift/`（hook 已放行 rm -rf 與 cleanup_path）
+- session 本地：`{project}/_tmp_remote/{preset}_drift/`（避開 git，basePath 內）
+
+**Step 2 — 自動 diff 並分類**
+
+對每個 drift 檔跑 `diff -u {tmp_remote}/X.php X.php`，依結果分類：
+
+| 類別 | 偵測規則 | 建議動作 |
+|------|---------|---------|
+| 🟢 純本機 only-add | diff 只有 `+` 行（本機新增），無 `-` 行 | 安全 force 重傳 |
+| 🟡 純遠端 only-add | diff 只有 `-` 行（遠端新增） | merge：先把遠端內容合併進本地，再上傳 |
+| 🔴 真衝突 | 同行有 `+` 和 `-`（雙方改了同一處） | 人工選擇（顯示 diff 給使用者，等指示） |
+
+**Step 3 — 依分類執行**
+
+- 🟢 全部 only-add → 列出檔名 → 確認後 `force: true` 重傳
+- 🟡 only-add（遠端方向）→ 列出遠端新增段落 → 確認合併方向 → 改本地 → 重傳
+- 🔴 衝突 → 把 unified diff 完整貼出 → 等使用者選 (a) 採本地 (b) 採遠端 (c) 手動合併
+
+**Step 4 — 清理暫存**
+
+部署完後優先用 MCP 工具：
+
+```
+cleanup_path(path: "D:/tmp/{preset}_drift/", confirm: true)
+```
+
+或 Bash（已放行 D:/tmp/ 與 _tmp_remote/_drift/ 路徑）：
+
+```bash
+rm -rf D:/tmp/{preset}_drift/
+```
+
+**Why:** drift 訊息是保護機制，盲 force 會覆蓋他人 work。互動模式 + 自動分類能在 30 秒內處理完，不需逐檔人工判讀。
+
 ---
 
 ### 步驟 5：驗證部署結果

@@ -57,21 +57,56 @@ async function dockerExecRawQuery(config, sql) {
   if (database) mysqlArgs.push(database);
   mysqlArgs.push("-e", sql);
 
-  let cmd, args;
-  if (config.ssh_host) {
-    // 透過 SSH 中繼：ssh user@host docker exec ...
-    // 使用陣列參數避免 shell injection；遠端命令需要 shell quoting
-    const target = config.ssh_user ? `${config.ssh_user}@${config.ssh_host}` : config.ssh_host;
-    // 把 docker exec 命令組合成單一字串給遠端 shell
-    const remoteCmd = ["docker"]
+  // SSH 中繼：把 docker exec 命令組成遠端 shell 字串
+  const buildRemoteCmd = () =>
+    ["docker"]
       .concat(mysqlArgs)
       .map((a) => `'${String(a).replace(/'/g, "'\\''")}'`)
       .join(" ");
+
+  // 分支 A：ssh_password 提供 → 用 ssh2 library 跑（支援密碼認證）
+  if (config.ssh_host && config.ssh_password) {
+    const { Client } = await import("ssh2");
+    const remoteCmd = buildRemoteCmd();
+    return await new Promise((resolve, reject) => {
+      const conn = new Client();
+      conn
+        .on("ready", () => {
+          conn.exec(remoteCmd, (err, stream) => {
+            if (err) { conn.end(); return reject(err); }
+            let stdout = "", stderr = "";
+            stream
+              .on("close", (code) => {
+                conn.end();
+                if (code !== 0) return reject(new Error(`docker_exec 執行失敗 (exit ${code})：${stderr.slice(0, 500)}`));
+                resolve(parseMysqlBatchOutput(stdout));
+              })
+              .on("data", (d) => { stdout += d.toString(); })
+              .stderr.on("data", (d) => { stderr += d.toString(); });
+          });
+        })
+        .on("error", (err) => reject(new Error(`SSH 連線失敗：${err.message}`)))
+        .connect({
+          host: config.ssh_host,
+          port: config.ssh_port || 22,
+          username: config.ssh_user,
+          password: config.ssh_password,
+          readyTimeout: 15000,
+        });
+    });
+  }
+
+  // 分支 B：ssh_host 但無密碼 → 走 ssh binary（金鑰認證 / BatchMode）
+  let cmd, args;
+  if (config.ssh_host) {
+    const target = config.ssh_user ? `${config.ssh_user}@${config.ssh_host}` : config.ssh_host;
+    const remoteCmd = buildRemoteCmd();
     cmd = "ssh";
     args = ["-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes"];
     if (config.ssh_port) args.push("-p", String(config.ssh_port));
     args.push(target, remoteCmd);
   } else {
+    // 分支 C：本機 docker
     cmd = "docker";
     args = mysqlArgs;
   }
@@ -97,7 +132,7 @@ async function getQueryRunner(config) {
     };
   }
   // 過濾 docker_exec 專屬欄位，避免污染 mysql2 設定
-  const { connection_type, container, db_user, db_password, ssh_host, ssh_user, ssh_port, ...mysqlConfig } = config;
+  const { connection_type, container, db_user, db_password, ssh_host, ssh_user, ssh_port, ssh_password, allow_write, ...mysqlConfig } = config;
   return await mysql.createConnection(mysqlConfig);
 }
 
@@ -180,7 +215,7 @@ export const definitions = [
     description: "設定資料庫連線。支援多連線：不同 database 各自儲存，最後設定的為預設連線。\n" +
       "兩種模式：\n" +
       "  1. 直連（預設）：填 host/port/user/password/database\n" +
-      "  2. docker_exec（容器內 DB 不對外 port）：填 connection_type=\"docker_exec\" + container + db_user + db_password + database；可選 ssh_host/ssh_user/ssh_port 透過 SSH 中繼。預設僅唯讀（SELECT/SHOW/DESCRIBE/EXPLAIN/WITH），要執行 INSERT/ALTER/CREATE 等寫入語句請加 allow_write: true（DELETE/UPDATE/DROP/TRUNCATE 仍需 confirm: true）。",
+      "  2. docker_exec（容器內 DB 不對外 port）：填 connection_type=\"docker_exec\" + container + db_user + db_password + database；可選 ssh_host/ssh_user/ssh_port 透過 SSH 中繼。SSH 認證：預設走 ssh binary（金鑰登入），若提供 ssh_password 則改用 ssh2 library 走密碼登入。預設僅唯讀（SELECT/SHOW/DESCRIBE/EXPLAIN/WITH），要執行 INSERT/ALTER/CREATE 等寫入語句請加 allow_write: true（DELETE/UPDATE/DROP/TRUNCATE 仍需 confirm: true）。",
     inputSchema: {
       type: "object",
       properties: {
@@ -202,6 +237,7 @@ export const definitions = [
         ssh_host: { type: "string", description: "docker_exec 模式：SSH 主機（選填，啟用 SSH 中繼）" },
         ssh_user: { type: "string", description: "docker_exec 模式：SSH 使用者" },
         ssh_port: { type: "number", description: "docker_exec 模式：SSH 埠（預設 22）" },
+        ssh_password: { type: "string", description: "docker_exec 模式：SSH 密碼（選填；未提供時走 ssh binary BatchMode 金鑰認證，提供時改用 ssh2 library 支援密碼登入）" },
         allow_write: { type: "boolean", description: "docker_exec 模式：放行 INSERT/UPDATE/DELETE/CREATE/ALTER 等寫入語句（DELETE/UPDATE/DROP/TRUNCATE 仍受 checkDangerousStmt + confirm 把關）。預設 false。", default: false },
       },
       required: ["database"],
@@ -528,6 +564,7 @@ export async function handle(name, args) {
           ssh_host: args.ssh_host,
           ssh_user: args.ssh_user,
           ssh_port: args.ssh_port,
+          ssh_password: args.ssh_password,
           allow_write: args.allow_write === true,
         }
       : {

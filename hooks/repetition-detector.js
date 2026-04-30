@@ -117,6 +117,30 @@ function identifyTokenWaste(entry, history) {
     }
   }
 
+  // ── W9: 同檔多次小 limit 分段讀（碎片化讀取） ──
+  //   觸發：同 file_path 在最近 N 步內被 Read ≥4 次，且每次 limit ≤60
+  //   常見壞模式：明明 Read 預設可讀 2000 行，卻刻意 limit:30~60 反覆切片讀
+  if (tool === 'Read' || tool === 'read_file') {
+    const filePath = args.file_path || args.path || '';
+    if (filePath && (args.limit ?? 9999) <= 60) {
+      const recentSmallReads = history.slice(-15).filter(h => {
+        const t = shortName(h.tool);
+        if (t !== 'Read' && t !== 'read_file') return false;
+        if ((h.args?.file_path || h.args?.path || '') !== filePath) return false;
+        return (h.args?.limit ?? 9999) <= 60;
+      });
+      const totalSmallReads = recentSmallReads.length + 1;
+      if (totalSmallReads >= 4) {
+        issues.push({
+          id: 'W9_fragmented_small_reads',
+          issue: `同檔 ${path.basename(filePath)} 已用小 limit (≤60) Read ${totalSmallReads} 次，碎片化讀取`,
+          wasted: totalSmallReads * 150,
+          suggestion: 'Read 預設可讀 2000 行，一次讀完省去多次 round-trip；或先 Grep 定位行號再精準讀',
+        });
+      }
+    }
+  }
+
   // ── W2: Read 大檔案未用 offset/limit ──
   if (tool === 'Read' || tool === 'read_file') {
     const hasOffset = args.offset != null;
@@ -591,9 +615,20 @@ const BASH_BLOCK_ALLOWLIST = [
   /\b127\.0\.0\.1[:\/]/,                          // 本機探測
 ];
 
+// rm -rf 安全白名單：限定明確 tmp / drift 暫存路徑（搭配 cleanup_path 工具的同等規則）
+const RM_TMP_WHITELIST = [
+  /\brm\s+-r?f?\s+["']?[dD]:[/\\]tmp[/\\]/,
+  /\brm\s+-r?f?\s+["']?[cC]:[/\\]Users[/\\][^/\\]+[/\\]AppData[/\\]Local[/\\]Temp[/\\]/,
+  /\brm\s+-r?f?\s+["']?\/tmp\//,
+  /\brm\s+-r?f?\s+[^\s]*[/\\]_tmp_remote[/\\]/i,
+  /\brm\s+-r?f?\s+[^\s]*[/\\]_drift[/\\]/i,
+  /\brm\s+-r?f?\s+[^\s]*[/\\]\.tmp[/\\]/i,
+];
+
 function isBashAllowed(command) {
   if (!command) return false;
   if (MCP_FALLBACK_RE.test(command)) return true;
+  if (RM_TMP_WHITELIST.some(re => re.test(command))) return true;
   return BASH_BLOCK_ALLOWLIST.some(re => re.test(command));
 }
 
@@ -613,28 +648,28 @@ const BASH_PATTERNS = [
     signature: 'bash:docker-mysql',
     hint: 'set_database + execute_sql / execute_sql_batch（MCP 工具，免重複 docker exec 開銷）',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     regex: /docker\s+exec\s+\S+\s+php\b/i,
     signature: 'bash:docker-php',
     hint: 'run_php_script / run_php_script_batch / run_php_code（MCP 工具）',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     regex: /docker\s+exec\s+\S+\s+python/i,
     signature: 'bash:docker-python',
     hint: 'run_python_script（MCP 工具）',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     regex: /\bmysql\s+(-[ueph]\s*\S+\s+)*.*(-e|--execute)/i,
     signature: 'bash:direct-mysql',
     hint: 'set_database + execute_sql / execute_sql_batch（MCP 工具）',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     // Bash grep 對 .php 檔 → BLOCK（規避 L2.4/L2.4b/L2.4c PHP symbol 偵測的常見手法）
@@ -643,7 +678,7 @@ const BASH_PATTERNS = [
     signature: 'bash:grep-php',
     hint: 'PHP 符號定位請用 AST 工具：class_method_lookup / find_usages / symbol_index / trace_logic。\n  純文字搜尋請用 Grep 工具帶 glob="*.php"。\n  禁 Bash grep .php — 規避 PHP symbol hook 偵測。',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     // Bash grep 對 PHP 專案目錄（cls / model / controller / service / repository / trait）→ BLOCK
@@ -651,7 +686,7 @@ const BASH_PATTERNS = [
     signature: 'bash:grep-php-dir',
     hint: 'PHP 目錄符號查詢請用 AST 工具：class_method_lookup / find_usages / symbol_index。',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     // rg --type php → BLOCK（同等於指定 PHP 檔，但無 .php 字面）
@@ -659,7 +694,7 @@ const BASH_PATTERNS = [
     signature: 'bash:rg-type-php',
     hint: '改用 AST 工具或 Grep 工具 type="php"。',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     // Node 自寫 file-read-and-grep → BLOCK（規避 PHP symbol 偵測的繞道路徑）
@@ -667,7 +702,7 @@ const BASH_PATTERNS = [
     signature: 'bash:node-grep-php',
     hint: 'PHP 符號用 AST 工具：class_method_lookup / find_usages / symbol_index。禁用 node 自寫 grep 繞道。',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     // awk / sed 對 .php 檔 → BLOCK
@@ -675,7 +710,7 @@ const BASH_PATTERNS = [
     signature: 'bash:awk-sed-php',
     hint: 'PHP 處理請用 AST 工具（讀取）+ apply_diff（修改），不要 awk/sed。',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     // PowerShell Select-String 對 .php → BLOCK
@@ -684,7 +719,7 @@ const BASH_PATTERNS = [
     signature: 'bash:powershell-grep-php',
     hint: 'PHP 符號用 AST 工具，不要透過 PowerShell Select-String 規避。',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     regex: /\b(cat|head|tail)\s+/i,
@@ -736,7 +771,7 @@ const BASH_PATTERNS = [
     signature: 'bash:curl',
     hint: 'send_http_request / send_http_requests_batch（MCP 工具，支援 cookie session）',
     warnOnFirst: true,
-    block: true,
+    block: false,
   },
   {
     regex: /\becho\s+.*[>]/i,
@@ -1176,12 +1211,13 @@ const PATTERNS = [
       if (isPureSnakeCaseField(pattern)) return null;
 
       if (explicitPhpScope) {
-        return {
-          block: true,
-          message:
-            `[PHP Symbol] ❌ Grep PHP scope+symbol「${pattern.substring(0, 50)}」→ 改 class_method_lookup / find_usages / symbol_index。Grep 只搜純文字。\n`,
-        };
+        return `[PHP Symbol] ⚠️ Grep PHP scope+symbol「${pattern.substring(0, 50)}」→ 建議改 class_method_lookup / find_usages / symbol_index（更省 token）。Grep 適合搜純文字。\n`;
       }
+
+      // 鬆散 path-based PHP context (如 dbox/, admin/, project/) 但 pattern 無 PHP 結構符號
+      // → 無法區分是 PHP method 還是同名 JS 變數（如 showBonusUI / getMemberBonus），
+      //   一律放行避免誤殺純 JS 開發。要 BLOCK 必須 pattern 內有 `::` / `->` / `function ` / `class ` 等明確證據。
+      if (!hasSymbolOperator(pattern)) return null;
 
       // 累計：統計歷史中同樣是 PHP symbol search 的 Grep，跨不同路徑
       const prevSymbolGreps = history.filter(h => {
@@ -1197,17 +1233,10 @@ const PATTERNS = [
       uniquePaths.add(filePath || 'cwd');
       const count = prevSymbolGreps.length + 1;
 
-      // 不論是否 explicit PHP scope，偵測到 PHP context + symbol pattern 一律 block
-      return {
-        block: true,
-        message:
-          `[PHP Symbol] ❌ Grep PHP symbol「${pattern.substring(0, 50)}」→ 改用 MCP AST 工具：\n` +
-          `  → class_method_lookup：直接取得 method 原始碼\n` +
-          `  → find_usages：找誰呼叫了這個 method / 哪裡用到這個 class\n` +
-          `  → trace_logic：追蹤函式控制流（if/switch 分支展開）\n` +
-          `  → find_hierarchy：找繼承鏈（extends / implements）\n` +
-          `  Grep 只搜純文字（變數名、字串常數、SQL 欄位名）。\n`,
-      };
+      // 鬆散 PHP context + pattern 含 PHP 結構符號 → 警告
+      return `[PHP Symbol] ⚠️ Grep PHP symbol「${pattern.substring(0, 50)}」→ 建議改 MCP AST 工具更省 token：\n` +
+             `  → class_method_lookup / find_usages / trace_logic / find_hierarchy\n` +
+             `  Grep 適合搜純文字（變數名、字串常數、SQL 欄位名）。\n`;
     },
   },
   {
@@ -1248,11 +1277,7 @@ const PATTERNS = [
       const hit = STRUCTURAL.find(s => s.re.test(pattern));
       if (!hit) return null;
 
-      return {
-        block: true,
-        message:
-          `[PHP Symbol] ❌ Grep PHP 結構語法「${hit.hint}」→ 改 class_method_lookup / find_usages / symbol_index。要搜純文字請去掉結構符號（如 \`->foo(\` → \`foo\`）。\n`,
-      };
+      return `[PHP Symbol] ⚠️ Grep PHP 結構語法「${hit.hint}」→ 建議改 class_method_lookup / find_usages / symbol_index 更省 token。要搜純文字請去掉結構符號（如 \`->foo(\` → \`foo\`）。\n`;
     },
   },
   {
@@ -1489,16 +1514,14 @@ const PATTERNS = [
       const files = [...new Set([...sameReplace.map(h => h.args?.file_path), currentFile])];
       const preview = oldStr.length > 60 ? oldStr.slice(0, 60) + '…' : oldStr;
 
+      // 放寬：不阻擋，只強度遞增提醒（避免擋實際批次注入工作如 sidebar 條件顯示）
       if (count >= 5) {
-        return {
-          block: true,
-          message: `[Batch Replace] ❌ BLOCKED：相同字串替換已跨 ${files.length} 個檔案（${count} 次 Edit）。\n` +
-                   `  → 替換內容：「${preview}」\n` +
-                   `  → 請改用一行 sed 或 node 腳本批次處理所有檔案，不要逐一 Edit。\n`,
-        };
+        return `[Batch Replace] ⚠️⚠️ 跨檔相同替換已 ${count} 次（${files.length} 檔）。\n` +
+               `  → 替換內容：「${preview}」\n` +
+               `  → 強烈建議改用 sed / node / multi_file_inject 一次掃完，省 tool call。\n`;
       }
 
-      return `[Batch Replace] ⚠️ 偵測到跨檔相同替換（${files.length} 檔，${count} 次），5 次將被阻擋。\n` +
+      return `[Batch Replace] ⚠️ 偵測到跨檔相同替換（${files.length} 檔，${count} 次）。\n` +
              `  → 替換內容：「${preview}」\n` +
              `  → 建議改用 sed/node 腳本一次掃完所有檔案。\n`;
     },
@@ -1533,31 +1556,31 @@ const PATTERNS = [
       const uniqueBlocks = blockKeys.size;
       const isMultiBlock = uniqueBlocks === count; // 每次都改不同地方
 
-      // 不同區塊分散修改：閾值加倍（8→15 警告，12→20 block）
-      const warnAt = isMultiBlock ? 8 : 5;
-      const blockAt = isMultiBlock ? 15 : 8;
+      // apply_diff 本身已支援單次多 blocks，重複呼叫等同浪費；門檻較 Edit 嚴格
+      // Edit 是逐處修改，多區塊分散修改較合理，閾值加倍
+      // 放寬：移除 BLOCK，純警告分級（避免擋實際多區塊修改工作）
+      const isApplyDiff = tool === 'apply_diff';
+      const warn1At = isApplyDiff ? 5 : (isMultiBlock ? 8 : 5);
+      const warn2At = isApplyDiff ? 10 : (isMultiBlock ? 18 : 10);
 
-      // 早期 hint：multi-block 第 3 次時輕量提示改用 apply_diff_batch（不警告、不阻擋）
+      // 早期 hint：multi-block 第 3 次時輕量提示改用 apply_diff_batch
       if (isMultiBlock && count === 3 && tool === 'Edit') {
         const fname = filePath.split('/').pop();
         return `[Same File Edit] \u{1F4A1} ${fname} \u5DF2\u7528 Edit \u6539\u4E86 3 \u500B\u4E0D\u540C\u533A\u584A\uFF0C\u5EFA\u8B70\u5269\u9918\u4FEE\u6539\u6539\u7528 apply_diff_batch \u4E00\u6B21\u9001\u5B8C\uFF08\u7701 token \u4E26\u907F\u514D\u5F8C\u7E8C\u89F8\u767C L2.8 \u963B\u64CB\uFF09\u3002\n`;
       }
 
-      if (count >= blockAt) {
+      if (count >= warn2At) {
         const fname = filePath.split('/').pop();
-        return {
-          block: true,
-          message: `[Same File Edit] \u274C BLOCKED\uFF1A\u5C0D ${fname} \u5DF2\u9023\u7E8C\u4FEE\u6539 ${count} \u6B21\u3002\n` +
-                   `  \u2192 \u8ACB\u505C\u4E0B\u4F86\u601D\u8003\uFF1A\u662F\u5426\u61C9\u8A72\u91CD\u69CB\u9019\u500B\u6A94\u6848\uFF0C\u800C\u4E0D\u662F\u4E00\u76F4\u8CBC OK \u7E43\uFF1F\n` +
-                   `  \u2192 \u82E5\u78BA\u5BE6\u9700\u8981\u591A\u8655\u4FEE\u6539\uFF0C\u8ACB\u7528 apply_diff_batch \u4E00\u6B21\u9001\u5B8C\u3002\n`,
-        };
+        return `[Same File Edit] ⚠️⚠️ ${fname} 已${isApplyDiff ? ' apply_diff' : '修改'} ${count} 次，請考慮：\n` +
+               `  → 是否該重構這個檔案？\n` +
+               `  → 跨檔相同替換→ apply_diff_batch；同字串多處→ Edit replace_all=true。\n`;
       }
 
-      if (count >= warnAt) {
+      if (count >= warn1At) {
         const fname = filePath.split('/').pop();
-        const modeNote = isMultiBlock ? `（${uniqueBlocks} 個不同區塊）` : '';
-        return `[Same File Edit] \u26A0\uFE0F \u5C0D ${fname} \u5DF2\u4FEE\u6539 ${count} \u6B21${modeNote}\uFF08${blockAt} \u6B21\u5C07\u88AB\u963B\u64CB\uFF09\u3002\n` +
-               `  \u2192 \u8003\u616E\u7528 apply_diff_batch \u5408\u4F75\u5269\u9918\u4FEE\u6539\uFF0C\u6216\u5148\u5411\u4F7F\u7528\u8005\u63D0\u8B70\u91CD\u69CB\u3002\n`;
+        const modeNote = isMultiBlock ? `（${uniqueBlocks} 個不同区塊）` : '';
+        return `[Same File Edit] ⚠️ ${fname} 已${isApplyDiff ? ' apply_diff' : '修改'} ${count} 次${modeNote}。\n` +
+               `  → 跨檔相同替換→ apply_diff_batch；同字串多處→ Edit replace_all=true。\n`;
       }
 
       return null;
@@ -1594,15 +1617,195 @@ const PATTERNS = [
       if (!triggered) return null;
 
       const fname = filePath.split('/').pop();
-      return {
-        block: true,
-        message:
-          `[Confirm Requirements] ❌ BLOCKED：${fname} 30 分鐘內已被 Edit ${editCount} 次，` +
-          `且最近使用者訊息出現「不對/又/為什麼」等糾正詞。\n` +
-          `  → 你正在「猜需求 → 改 → 被退 → 再猜」死循環。\n` +
-          `  → 強制中斷：請用 1-3 句話總結你目前理解的需求，等使用者確認後再繼續修改。\n` +
-          `  → 使用者下次發送「不含糾正詞」的訊息（如「對」「就是這樣」「繼續」）後此 hook 會自動放行。\n`,
+      return `[Confirm Requirements] ⚠️ ${fname} 30 分鐘內已 Edit ${editCount} 次，且最近使用者訊息含「不對/又/為什麼」等糾正詞。\n` +
+             `  → 可能在「猜需求 → 改 → 被退 → 再猜」循環。\n` +
+             `  → 建議先用 1-3 句話總結目前理解的需求，等使用者確認後再繼續修改。\n`;
+    },
+  },
+  {
+    // Layer 2.84: UI Click No Progress — 同 selector 連續 click ≥3 次，疑似 callback 沒執行
+    // 真實案例：點刪除按鈕沒反應，反覆 click() / dispatchEvent() / 直呼 method 全沒效，
+    // 根因是後端 fatal 噴 HTML，jQuery dataType:'json' success 靜默不執行——應先 fetch raw body。
+    id: 'ui_click_no_progress',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      // 涵蓋兩個 playwright server (default / default2) 與 MCP browser_interact
+      if (tool !== 'browser_interact' && tool !== 'browser_click') return null;
+
+      const extractClickSelectors = (h) => {
+        const ht = shortName(h.tool);
+        if (ht === 'browser_click') {
+          return [h.args?.element || h.args?.ref || h.args?.selector || ''];
+        }
+        if (ht === 'browser_interact') {
+          const actions = h.args?.actions || [];
+          return actions
+            .filter(a => a.type === 'click' || a.type === 'evaluate' && /\.click\(\)|dispatchEvent.*click/i.test(a.code || ''))
+            .map(a => a.selector || a.ref || a.code?.match(/['"]([#.][\w-]+)['"]/)?.[1] || '');
+        }
+        return [];
       };
+
+      const currentSelectors = extractClickSelectors(entry).filter(Boolean);
+      if (currentSelectors.length === 0) return null;
+
+      // 比對最近 8 步內同 selector 的 click 次數
+      const recentClicks = [];
+      for (const h of history.slice(-8)) {
+        for (const sel of extractClickSelectors(h).filter(Boolean)) {
+          recentClicks.push(sel);
+        }
+      }
+
+      const hits = currentSelectors.filter(sel =>
+        recentClicks.filter(s => s === sel).length >= 2  // 過去已有 2 次 + 本次 = 3 次
+      );
+      if (hits.length === 0) return null;
+
+      // 加分訊號：最近 8 步內是否有 send_http_request 或 fetch raw body 動作
+      const hasFetchedRaw = history.slice(-8).some(h => {
+        const ht = shortName(h.tool);
+        if (ht === 'send_http_request') return true;
+        if (ht === 'browser_interact') {
+          const actions = h.args?.actions || [];
+          return actions.some(a => a.type === 'evaluate' && /fetch\(.*\)\.text\(\)/i.test(a.code || ''));
+        }
+        return false;
+      });
+
+      if (hasFetchedRaw) return null;  // 已驗過 raw body，可能是真前端問題，不再警示
+
+      return `[UI Click No Progress] ⚠️ 偵測到對 ${hits.join(', ')} 已連續 click ≥3 次（最近 8 步內）。\n` +
+             `  → 反覆 click 沒進展常代表 callback 根本沒執行，不是「綁定問題」。\n` +
+             `  → 最常見根因：後端 fatal/warning 噴 HTML，jQuery dataType:'json' success 靜默不跑。\n` +
+             `  → 必做下一步：用 send_http_request 直接打該按鈕觸發的 endpoint，看 raw 200 body：\n` +
+             `      ▸ body 開頭 \`{\` / \`[\` → 合法 JSON，問題在前端\n` +
+             `      ▸ body 開頭 \`<\` 或含 \`<b>Fatal error</b>\` / \`Warning:\` → 後端壞了，禁止再改前端\n` +
+             `  → 跳過此驗證會繞遠路（可參考 /bug_trace 步驟 2.5 AJAX gate）。\n`;
+    },
+  },
+  {
+    // Layer 2.83: UI Verify Mismatch — 改完前端互動 (Vue / popup / 事件綁定) 後用 run_php_code 充當驗證
+    // run_php_code 只能驗資料層，無法驗 Vue reactivity / DOM 渲染 / v-if 條件分支 / 點擊事件
+    // 警示 (非阻擋)：提醒改用 Playwright 端到端跑使用者操作流程
+    id: 'ui_verify_mismatch',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'run_php_code') return null;
+
+      // 條件 A：最近 30 個 step 內有改過前端互動相關檔案
+      const editTools = new Set(['Edit', 'Write', 'apply_diff', 'create_file', 'multi_file_inject']);
+      const VUE_DIRECTIVES = /v-(?:for|if|else|show|model|on|bind)\b|@click|@change|@submit|:class=|:style=|vm\.|Vue\.|new Vue\(|readyCart|removeReadyCart|addReadyCart/;
+
+      // 整檔掃描快取（同 step 內同檔避免重複讀）
+      const fileScanCache = new Map();
+      const scanFileForVue = (absPath) => {
+        if (fileScanCache.has(absPath)) return fileScanCache.get(absPath);
+        let hit = false;
+        try {
+          const stat = fs.statSync(absPath);
+          if (stat.size <= 512 * 1024) {
+            const content = fs.readFileSync(absPath, 'utf-8');
+            hit = VUE_DIRECTIVES.test(content);
+          }
+        } catch {}
+        fileScanCache.set(absPath, hit);
+        return hit;
+      };
+
+      const recentUiEdit = history.slice(-30).some(h => {
+        if (!editTools.has(shortName(h.tool))) return false;
+        const fp = (h.args?.file_path || h.args?.path || '').replace(/\\/g, '/');
+        const fpLower = fp.toLowerCase();
+        if (/\.(vue|jsx|tsx)$/.test(fpLower)) return true;
+        if (/\.js$/.test(fpLower) && !/\/(node_modules|vendor|migrations)\//.test(fpLower)) return true;
+        if (/\.php$/.test(fpLower)) {
+          // 先看本次 diff/new_string（快路徑）
+          const blob = (h.args?.new_string || h.args?.content || h.args?.diff || '');
+          if (VUE_DIRECTIVES.test(blob)) return true;
+          // fallback：掃整檔（涵蓋「改後端方法但同檔上方有 Vue 模板」死角）
+          if (fp) {
+            const abs = path.isAbsolute(fp) ? fp : path.resolve(process.cwd(), fp);
+            if (scanFileForVue(abs)) return true;
+          }
+        }
+        return false;
+      });
+      if (!recentUiEdit) return null;
+
+      // 條件 B：run_php_code 內容看起來像「驗證/測試」用途
+      const code = entry.args?.code || '';
+      const looksLikeTest = /(echo|var_dump|print_r|var_export|json_encode)\s*\(/.test(code) ||
+                            /assert|測試|驗證|check|verify|斷言/i.test(code) ||
+                            /->build\(|->render\(|->get(?:Data|Result|Output)/.test(code);
+      if (!looksLikeTest) return null;
+
+      // 條件 C：read write-guard state，若使用者最近 prompt 含 UI 互動關鍵字，加重提醒
+      let uiContext = false;
+      try {
+        const wgFile = path.join(os.tmpdir(), 'claude-write-guard', 'state.json');
+        if (fs.existsSync(wgFile)) {
+          const wg = JSON.parse(fs.readFileSync(wgFile, 'utf-8'));
+          if (Date.now() - (wg.ts || 0) < 30 * 60 * 1000) {
+            const lastPrompt = (wg.lastPrompt || '').toString();
+            uiContext = /vue|popup|彈窗|reactivity|渲染|畫面|看不到|顯示|點擊|綁定|v-for|v-if|@click/i.test(lastPrompt);
+          }
+        }
+      } catch {}
+
+      const heavy = uiContext ? '⚠️⚠️ ' : '⚠️ ';
+      return `[UI Verify Mismatch] ${heavy}偵測到剛改過前端互動相關檔案，正用 run_php_code 跑驗證。\n` +
+             `  → run_php_code 只能驗「資料層輸出」，無法驗 Vue reactivity / DOM 渲染 / v-if 分支 / 點擊事件 / popup 開啟狀態。\n` +
+             `  → 餵 fake session 給 builder 看 output 通過 ≠ 使用者畫面正常。\n` +
+             `  → 正確驗法：browser_interact 端到端跑使用者操作流程（登入 → 觸發互動 → 抓 DOM 斷言）。\n` +
+             `  → 若這次只是純資料層 trace（非驗證修復），可忽略此提醒。\n`;
+    },
+  },
+  {
+    // Layer 2.82: SFTP Local Test Gate — sftp_upload PHP/CSS/JS 前若 30 分鐘內無 localhost 訪問記錄，提醒先 local 測過
+    // 警示而非阻擋（檔案↔URL 對應追蹤難度高，誤報率不低）
+    id: 'sftp_local_test_gate',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'sftp_upload' && tool !== 'sftp_upload_batch') return null;
+
+      const items = tool === 'sftp_upload_batch'
+        ? (entry.args?.items || [])
+        : [entry.args || {}];
+
+      const codeFiles = items
+        .map(it => (it.local_path || '').replace(/\\/g, '/'))
+        .filter(p => /\.(php|css|js)$/i.test(p));
+      if (codeFiles.length === 0) return null;
+
+      // 排除明顯不需要 local 測試的檔案（include / class / config / migration）
+      const skipPattern = /\/(include|inc|classes?|config|migrations?|sql|vendor|node_modules)\//i;
+      const testableFiles = codeFiles.filter(p => !skipPattern.test(p));
+      if (testableFiles.length === 0) return null;
+
+      // 檢查最近 30 分鐘內是否有 browser_navigate 到 localhost / 127.0.0.1 / 區網 IP
+      const THIRTY_MIN = 30 * 60 * 1000;
+      const now = Date.now();
+      const localPattern = /(localhost|127\.0\.0\.1|192\.168\.|10\.\d+\.|172\.(1[6-9]|2\d|3[01])\.)/i;
+
+      const recentLocalNav = history.some(h => {
+        if ((now - (h.ts || 0)) > THIRTY_MIN) return false;
+        const ht = shortName(h.tool);
+        if (ht !== 'browser_interact' && ht !== 'browser_navigate') return false;
+        const actions = h.args?.actions || [];
+        const urls = ht === 'browser_navigate'
+          ? [h.args?.url || '']
+          : actions.filter(a => a.type === 'navigate').map(a => a.url || '');
+        return urls.some(u => localPattern.test(u));
+      });
+
+      if (recentLocalNav) return null;
+
+      const fnames = testableFiles.map(p => p.split('/').pop()).slice(0, 3).join(', ');
+      const more = testableFiles.length > 3 ? ` 等 ${testableFiles.length} 個` : '';
+      return `[SFTP Local Test Gate] ⚠️ ${fnames}${more} 即將 sftp_upload，但最近 30 分鐘內未偵測到 localhost / 區網訪問記錄。\n` +
+             `  → 確定先在 local 測過了嗎？跳過 local 直接上測試機常導致來回部署。\n` +
+             `  → 若是 include/class/config 類檔案不需直接訪問，可忽略此提醒。\n`;
     },
   },
   {
@@ -1805,17 +2008,17 @@ const PATTERNS = [
 
       // 10 次以上 → 阻擋
       if (count >= 10) {
-        const lines = [`[Repetition Detector] ❌ BLOCKED：${displayName} 同類操作已達 ${count} 次，強制暫停。`];
+        const lines = [`[Repetition Detector] ⚠️⚠️ ${displayName} 同類操作已達 ${count} 次，強烈建議暫停評估。`];
         if (batchHint) {
-          lines.push(`  → 必須改用 batch 工具：${batchHint}`);
+          lines.push(`  → 改用 batch 工具：${batchHint}`);
         }
-        lines.push('  → 停下來重新評估策略，不要繼續重複同類操作。');
-        return { block: true, message: lines.join('\n') + '\n' };
+        lines.push('  → 重新評估策略，避免繼續燒 token。');
+        return lines.join('\n') + '\n';
       }
 
-      // 3-6 次 → 警告（但最早只在第 3 次觸發）
+      // 3-6 次 → 警告
       if (count >= 3) {
-        const lines = [`[Repetition Detector] ⚠️ ${displayName} 同類操作已執行 ${count} 次（7 次將被阻擋）。請暫停思考：`];
+        const lines = [`[Repetition Detector] ⚠️ ${displayName} 同類操作已執行 ${count} 次。請暫停思考：`];
         if (batchHint) {
           lines.push(`  - 建議改用 batch 工具：${batchHint}`);
         } else {
