@@ -12,7 +12,7 @@ try {
 }
 
 export const CONFIG = {
-  basePaths: MCP_BASE_PATHS ?? localConfig.basePaths ?? ["D:\\Project\\"],
+  basePaths: MCP_BASE_PATHS ?? localConfig.basePaths ?? ["D:\\Project\\", "D:\\tmp\\"],
   /** @deprecated 向後相容：舊程式碼用 CONFIG.basePath，回傳 basePaths[0] */
   get basePath() { return this.basePaths[0]; },
 };
