@@ -75,7 +75,24 @@ export const definitions = [
             },
             required: ["name", "value", "domain"],
           },
-          description: "選填:注入 cookies(用於需要登入的頁面)",
+          description: "選填:注入 cookies(用於需要登入的頁面)。本工具開全新無痕 browser，沒有 Playwright session 的 cookie，需登入頁面或購物車類條件式 render 元素必須傳 cookies 才能查到。",
+        },
+        trigger_selectors: {
+          type: "array",
+          items: { type: "string" },
+          description: "選填：在查詢前依序 click 這些 selector（用於展開 popup/modal/dropdown 才出現的元素）。每次 click 後等待 trigger_wait 毫秒。",
+        },
+        trigger_wait: {
+          type: "number",
+          description: "選填：每次 trigger click 後等待毫秒（預設 300）",
+        },
+        wait_for_selector: {
+          type: "string",
+          description: "選填：trigger 後等待此 selector 出現再查詢（預設等 target selector 本身）",
+        },
+        wait_for_timeout: {
+          type: "number",
+          description: "選填：wait_for_selector 等待逾時毫秒（預設 3000）",
         },
       },
       required: ["url", "selector"],
@@ -358,6 +375,10 @@ async function handleCssComputedWinner(args) {
     viewport = { width: 1920, height: 1080 },
     timeout = 15000,
     cookies = [],
+    trigger_selectors = [],
+    trigger_wait = 300,
+    wait_for_selector,
+    wait_for_timeout = 3000,
   } = args;
 
   const targetProps = propsList || (property ? [property] : null);
@@ -378,11 +399,56 @@ async function handleCssComputedWinner(args) {
     const page = await context.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout });
 
+    // 依序 click trigger selectors（展開 popup/modal/dropdown）
+    for (const trig of trigger_selectors) {
+      try {
+        await page.click(trig, { timeout: 3000 });
+        await page.waitForTimeout(trigger_wait);
+      } catch (e) {
+        await context.close();
+        return { content: [{ type: "text", text: `❌ trigger_selectors click 失敗於 "${trig}": ${e.message}` }] };
+      }
+    }
+
+    // 等待目標元素出現（給 Vue/React 條件 render 留時間）
+    const waitTarget = wait_for_selector || selector;
+    try {
+      await page.waitForSelector(waitTarget, { timeout: wait_for_timeout, state: 'attached' });
+    } catch (e) {
+      // 不立刻失敗，往下一步給更詳細的診斷
+    }
+
     // 確認元素存在
     const elHandle = await page.$(selector);
     if (!elHandle) {
+      // 收集診斷資訊：頁面 title、是否在登入頁、是否含登入相關元素
+      const diag = await page.evaluate(() => {
+        const hasLoginForm = !!document.querySelector('input[type="password"], form[action*="login"], a[href*="login"]');
+        const bodyClass = document.body?.className || '';
+        return { title: document.title, url: location.href, hasLoginForm, bodyClass: bodyClass.slice(0, 200) };
+      }).catch(() => null);
       await context.close();
-      return { content: [{ type: "text", text: `❌ 找不到元素: ${selector}` }] };
+
+      const hint = [
+        `❌ 找不到元素: ${selector}`,
+        ``,
+        `📋 診斷：`,
+        `  - 頁面 title: ${diag?.title || 'N/A'}`,
+        `  - 實際 URL: ${diag?.url || 'N/A'}`,
+        `  - 偵測到登入元素: ${diag?.hasLoginForm ? '是（極可能被導去登入頁）' : '否'}`,
+        ``,
+        `💡 常見原因與解法：`,
+        `  1. 元素只在登入後 / 條件成立才 render（如購物車為空時 .c_p_grid 不存在）：`,
+        `     → 傳 cookies 參數複製 Playwright session 的登入 cookie`,
+        `     → 或改用 mcp__browser_interact 的 evaluate action（沿用已登入的 session）`,
+        `  2. 元素在 popup/modal 內，需要先點觸發器：`,
+        `     → 傳 trigger_selectors: ["#open-popup-btn"] 自動展開`,
+        `  3. 元素由 JS 延遲 render：`,
+        `     → 加大 wait_for_timeout（預設 3000ms）`,
+        `  4. selector 寫錯：`,
+        `     → 用 mcp__browser_snapshot 確認實際 DOM 結構`,
+      ].join("\n");
+      return { content: [{ type: "text", text: hint }] };
     }
 
     // 取得 computed values

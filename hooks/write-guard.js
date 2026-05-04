@@ -32,8 +32,13 @@ function loadState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
+      const age = Date.now() - (raw.ts || 0);
       // 超過 30 分鐘自動重置（避免跨 session 殘留）
-      if (Date.now() - (raw.ts || 0) > 30 * 60 * 1000) return freshState();
+      if (age > 30 * 60 * 1000) return freshState();
+      // promptGuardActive 短 TTL：超過 2 分鐘自動解除（避免 stuck state）
+      if (raw.promptGuardActive && age > 2 * 60 * 1000) {
+        raw.promptGuardActive = false;
+      }
       return raw;
     }
   } catch (e) {}
@@ -186,11 +191,10 @@ process.stdin.on('end', () => {
     // ── 方案 A：Prompt Guard 連動阻擋 ───────────────────
     const state = loadState();
     if (state.promptGuardActive) {
-      process.stderr.write(
-        `[Write Guard] ❌ BLOCKED — Edit/Write 被 Prompt Guard 連動擋下。\n` +
-        `  原因：UserPromptSubmit hook 認為任務描述不夠具體（指代詞、缺 URL/element/截圖等）。\n` +
-        `  替代：mcp__apply_diff / mcp__create_file 不受此限，可直接使用。\n` +
-        `  解除：改用純文字回覆使用者，讓使用者下一次發話自動重置 promptGuardActive=false。\n`
+      process.stdout.write(
+        `[Write Guard] ❌ Edit/Write 暫時被擋（Prompt Guard 偵測到任務描述不完整）。\n` +
+        `  → 若是後端任務被誤判：直接改用 apply_diff（不受此限）即可繼續。\n` +
+        `  → 若任務確實需要更多資訊：先用純文字回覆使用者確認後再修改。\n`
       );
       process.exit(2);
     }
@@ -204,11 +208,10 @@ process.stdin.on('end', () => {
       // 擋第一次 → 標記 batchAcked，下次放行（警告已送達使用者）
       state.batchAcked = true;
       saveState(state);
-      process.stderr.write(
+      process.stdout.write(
         `[Write Guard] ❌ BLOCKED：已連續修改 ${state.files.length} 個不同檔案（上限 ${BATCH_LIMIT}）。\n` +
-        `  原因：批次編輯保護，避免無限制連改造成大規模誤動。\n` +
-        `  替代：暫停回報使用者，或改用 mcp__apply_diff_batch 一次送完。\n` +
-        `  解除：已自動 ack，下一次 Edit/Write 會放行（僅一次）。\n`
+        `  → 請先暫停，向使用者確認是否要繼續批次修改。\n` +
+        `  → 已自動 ack；若使用者確認繼續，下一次修改會放行。否則請停下。\n`
       );
       process.exit(2);
     }

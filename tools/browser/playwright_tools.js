@@ -68,6 +68,8 @@ export const definitions = [
                   "dismiss", "wait", "wait_for", "scroll_to",
                   "evaluate", "extract", "extract_all", "screenshot",
                   "navigate", "watch_network", "collect_network",
+                  "auto_dismiss_file_chooser", "dismiss_file_chooser_now",
+                  "inspect_element",
                 ],
                 description: "動作類型",
               },
@@ -95,6 +97,8 @@ export const definitions = [
               filter: { type: "string", description: "watch_network 用:URL 過濾關鍵字(只捕捉包含此字串的請求,如 'ajax/' 或 'api/')" },
               include_body: { type: "boolean", description: "watch_network 用:是否捕捉 response body(預設 true)" },
               max_body_size: { type: "number", description: "watch_network 用:response body 最大擷取字元數(預設 2000)" },
+              property: { type: "string", description: "inspect_element 用：要查的 CSS 屬性（kebab-case，如 'background-color'）；省略時 dump 整個 computed style" },
+              properties: { type: "array", items: { type: "string" }, description: "inspect_element 用：批次查多個屬性" },
             },
             required: ["type"],
           },
@@ -475,6 +479,150 @@ async function handleBrowserInteract(args) {
             }, action.selector);
             dismissedElements.push(action.selector);
             results.push({ action: label, ok: true });
+            break;
+          }
+
+          case "auto_dismiss_file_chooser": {
+            // 註冊 page-level handler，後續任何 file chooser 觸發後自動 setFiles([]) 解除 modal state
+            // 必須在會觸發 file chooser 的 click 之前呼叫；只需註冊一次。
+            if (!page._autoDismissFileChooserRegistered) {
+              page.on('filechooser', async (chooser) => {
+                try { await chooser.setFiles([]); } catch {}
+              });
+              page._autoDismissFileChooserRegistered = true;
+            }
+            results.push({ action: label, ok: true, note: 'file chooser handler registered' });
+            break;
+          }
+
+          case "dismiss_file_chooser_now": {
+            // 已經卡在 modal state 時的緊急脫困：等下一個 filechooser event 並 setFiles([])
+            // 配合 Promise.race，超時即放棄
+            const TIMEOUT_MS = action.ms || 2000;
+            try {
+              const chooser = await Promise.race([
+                page.waitForEvent('filechooser', { timeout: TIMEOUT_MS }),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('no filechooser event within timeout')), TIMEOUT_MS + 100)),
+              ]);
+              await chooser.setFiles([]);
+              results.push({ action: label, ok: true, note: 'file chooser dismissed' });
+            } catch (e) {
+              results.push({ action: label, ok: false, error: `dismiss_file_chooser_now: ${e.message}` });
+            }
+            break;
+          }
+
+          case "inspect_element": {
+            // F12-like：在當前 page session 內取目標元素的 computed style + matched CSS rules（CDP）
+            // 沿用 actions 之前已建立的所有狀態（登入、cookies、popup 已開、購物車已加商品等）
+            const targetProps = Array.isArray(action.properties) && action.properties.length
+              ? action.properties
+              : (action.property ? [action.property] : null);
+
+            const elExists = await page.$(action.selector);
+            if (!elExists) {
+              results.push({ action: label, ok: false, error: `inspect_element: 找不到元素 ${action.selector}（在當前 page state 下）` });
+              break;
+            }
+
+            // computed style（不需要 CDP，getComputedStyle 直接取）
+            const computed = await page.evaluate(({ sel, props }) => {
+              const el = document.querySelector(sel);
+              if (!el) return null;
+              const cs = window.getComputedStyle(el);
+              if (props) {
+                const out = {};
+                for (const p of props) out[p] = cs.getPropertyValue(p);
+                return out;
+              }
+              // 全 dump 但只挑非預設值
+              const out = {};
+              for (let i = 0; i < cs.length; i++) {
+                const name = cs[i];
+                out[name] = cs.getPropertyValue(name);
+              }
+              return out;
+            }, { sel: action.selector, props: targetProps });
+
+            // CDP：matched CSS rules + 來源檔行號
+            let cdp = null;
+            let matchedSummary = null;
+            try {
+              cdp = await context.newCDPSession(page);
+              const sheetHeaders = new Map();
+              cdp.on('CSS.styleSheetAdded', ({ header }) => sheetHeaders.set(header.styleSheetId, header));
+              await cdp.send('DOM.enable');
+              await cdp.send('CSS.enable');
+              const { root } = await cdp.send('DOM.getDocument');
+              const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: action.selector });
+
+              if (nodeId) {
+                const { matchedCSSRules = [], inherited = [] } = await cdp.send('CSS.getMatchedStylesForNode', { nodeId });
+                let inlineProps = {};
+                try {
+                  const { inlineStyle } = await cdp.send('CSS.getInlineStylesForNode', { nodeId });
+                  if (inlineStyle?.cssProperties) {
+                    for (const p of inlineStyle.cssProperties) {
+                      if (p.text && !p.disabled) inlineProps[p.name] = p.value;
+                    }
+                  }
+                } catch {}
+
+                const allRules = [];
+                if (Object.keys(inlineProps).length) {
+                  allRules.push({ selector: '[inline style]', source: 'inline', properties: inlineProps });
+                }
+                for (const entry of matchedCSSRules) {
+                  const rule = entry.rule;
+                  if (!rule?.selectorList || rule.origin === 'user-agent') continue;
+                  const props = {};
+                  for (const cssProp of (rule.style.cssProperties || [])) {
+                    if (cssProp.text && !cssProp.text.startsWith('/*') && !cssProp.disabled) {
+                      props[cssProp.name] = cssProp.value + (cssProp.important ? ' !important' : '');
+                    }
+                  }
+                  if (!Object.keys(props).length) continue;
+                  let source = '';
+                  if (rule.origin === 'regular' && rule.style.styleSheetId) {
+                    const header = sheetHeaders.get(rule.style.styleSheetId);
+                    const file = header?.sourceURL ? header.sourceURL.split('/').pop().split('?')[0] : (header?.title || '');
+                    const line = rule.style.range ? rule.style.range.startLine + 1 : null;
+                    source = file ? (line ? `${file}:${line}` : file) : (line ? `line:${line}` : '');
+                  }
+                  allRules.push({ selector: rule.selectorList.text, source, properties: props, media: rule.media?.[0]?.text });
+                }
+                matchedSummary = { matched: allRules, inherited_count: inherited.length };
+              }
+            } catch (e) {
+              matchedSummary = { error: `CDP query failed: ${e.message}` };
+            } finally {
+              if (cdp) await cdp.detach().catch(() => {});
+            }
+
+            const lines = [`=== inspect_element: ${action.selector} ===`];
+            if (targetProps) {
+              lines.push(`Computed (${targetProps.length} props):`);
+              for (const [k, v] of Object.entries(computed || {})) lines.push(`  ${k}: ${v}`);
+            } else {
+              const entries = Object.entries(computed || {}).filter(([k]) => /color|background|font|margin|padding|border|display|position|width|height|grid|flex|z-index/.test(k));
+              lines.push(`Computed (篩選 layout/visual ${entries.length} 項，全部 ${Object.keys(computed || {}).length}):`);
+              for (const [k, v] of entries) lines.push(`  ${k}: ${v}`);
+            }
+            if (matchedSummary?.matched) {
+              lines.push(`\nMatched CSS rules (${matchedSummary.matched.length})：`);
+              matchedSummary.matched.forEach((r, i) => {
+                lines.push(`  ${i + 1}. ${r.selector}${r.media ? ` @ ${r.media}` : ''}`);
+                if (r.source) lines.push(`     source: ${r.source}`);
+                const propsToShow = targetProps
+                  ? Object.entries(r.properties).filter(([k]) => targetProps.includes(k))
+                  : Object.entries(r.properties);
+                for (const [k, v] of propsToShow) lines.push(`     ${k}: ${v}`);
+              });
+            } else if (matchedSummary?.error) {
+              lines.push(`\n⚠️ ${matchedSummary.error}`);
+            }
+            contentBlocks.push({ type: 'text', text: lines.join('\n') });
+            results.push({ action: label, ok: true, note: `${matchedSummary?.matched?.length || 0} matched rules` });
             break;
           }
 

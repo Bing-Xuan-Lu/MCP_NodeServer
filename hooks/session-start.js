@@ -300,6 +300,37 @@ async function main() {
       }
     }
 
+    // 12. Stale Snapshot 偵測 — 當前專案根目錄的 Playwright a11y snapshot YAML
+    //     只掃 cwd 根目錄（不遞迴），列前 10 + 總數 + 一鍵清理指令
+    try {
+      const entries = fs.readdirSync(cwd, { withFileTypes: true });
+      const stale = [];
+      for (const e of entries) {
+        if (!e.isFile()) continue;
+        if (!/\.ya?ml$/i.test(e.name)) continue;
+        const fp = path.join(cwd, e.name);
+        try {
+          const head = fs.readFileSync(fp, 'utf-8').slice(0, 2048);
+          if (/\[ref=e\d+\]/.test(head)) {
+            stale.push({ name: e.name, mtime: fs.statSync(fp).mtimeMs });
+          }
+        } catch {}
+      }
+      if (stale.length > 0) {
+        stale.sort((a, b) => b.mtime - a.mtime);
+        const list = stale.slice(0, 10).map(f => `  - ${f.name}`).join('\n');
+        const more = stale.length > 10 ? `\n  ...還有 ${stale.length - 10} 個` : '';
+        const names = stale.map(f => `"${f.name}"`).join(' ');
+        output.push(
+          `\n[Cleanup] 🧹 偵測到 ${stale.length} 個 stale Playwright snapshot YAML（專案根目錄）：\n` +
+          list + more +
+          `\n  → 一鍵清理：cleanup_path({ paths: [${stale.slice(0, 10).map(f => `"${f.name}"`).join(', ')}${stale.length > 10 ? ', ...' : ''}] })\n` +
+          `  → 或 PowerShell：Remove-Item ${names}\n` +
+          `  → 這些是你之前自動產生的 stale 檔，請主動清理而不是留給使用者。`
+        );
+      }
+    } catch (e) {}
+
   } catch (err) {
     process.stderr.write(`[session-start] error: ${err.message}\n`);
   }

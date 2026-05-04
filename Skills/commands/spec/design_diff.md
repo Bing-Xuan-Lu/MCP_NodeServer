@@ -13,14 +13,17 @@ description: "設計稿與實作截圖像素級比對。當使用者說「跟設
 
 $ARGUMENTS
 
-格式：`{設計稿來源} [目標URL] [--breakpoint 1920]`
+格式：`{設計稿來源} [目標URL] [--breakpoint 1920 | --rwd]`
 
 - `{設計稿來源}`：以下三種之一：
   - **本地路徑**：設計稿圖片/PDF 的檔案或資料夾路徑（`D:\Design\homepage.png`）
   - **線上 XD 連結**：Adobe XD 分享連結（`https://xd.adobe.com/view/...`）
   - **線上 Figma 連結**：Figma 分享連結（`https://www.figma.com/...`）
 - `[目標URL]`（可選）：實作頁面 URL；省略時從設計稿檔名或頁面名稱推斷
-- `--breakpoint`（可選）：指定截圖寬度（預設由專案規格書決定，無則用 `1920`）
+- `--breakpoint`（可選）：指定單一截圖寬度（預設由專案規格書決定，無則用 `1920`）
+- `--rwd`（可選，**強烈建議**）：自動跑三斷點 RWD 比對（1920 桌機 / 769 平板邊界 / 481 手機），避免改桌機才發現手機跑版
+
+> **預設行為提醒**：使用者未明確指定 `--breakpoint` 也未說「只比桌機」時，**主動詢問是否啟用 `--rwd`**。前台頁面 90% 都有 RWD，只比桌機常漏 mobile bug。
 
 支援的設計稿格式：PNG、JPG、JPEG、PDF、線上 XD/Figma。
 
@@ -178,19 +181,33 @@ Read: {設計稿路徑}
 
 ### 步驟 3：截取實作頁面截圖
 
+**斷點清單**：
+
+| 模式 | 寬度 | 命名 | 用途 |
+|------|------|------|------|
+| 桌機 | 1920 | `impl_{page}_desktop.png` | 主視覺驗收 |
+| 平板邊界 | 769 | `impl_{page}_tablet.png` | RWD breakpoint 切換點，常出 bug 處 |
+| 手機 | 481 | `impl_{page}_mobile.png` | 手機板 layout 驗收 |
+
+- 預設模式（單斷點）：使用 `--breakpoint` 指定的寬度，無則 `1920`
+- **`--rwd` 模式**：依序跑三個斷點，每個斷點都執行 3a~3f
+
 ```text
 3a. browser_resize(width={breakpoint}, height=900)
+    --rwd 模式：對 [1920, 769, 481] 逐一執行
 
 3b. 若需登入：
     browser_navigate → 登入頁
     browser_fill_form → 帳號密碼
     browser_click → 登入
+    （--rwd 模式只需在第一個斷點登入一次，後續切寬度不會掉 session）
 
 3c. browser_navigate → 對應的實作 URL
     browser_wait_for → 等待主要內容載入
 
-3d. browser_take_screenshot → 儲存為 impl_{page_name}.png
+3d. browser_take_screenshot → 儲存為 impl_{page_name}_{viewport}.png
     儲存至：screenshots/{frontend|backend}/diff/
+    viewport 命名：desktop / tablet / mobile（單斷點模式可省略後綴）
 
 3e. browser_evaluate → 取得關鍵元素的 computed style：
 ```
@@ -234,6 +251,8 @@ browser_evaluate:
 ---
 
 ### 步驟 4：逐項比對
+
+**`--rwd` 模式**：每個斷點獨立執行步驟 4a~4e，報告中區分「桌機 / 平板 / 手機」三段，避免桌機 OK 蓋過手機 NG。
 
 對每組設計稿 vs 實際截圖，執行五個維度的比對：
 
@@ -327,4 +346,6 @@ browser_evaluate:
 - **不修改程式碼**：只做比對與報告，修正建議寫在報告中
 - **動態內容**：比對結構與樣式，不比對假資料文字（除非是固定標題/標籤）
 - **多斷點設計稿**：每個斷點獨立比對
+- **`--rwd` 三斷點**：桌機 1920 / 平板 769 / 手機 481；769 是常見 RWD 切換點，最容易出現 layout 跳版（display flex/block 切換、@media 順序錯誤、!important 蓋掉手機規則）；481 驗證手機板獨立 layout
+- **桌機與手機分開記分**：報告統計需區分三段符合率，桌機 100% 但手機 60% 也要被標紅
 - **CSS 修正建議**：優先使用 CSS 變數（若專案已有）

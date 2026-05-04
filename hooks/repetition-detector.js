@@ -1484,6 +1484,60 @@ const PATTERNS = [
     },
   },
   {
+    // Layer 2.10b: CSS Legacy Skill Gate
+    //   寫入 css/v3/**/*.css、page/**/*.css，或 screen.prefixer / legacy global CSS 鄰近檔時，
+    //   第一次 BLOCK 提示「先跑 /css_legacy_override」（避免桌機改完破手機）；同 session 已提示過則放行。
+    //   ack 機制：使用者可發 prompt 含 "/css_legacy_override" 或 "確認" 字樣，或本 session 跑過 css_legacy_override skill 即放行。
+    id: 'css_legacy_skill_gate',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      const writeTools = new Set(['Edit', 'Write', 'apply_diff', 'create_file', 'apply_diff_batch']);
+      if (!writeTools.has(tool)) return null;
+
+      const filePath = (entry.args?.file_path || entry.args?.path || '').replace(/\\/g, '/').toLowerCase();
+      if (!/\.(css|scss|less)$/.test(filePath)) return null;
+
+      // 觸發路徑：頁面層 CSS（v3/page、page/v3、{module}/page、{module}/v3）
+      const isPageLayerCss = /(\/(v3|page)\/|\/page\/v\d+\/|\/[^/]+\/(page|v3)\/)/.test(filePath);
+      if (!isPageLayerCss) return null;
+
+      // 同 session 已 ack：history 出現過 css_legacy_override skill 命令、或 lastPrompt 含確認字樣
+      let acked = false;
+      try {
+        const wgFile = path.join(os.tmpdir(), 'claude-write-guard', 'state.json');
+        if (fs.existsSync(wgFile)) {
+          const wg = JSON.parse(fs.readFileSync(wgFile, 'utf-8'));
+          const lp = (wg.lastPrompt || '').toLowerCase();
+          if (/\/css_legacy_override|legacy.*已查|已跑.*legacy|確認.*覆寫|skip.*legacy/.test(lp)) acked = true;
+          if (wg.cssLegacyAcked && (Date.now() - (wg.ts || 0) < 30 * 60 * 1000)) acked = true;
+        }
+      } catch {}
+
+      // 檢查 history：本 session 是否已被本 hook 攔過（自動 ack 機制：第二次放行）
+      const prevBlocked = history.some(h => h._cssLegacyGateBlocked);
+      if (prevBlocked || acked) return null;
+
+      // 標記本次 entry 已被攔（給後續 entry 做 prevBlocked 判斷用）
+      entry._cssLegacyGateBlocked = true;
+
+      const fname = filePath.split('/').pop();
+      return {
+        block: true,
+        message:
+          `[CSS Legacy Gate] ❌ BLOCKED：嘗試寫入頁面層 CSS（${fname}），但本 session 尚未跑過 /css_legacy_override。\n` +
+          `  原因：頁面層 CSS 通常是用來覆寫 legacy 全域 CSS（screen.prefixer.css 等）的 !important，\n` +
+          `        如果只蓋桌機規則沒處理 @media (max-width: 768px) / 480px / hover，常導致：\n` +
+          `        ▸ 桌機驗收 OK、手機 popup 跑版\n` +
+          `        ▸ active state 失效、hover 變色錯誤\n` +
+          `  必要前置：\n` +
+          `    ▸ /css_legacy_override {目標CSS檔} {選擇器} — 自動掃 legacy 所有 @media 出現點，產出對照表 + 反制建議\n` +
+          `  快速通過（若確定不需要反制）：\n` +
+          `    ▸ 直接重發指令 — 本 hook 已記錄第一次攔截，第二次嘗試會自動放行\n` +
+          `    ▸ 或在 prompt 內提到「已查 legacy / 確認覆寫 / /css_legacy_override」字樣\n`,
+      };
+    },
+  },
+  {
     // Layer 2.7: Edit Batch Replace — 多檔做相同字串替換時提醒用批次腳本
     id: 'edit_batch_replace',
     detect: (entry, history) => {
@@ -2198,6 +2252,73 @@ const PATTERNS = [
       }
 
       return null;
+    },
+  },
+  {
+    // Layer 1.5b: Prompt Guard 擴及 MCP 寫入工具
+    //   write-guard 只 hook 內建 Edit/Write，繞用 mcp__*__apply_diff / create_file / multi_file_inject 即可逃過。
+    //   此層讀取同一份 claude-write-guard/state.json，對 MCP 寫入工具套同樣的 promptGuardActive 阻擋。
+    //   也偵測 css_legacy_skill_gate（Layer 2.10b）所需的 file_path 路徑。
+    id: 'prompt_guard_mcp_write',
+    detect: (entry, _history) => {
+      const tool = shortName(entry.tool);
+      const MCP_WRITE_TOOLS = new Set([
+        'apply_diff', 'apply_diff_batch',
+        'create_file', 'create_file_batch',
+        'multi_file_inject',
+      ]);
+      if (!MCP_WRITE_TOOLS.has(tool)) return null;
+
+      try {
+        const wgStateFile = path.join(os.tmpdir(), 'claude-write-guard', 'state.json');
+        if (!fs.existsSync(wgStateFile)) return null;
+        const raw = JSON.parse(fs.readFileSync(wgStateFile, 'utf-8'));
+        const age = Date.now() - (raw.ts || 0);
+        // 同 user-prompt-guard 的 2 分鐘 TTL，超過自動失效
+        if (!raw.promptGuardActive || age > 2 * 60 * 1000) return null;
+
+        return {
+          block: true,
+          message: `[Prompt Guard] ❌ BLOCKED：${tool} 暫時被擋（Prompt Guard 偵測到任務描述不完整）。\n` +
+                   `  → write-guard 已擋下 Edit/Write，MCP 寫入工具同樣受限，避免繞道。\n` +
+                   `  → 請先用純文字回覆使用者確認需求後再寫入。\n` +
+                   `  → 確認方式：使用者明確回覆「OK / 確認 / 繼續 / A / 1」等即可解除。\n`,
+        };
+      } catch (e) {
+        return null;
+      }
+    },
+  },
+  {
+    // Layer 1.55: Snapshot Path — Playwright accessibility snapshot YAML 不可落專案根目錄
+    // 偵測：Write/create_file/apply_diff 寫入 .yml/.yaml，內容含 `[ref=e` (Playwright a11y tree 特徵)
+    //       且路徑不在 .playwright-mcp/ 或 screenshot*/ 子目錄下 → BLOCK
+    id: 'snapshot_wrong_path',
+    detect: (entry, _history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'Write' && tool !== 'create_file' && tool !== 'apply_diff') return null;
+
+      const filePath = entry.args?.file_path || entry.args?.path || entry.args?.filename;
+      if (!filePath) return null;
+      if (!/\.ya?ml$/i.test(filePath)) return null;
+
+      const content = entry.args?.content || entry.args?.new_content || entry.args?.diff || '';
+      if (typeof content !== 'string') return null;
+      // Playwright a11y snapshot 特徵：含 `[ref=eNNN]` 形式的元素 ref
+      if (!/\[ref=e\d+\]/.test(content)) return null;
+
+      const normalized = filePath.replace(/\\/g, '/');
+      // 允許落地的子目錄：.playwright-mcp/、screenshot*/、tmp/、_tmp_*/
+      if (/(^|\/)(\.playwright-mcp|screenshots?|tmp|_tmp_[^/]+)\//i.test(normalized)) return null;
+
+      return {
+        block: true,
+        message: `[Wrong Path] ❌ BLOCKED：Playwright snapshot YAML 不可落專案根目錄。\n` +
+                 `  → 收到的 file_path: "${filePath}"\n` +
+                 `  → 請改為：.playwright-mcp/your-snapshot.yml 或 screenshot/your-snapshot.yml\n` +
+                 `  → snapshot 是暫存物（stale fast），不可污染專案根目錄。\n` +
+                 `  → 若需長期保留請明確命名並放至 docs/ 或 reports/。\n`,
+      };
     },
   },
   AUTO_FIX_PATTERN,

@@ -28,11 +28,27 @@ function wgLoadState() {
   try {
     if (fs.existsSync(WG_STATE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(WG_STATE_FILE, 'utf-8'));
-      if (Date.now() - (raw.ts || 0) > 30 * 60 * 1000) return wgFreshState();
+      const age = Date.now() - (raw.ts || 0);
+      if (age > 30 * 60 * 1000) return wgFreshState();
+      // promptGuardActive 短 TTL：超過 2 分鐘自動解除，避免 stuck state
+      if (raw.promptGuardActive && age > 2 * 60 * 1000) {
+        raw.promptGuardActive = false;
+      }
       return raw;
     }
   } catch (e) {}
   return wgFreshState();
+}
+
+// 明確的「使用者確認」訊號 — 命中時保證解除 promptGuardActive 並輸出正向回饋
+const EXPLICIT_CONFIRM_PATTERNS = [
+  /^(確認可以|確認|可以|OK|好的?|繼續|沒問題|沒錯|對|是|yes|y|執行|go|do it|ok 繼續|繼續執行)[\s,，.。!！]*$/i,
+  /^(?:選項?\s*)?[A-Da-d](?:\s|$|[,.。!！])/,                  // "A" / "選 A" / "A,"
+  /^(?:選\s*)?\d+(?:\s|$|[,.。!！])/,                          // "1" / "選 1"
+  /^(我?確認|沒錯就這樣|就這樣|按你說的|照你說的|照辦|去做)/,
+];
+function isExplicitConfirm(prompt) {
+  return EXPLICIT_CONFIRM_PATTERNS.some(p => p.test(prompt.trim()));
 }
 function wgSaveState(state) {
   try {
@@ -292,10 +308,21 @@ process.stdin.on('end', () => {
 
     // 每次使用者發話 → 重置 write-guard 的批次計數與 Prompt Guard 旗標
     // 同時保存 lastPrompt 供其他 hook (repetition-detector L2.83) 判斷情境
+    const prevState = wgLoadState();
+    const wasGuardActive = prevState.promptGuardActive === true;
     {
       const fresh = wgFreshState();
       fresh.lastPrompt = prompt.slice(0, 500);
       wgSaveState(fresh);
+    }
+
+    // 明確確認偵測：使用者清楚表達同意 → 輸出正向回饋，明示已解除
+    // （reset 已在上面跑過，這裡只是讓使用者看到「擋住的東西已放行」）
+    if (isExplicitConfirm(prompt) && wasGuardActive) {
+      process.stdout.write(
+        `[Prompt Guard] ✅ 偵測到使用者確認 ("${prompt.slice(0, 30)}") — 已解除 Edit/Write 阻擋，AI 可繼續執行。\n\n`
+      );
+      process.exit(0);
     }
 
     // ── CSS Trouble 偵測：使用者回報排版/跑版/樣式問題 → 強制下次 .css 寫入前先 inspect ──
