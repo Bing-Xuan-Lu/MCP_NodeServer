@@ -108,11 +108,15 @@ function identifyTokenWaste(entry, history) {
     }).length + 1;
 
     if (sameFileReads >= 2) {
+      const isPhp = /\.php$/i.test(filePath);
+      const phpHint = isPhp
+        ? '；.php 檔請改用 class_method_lookup(class, method) 直接抓 method 原始碼，免分段'
+        : '';
       issues.push({
         id: 'W1_duplicate_read',
         issue: `重複讀同檔案 ${sameFileReads} 次：${path.basename(filePath)}`,
         wasted: estimateToolTokens(entry.tool, args) * (sameFileReads - 1),
-        suggestion: '一次用 Read(offset, limit) 讀完需要的區段，或用 Grep 定位行號再精準讀',
+        suggestion: `一次用 Read(offset, limit) 讀完需要的區段，或用 Grep 定位行號再精準讀${phpHint}`,
       });
     }
   }
@@ -734,10 +738,19 @@ const BASH_PATTERNS = [
     warnOnFirst: true,
   },
   {
-    regex: /\bfind\s+\S+\s+-/i,
+    regex: /\bfind\s+(\S+\s+)?-(name|type|iname|path|maxdepth|mindepth)\b/i,
     signature: 'bash:find',
     hint: 'Glob 工具（內建，模式匹配更快，不需 Bash）',
     warnOnFirst: true,
+  },
+  {
+    // ls / dir：列目錄一律改用 list_files / Glob
+    // 排除 `ls -la | grep ...` 這類少見但合理的組合（已被 grep pattern 攔下，不重複擋）
+    regex: /^\s*(ls|dir)\b(?!\s+\|)/i,
+    signature: 'bash:ls',
+    hint: 'list_files / list_files_batch（MCP 工具，結構化輸出含大小/日期）或 Glob（內建模式匹配）',
+    warnOnFirst: true,
+    block: false,
   },
   {
     regex: /\b(sed|awk)\s+/i,
@@ -2125,10 +2138,21 @@ const PATTERNS = [
       };
       const entryStr = fingerprint(entry);
       const count = history.filter(h => fingerprint(h) === entryStr).length + 1;
-      if (count < 5) return null;
+
+      // UI 測試常在同一頁反覆 wait / re-navigate，門檻提高到 9
+      // browser_wait_for 額外接受 text/textGone 不同視為不同呼叫（已由 fingerprint args 區分）
+      const tool = shortName(entry.tool);
+      const threshold = (tool === 'browser_wait_for' || tool === 'browser_navigate') ? 9 : 5;
+
+      if (count < threshold) return null;
+      const extraHint = (tool === 'browser_wait_for')
+        ? '\n  → wait_for 持續失敗多半是前置條件沒成立：檢查 callback 是否真的有跑（先打 endpoint 看 raw body）、selector 是否仍存在、頁面是否被 navigate 走。'
+        : (tool === 'browser_navigate')
+        ? '\n  → 連續 navigate 同一 URL 通常代表頁面狀態不對：先 browser_close 重設 session，或檢查網址是否真的有變。'
+        : '';
       return {
         block: true,
-        message: `[Repetition Detector] ❌ BLOCKED：完全相同的工具呼叫已達 ${count} 次。停下來重新評估策略。\n`,
+        message: `[Repetition Detector] ❌ BLOCKED：完全相同的工具呼叫已達 ${count} 次（門檻 ${threshold}）。停下來重新評估策略。${extraHint}\n`,
       };
     },
   },
@@ -2276,6 +2300,20 @@ const PATTERNS = [
         const age = Date.now() - (raw.ts || 0);
         // 同 user-prompt-guard 的 2 分鐘 TTL，超過自動失效
         if (!raw.promptGuardActive || age > 2 * 60 * 1000) return null;
+
+        // Implicit ack：guard 啟動後若已有任何 MCP 寫入工具呼叫進入 history（代表前一輪已通過或使用者已具體指示），
+        // 5 分鐘時間窗內後續同類寫入自動放行，避免每改一次都要使用者重打「OK」。
+        if (Array.isArray(_history) && _history.length > 0) {
+          const FIVE_MIN = 5 * 60 * 1000;
+          const now = Date.now();
+          const recentWrite = _history.some(h => {
+            const hts = h.ts || h.timestamp || 0;
+            if (hts <= (raw.ts || 0)) return false;          // 必須晚於 guard 啟動時間
+            if (now - hts > FIVE_MIN) return false;          // 5 分鐘窗
+            return MCP_WRITE_TOOLS.has(shortName(h.tool));
+          });
+          if (recentWrite) return null;
+        }
 
         return {
           block: true,

@@ -13,6 +13,58 @@ const PROTECTED_PATTERNS = [
   /_mcp_audit\.log$/i,        // SQL audit log（append-only，不可被覆寫）
 ];
 
+// Whitespace-flexible 比對：將所有空白序列（含 tabs/spaces/newlines）視為等價，
+// 用於 indent 容錯失敗後的最後一層 fallback。回傳 content 中對應的原始 slice，找不到則 null。
+function whitespaceFlexFind(content, search) {
+  const flexChars = [];
+  const origIdx = [];
+  let inWs = false;
+  for (let i = 0; i < content.length; i++) {
+    const c = content[i];
+    if (/\s/.test(c)) {
+      if (!inWs) { flexChars.push(' '); origIdx.push(i); inWs = true; }
+    } else {
+      flexChars.push(c); origIdx.push(i); inWs = false;
+    }
+  }
+  const cFlex = flexChars.join('');
+  const sFlex = search.replace(/\s+/g, ' ');
+  if (!sFlex) return null;
+  const pos = cFlex.indexOf(sFlex);
+  if (pos < 0) return null;
+  const startOrig = origIdx[pos];
+  const endFlex = pos + sFlex.length;
+  const endOrig = endFlex >= origIdx.length ? content.length : origIdx[endFlex];
+  return content.slice(startOrig, endOrig);
+}
+
+function hexPreview(s, len = 48) {
+  const buf = Buffer.from(s.slice(0, len), 'utf-8');
+  return Array.from(buf).map(b => b.toString(16).padStart(2, '0')).join(' ');
+}
+
+function buildDiffMismatchError(content, search) {
+  const preview = search.slice(0, 80).replace(/\n/g, '\\n');
+  const sHex = hexPreview(search);
+  // 嘗試找出 search 第一行在 content 中的近似位置，dump 對應 content hex 供比對
+  const firstLine = search.split('\n')[0].trim().slice(0, 24);
+  let nearbyHex = '(無相似上下文)';
+  if (firstLine) {
+    const idx = content.indexOf(firstLine);
+    if (idx >= 0) {
+      nearbyHex = hexPreview(content.slice(idx, idx + 48));
+    }
+  }
+  return new Error(
+    `比對失敗：找不到 search 區塊\n` +
+    `  search 前 80 字: ${preview}\n` +
+    `  search hex(48): ${sHex}\n` +
+    `  最近 content hex: ${nearbyHex}\n` +
+    `  提示：若是 tab/space 不一致，工具已嘗試 indent 與 whitespace-flex fallback 仍無匹配，` +
+    `請重新 read_file 確認原始空白後再傳 search。`
+  );
+}
+
 function checkProtected(filePath) {
   const normalized = filePath.replace(/\\/g, "/");
   const hit = PROTECTED_PATTERNS.find((p) => p.test(normalized));
@@ -405,8 +457,20 @@ export async function handle(name, args) {
           replacedCount = 1;
         }
       } else {
-        const preview = search.slice(0, 80).replace(/\n/g, "\\n");
-        throw new Error(`比對失敗：找不到 search 區塊（前 80 字元：${preview}）`);
+        // 第三層 fallback：whitespace-flexible（所有空白序列視為等價）
+        const flexSlice = whitespaceFlexFind(content, search);
+        if (flexSlice) {
+          matchCount = content.split(flexSlice).length - 1;
+          if (occurrence === "all") {
+            result = content.split(flexSlice).join(replace);
+            replacedCount = matchCount;
+          } else {
+            result = content.replace(flexSlice, () => replace);
+            replacedCount = 1;
+          }
+        } else {
+          throw buildDiffMismatchError(content, search);
+        }
       }
     }
 
@@ -483,9 +547,22 @@ export async function handle(name, args) {
               replacedCount = 1;
             }
           } else {
-            const preview = search.slice(0, 80).replace(/\n/g, "\\n");
-            results.push(`❌ ${diff.path}：比對失敗（前 80 字元：${preview}）`);
-            continue;
+            // 第三層 fallback：whitespace-flexible
+            const flexSlice = whitespaceFlexFind(content, search);
+            if (flexSlice) {
+              matchCount = content.split(flexSlice).length - 1;
+              if (occurrence === "all") {
+                result = content.split(flexSlice).join(replace);
+                replacedCount = matchCount;
+              } else {
+                result = content.replace(flexSlice, () => replace);
+                replacedCount = 1;
+              }
+            } else {
+              const errMsg = buildDiffMismatchError(content, search).message.replace(/\n/g, ' | ');
+              results.push(`❌ ${diff.path}：${errMsg}`);
+              continue;
+            }
           }
         }
         if (hasCRLF) result = result.replace(/\n/g, "\r\n");

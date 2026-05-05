@@ -549,6 +549,24 @@ function formatRows(rows) {
 // ============================================
 export async function handle(name, args) {
   const def = definitions.find(d => d.name === name);
+  // Alias 正規化：常見的替代欄位名稱統一映射到 schema 定義的名稱
+  // 避免「傳 db_name 卻被回缺少 database」這類訊息混淆
+  if (args && typeof args === "object") {
+    const ALIASES = {
+      db_name: "database",
+      dbname: "database",
+      db: "database",
+      schema: "database",
+      username: "user",
+      pwd: "password",
+      passwd: "password",
+    };
+    for (const [alias, real] of Object.entries(ALIASES)) {
+      if (args[alias] !== undefined && args[real] === undefined) {
+        args[real] = args[alias];
+      }
+    }
+  }
   if (def) args = validateArgs(def.inputSchema, args);
 
   // ── set_database ──

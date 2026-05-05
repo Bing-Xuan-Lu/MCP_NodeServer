@@ -22,6 +22,7 @@
 | [reference/reference_known_issues.md](reference/reference_known_issues.md) | 已知問題：Playwright session、MCP 工具名參照、Skill 資訊洩漏 |
 | [reference/reference_playwright_config.md](reference/reference_playwright_config.md) | Playwright --user-data-dir 持久化登入 session 設定 |
 | [reference/reference_notion.md](reference/reference_notion.md) | Notion MCP 串接設定、Internal Integration 限制、筆記頁面用法 |
+| [reference/reference_playwright_target_closed.md](reference/reference_playwright_target_closed.md) | Playwright Target page closed 復原步驟（browser_close → re-navigate） |
 
 ### Feedback — Playwright
 | 檔案 | 說明 |
