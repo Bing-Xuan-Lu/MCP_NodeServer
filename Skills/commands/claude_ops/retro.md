@@ -69,6 +69,19 @@ $ARGUMENTS
 - Git 歷史 — `git log` 可查
 - 已在 CLAUDE.md 記載的規則
 - 本次對話中已存過的 Memory
+- **已修復的 bug 細節** — fix 在 git log / 對話本身就是答案，下次不會重犯
+- **半成品 / 進行中項目**（UI 沒做完、欄位沒接齊）— 屬 sprint backlog 範疇，補完即過期，不是長期 memory
+- **純 code call chain**（A 呼叫 B 呼叫 C）— `class_method_lookup` / `find_usages` 一查即得
+- **純 helper 函式入口**（路徑 + 函式名）— Grep 一行解決
+- **通用技術知識**（Vue/React/PHP 一般用法）— 文件查得到；除非「在這個專案踩過坑、有特殊組合 workaround 才有效」才存
+
+**該存的判準（須同時成立）**：
+
+1. 不是用 grep / AST / git log 一條指令可得的事實
+2. 不會在下個 sprint 自動消失
+3. 違反直覺，下次踩坑會再被坑（跨表約束、view 定義、業務規則對應違反 schema 直覺）
+
+> 自我檢查：寫完一筆候選後，問自己「半年後這條還對嗎？還有人會誤踩嗎？」兩題都 yes 才存。
 
 先讀取現有 MEMORY.md 索引，確認不重複：
 
