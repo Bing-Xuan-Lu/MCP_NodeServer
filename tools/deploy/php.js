@@ -124,6 +124,7 @@ export const definitions = [
             required: ["name"],
           },
         },
+        max_response_size: { type: "integer", description: "回應 body 字元上限（預設 20000；設 0 或負數 = 不截斷）" },
       },
       required: ["url"],
     },
@@ -202,6 +203,7 @@ export const definitions = [
           },
           description: "HTTP 請求陣列",
         },
+        max_response_size: { type: "integer", description: "每筆回應 body 字元上限（預設 8000；設 0 或負數 = 不截斷）" },
       },
       required: ["requests"],
     },
@@ -359,8 +361,15 @@ export async function handle(name, args) {
         }
       }
 
+      const maxSize = args.max_response_size === undefined ? 20000 : args.max_response_size;
+      const unlimited = !Number.isFinite(maxSize) || maxSize <= 0;
+      const totalLen = text.length;
+      const body = unlimited ? text : text.substring(0, maxSize);
+      const truncNote = (!unlimited && totalLen > maxSize)
+        ? `\n... ⚠️ 已截斷（${body.length}/${totalLen} 字元，傳 max_response_size:0 取完整內容）`
+        : "";
       return {
-        content: [{ type: "text", text: `🌐 HTTP ${response.status}${cookieNote}\n${text.substring(0, 2000)}` }],
+        content: [{ type: "text", text: `🌐 HTTP ${response.status}${cookieNote}\n${body}${truncNote}` }],
       };
     } catch (error) {
       return { isError: true, content: [{ type: "text", text: `請求失敗: ${error.message}` }] };
@@ -540,6 +549,8 @@ export async function handle(name, args) {
   }
 
   if (name === "send_http_requests_batch") {
+    const batchMaxSize = args.max_response_size === undefined ? 8000 : args.max_response_size;
+    const batchUnlimited = !Number.isFinite(batchMaxSize) || batchMaxSize <= 0;
     const tasks = args.requests.map(async (req, i) => {
       const label = req.label || `Request ${i + 1}`;
       try {
@@ -564,7 +575,9 @@ export async function handle(name, args) {
 
         const response = await fetch(req.url, options);
         const text = await response.text();
-        return `[${i + 1}] ${label} ✅ HTTP ${response.status} ${req.method || "GET"} ${req.url}\n${text.substring(0, 1000)}${text.length > 1000 ? "\n... (截斷)" : ""}`;
+        const slice = batchUnlimited ? text : text.substring(0, batchMaxSize);
+        const trunc = (!batchUnlimited && text.length > batchMaxSize) ? `\n... ⚠️ 已截斷（${slice.length}/${text.length}）` : "";
+        return `[${i + 1}] ${label} ✅ HTTP ${response.status} ${req.method || "GET"} ${req.url}\n${slice}${trunc}`;
       } catch (err) {
         return `[${i + 1}] ${label} ❌ ${req.method || "GET"} ${req.url}\n${err.message}`;
       }
