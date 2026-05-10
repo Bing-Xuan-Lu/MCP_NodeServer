@@ -364,12 +364,12 @@ export async function handle(name, args) {
       const maxSize = args.max_response_size === undefined ? 20000 : args.max_response_size;
       const unlimited = !Number.isFinite(maxSize) || maxSize <= 0;
       const totalLen = text.length;
-      const body = unlimited ? text : text.substring(0, maxSize);
+      const responseBody = unlimited ? text : text.substring(0, maxSize);
       const truncNote = (!unlimited && totalLen > maxSize)
-        ? `\n... ⚠️ 已截斷（${body.length}/${totalLen} 字元，傳 max_response_size:0 取完整內容）`
+        ? `\n... ⚠️ 已截斷（${responseBody.length}/${totalLen} 字元，傳 max_response_size:0 取完整內容）`
         : "";
       return {
-        content: [{ type: "text", text: `🌐 HTTP ${response.status}${cookieNote}\n${body}${truncNote}` }],
+        content: [{ type: "text", text: `🌐 HTTP ${response.status}${cookieNote}\n${responseBody}${truncNote}` }],
       };
     } catch (error) {
       return { isError: true, content: [{ type: "text", text: `請求失敗: ${error.message}` }] };
