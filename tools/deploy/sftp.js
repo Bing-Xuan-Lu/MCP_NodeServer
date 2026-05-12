@@ -400,6 +400,11 @@ function resolvePresetPaths(localPath, remotePath, sftpConfig) {
   const rb = sftpConfig?._remote_base;
   let note = "";
 
+  // localPath 缺失（item 沒帶 local_path）→ 直接回傳，由 caller 報錯
+  if (typeof localPath !== "string" || !localPath) {
+    return { localPath: localPath || "", remotePath: remotePath || null, presetNote: "" };
+  }
+
   // 如果已有完整 remote_path，直接用
   if (remotePath) return { localPath, remotePath, presetNote: "" };
 
@@ -759,10 +764,14 @@ export async function handle(name, args) {
       // Glob 展開：若 local_path 含萬用字元（* ?），展開為多個檔案
       const expandedItems = [];
       for (const item of args.items) {
+        if (!item || typeof item.local_path !== "string" || !item.local_path) {
+          results.push(`❌ items 內項目缺少 local_path：${JSON.stringify(item)}`);
+          continue;
+        }
         if (/[*?{]/.test(item.local_path)) {
           try {
             // 用 resolvePresetPaths 取得完整路徑前綴，再從中推算 glob 基底
-            const localBase = check.config?.local_base || '';
+            const localBase = check.config?._local_base || '';
             const prefix = localBase
               ? resolveSecurePath(localBase).replace(/\\/g, '/')
               : resolveSecurePath('.').replace(/\\/g, '/');
@@ -1183,6 +1192,9 @@ export async function handle(name, args) {
       return { content: [{ type: "text", text: lines.join("\n") }] };
     }
 
-    return errorResp(`未知 action: ${action}`, ["支援 save / list / delete"]);
+    return errorResp(`未知 action: ${action}`, [
+      "sftp_preset 只支援 save / list / delete 三種 action",
+      "若要套用已存的 preset 進行連線，請改呼叫 sftp_connect({ preset: 'name' })",
+    ]);
   }
 }

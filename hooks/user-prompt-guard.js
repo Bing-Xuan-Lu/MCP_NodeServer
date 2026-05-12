@@ -406,6 +406,16 @@ process.stdin.on('end', () => {
       );
     }
 
+    // CSS 迭代式具體修改：含「數值 + 單位」(10px / 1.2em / 200mm / 14pt …) 或具體顏色（#xxx / rgb()）
+    // → 視為「使用者已知道要改什麼」的精細調整，只給提醒不擋（避免列印頁迭代被反覆 BLOCK）
+    const CSS_CONCRETE_VALUE = /\d+(?:\.\d+)?\s*(?:px|em|rem|%|pt|mm|cm|vh|vw|vmin|vmax|fr|ch|ex|deg)\b|#[0-9a-f]{3,8}\b|rgb\s*\(|rgba\s*\(|hsl\s*\(/i;
+    if (scenario.name === '前端樣式' && CSS_CONCRETE_VALUE.test(prompt)) {
+      process.stdout.write(
+        `[Prompt Guard] 🎯 偵測到 CSS 具體數值修改（迭代模式）— 跳過完整 context 檢查，請直接執行。\n\n`
+      );
+      process.exit(0);
+    }
+
     const missing = getMissing(prompt, scenario.needed);
     const provided = scenario.needed.length - missing.length;
     // 只有「缺多數」才擋：提供資訊 < 一半時才 block，避免 URL+錯誤訊息已齊全仍被要求補 PHP 檔名

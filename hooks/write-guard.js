@@ -191,11 +191,13 @@ process.stdin.on('end', () => {
     // ── 方案 A：Prompt Guard 連動阻擋 ───────────────────
     const state = loadState();
     if (state.promptGuardActive) {
-      process.stdout.write(
+      const msg =
         `[Write Guard] ❌ Edit/Write 暫時被擋（Prompt Guard 偵測到任務描述不完整）。\n` +
         `  → 若是後端任務被誤判：直接改用 apply_diff（不受此限）即可繼續。\n` +
-        `  → 若任務確實需要更多資訊：先用純文字回覆使用者確認後再修改。\n`
-      );
+        `  → 若任務確實需要更多資訊：先用純文字回覆使用者確認後再修改。\n`;
+      // exit 2 時 Claude Code 讀的是 stderr；同步寫 stdout 讓使用者也看得到
+      process.stderr.write(msg);
+      process.stdout.write(msg);
       process.exit(2);
     }
 
@@ -208,11 +210,12 @@ process.stdin.on('end', () => {
       // 擋第一次 → 標記 batchAcked，下次放行（警告已送達使用者）
       state.batchAcked = true;
       saveState(state);
-      process.stdout.write(
+      const msg =
         `[Write Guard] ❌ BLOCKED：已連續修改 ${state.files.length} 個不同檔案（上限 ${BATCH_LIMIT}）。\n` +
         `  → 請先暫停，向使用者確認是否要繼續批次修改。\n` +
-        `  → 已自動 ack；若使用者確認繼續，下一次修改會放行。否則請停下。\n`
-      );
+        `  → 已自動 ack；若使用者確認繼續，下一次修改會放行。否則請停下。\n`;
+      process.stderr.write(msg);
+      process.stdout.write(msg);
       process.exit(2);
     }
     saveState(state);
