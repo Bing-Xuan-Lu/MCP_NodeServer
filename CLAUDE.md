@@ -55,7 +55,8 @@ MCP_NodeServer/
 │   │   └── php_text_search.js ← php_text_search（PHP 純文字搜尋；搜結構語法時自動指引改用 AST 工具）
 │   └── utils/           ← 通用工具與比對
 │       ├── image_diff.js ← image_diff（設計稿 vs 截圖像素級比對）
-│       └── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
+│       ├── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
+│       └── file_diff.js ← file_diff（純 Node 雙檔 unified diff，零依賴；取代 Bash git diff fallback）
 ├── hooks/               ← Claude Code Session Hooks（全域 ~/.claude/settings.json 設定）
 │   ├── session-start.js ← SessionStart：對話開場載入記憶與上次摘要
 │   ├── repetition-detector.js ← PreToolUse：11層偵測（錯誤工具、散搜、低效、重複、同檔連修、自動修復），支援成本追蹤、Slack通知、debug模式

@@ -25,7 +25,10 @@ function isAllowed(absPath) {
   const norm = normalize(absPath);
   if (norm.includes("/../") || norm.includes("/..\\")) return false;
   if (ALLOWED_PREFIXES.some((pre) => norm.toLowerCase().startsWith(pre.toLowerCase()))) return true;
-  if (ALLOWED_SEGMENTS.some((seg) => norm.toLowerCase().includes(seg.toLowerCase()))) return true;
+  // 補 trailing slash 後再比對 segment，避免「目錄名本身就是 segment 末端」（如
+  // D:/Project/_tmp_remote）因 normalize 已剝去尾斜線而漏判 /_tmp_remote/
+  const normForSeg = (norm + "/").toLowerCase();
+  if (ALLOWED_SEGMENTS.some((seg) => normForSeg.includes(seg.toLowerCase()))) return true;
   return false;
 }
 

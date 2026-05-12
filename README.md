@@ -127,6 +127,7 @@ MCP_NodeServer/
 │   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage, browser_save_session, browser_restore_session（自帶 headless 瀏覽器，需 Playwright）
 │   ├── image_diff.js    ← image_diff（設計稿 vs 截圖像素級比對，產生 diff 圖）
 │   ├── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
+│   ├── file_diff.js     ← file_diff（純 Node 雙檔 unified diff，零依賴）
 │   ├── agent_coord.js   ← agent_coord（多 Agent 協調：post/poll/status/delete/archive，JSON 檔案持久化）
 │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
 │   ├── css_tools.js     ← css_specificity_check, css_computed_winner（CSS specificity 分析與活頁面規則勝出查詢）

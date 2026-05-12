@@ -213,6 +213,7 @@ export const definitions = [
   {
     name: "set_database",
     description: "設定資料庫連線。支援多連線：不同 database 各自儲存，最後設定的為預設連線。\n" +
+      "database 與 preset 擇一必填（preset 用於載入先前已 remember 的連線）。\n" +
       "兩種模式：\n" +
       "  1. 直連（預設）：填 host/port/user/password/database\n" +
       "  2. docker_exec（容器內 DB 不對外 port）：填 connection_type=\"docker_exec\" + container + db_user + db_password + database；可選 ssh_host/ssh_user/ssh_port 透過 SSH 中繼。SSH 認證：預設走 ssh binary（金鑰登入），若提供 ssh_password 則改用 ssh2 library 走密碼登入。預設僅唯讀（SELECT/SHOW/DESCRIBE/EXPLAIN/WITH），要執行 INSERT/ALTER/CREATE 等寫入語句請加 allow_write: true（DELETE/UPDATE/DROP/TRUNCATE 仍需 confirm: true）。",
@@ -223,7 +224,8 @@ export const definitions = [
         port: { type: "number", description: "埠號（直連模式）", default: 3306 },
         user: { type: "string", description: "使用者名稱（直連模式）", default: "root" },
         password: { type: "string", description: "密碼（直連模式）" },
-        database: { type: "string", description: "資料庫名稱" },
+        database: { type: "string", description: "資料庫名稱（同時作為 pool key；可用 preset 為別名）" },
+        preset: { type: "string", description: "database 別名。若已用 remember:true 存過此名連線，僅傳 preset 即可重新載入並切換為預設連線（其他欄位可省略）" },
         remember: { type: "boolean", description: "是否記住此連線設定（密碼除外）供下次自動載入" },
         connection_type: {
           type: "string",
@@ -240,7 +242,6 @@ export const definitions = [
         ssh_password: { type: "string", description: "docker_exec 模式：SSH 密碼（選填；未提供時走 ssh binary BatchMode 金鑰認證，提供時改用 ssh2 library 支援密碼登入）" },
         allow_write: { type: "boolean", description: "docker_exec 模式：放行 INSERT/UPDATE/DELETE/CREATE/ALTER 等寫入語句（DELETE/UPDATE/DROP/TRUNCATE 仍受 checkDangerousStmt + confirm 把關）。預設 false。", default: false },
       },
-      required: ["database"],
     },
   },
   {
@@ -571,6 +572,27 @@ export async function handle(name, args) {
 
   // ── set_database ──
   if (name === "set_database") {
+    // preset 是 database 的別名；同時提供時以 database 為準
+    if (!args.database && args.preset) args.database = args.preset;
+    if (!args.database) {
+      return errorResp("缺少 database（或 preset 別名）參數。", [
+        "傳 database: 'name' 設定/切換連線",
+        "若已 remember 過此連線，可只傳 preset: 'name' 載入舊設定",
+      ]);
+    }
+
+    // 純 preset 切換場景：只給 database/preset，其他欄位省略 → 從 dbPool 重用既有設定
+    const onlyDbName = !args.host && !args.user && !args.password
+      && !args.container && !args.connection_type;
+    if (onlyDbName && dbPool.has(args.database)) {
+      defaultDb = args.database;
+      const cfg = dbPool.get(args.database);
+      const target = cfg.connection_type === "docker_exec"
+        ? `docker:${cfg.container}${cfg.ssh_host ? `@${cfg.ssh_host}` : ""}`
+        : `${cfg.host}:${cfg.port}`;
+      return { content: [{ type: "text", text: `✅ 已切換預設連線為 ${args.database}@${target}\n📊 目前共 ${dbPool.size} 個連線：${[...dbPool.keys()].join(", ")}（預設：${defaultDb}）` }] };
+    }
+
     const isDockerExec = args.connection_type === "docker_exec";
     const dbConfig = isDockerExec
       ? {

@@ -78,4 +78,6 @@ const TOOLS = {
   'trace_logic':            { dept:'PHP 分析', title:'業務邏輯流程追蹤', desc:'追蹤 PHP 函式/方法的控制流：解析 if/switch/迴圈/呼叫/回傳，輸出樹狀流程圖。支援遞迴追蹤子呼叫（max_depth 2-3）。', usage:'trace_logic {project:"...", function_name:"cancelOrder", class_name:"OrderModel", max_depth:2}', tools:[] },
 
   'image_transform':        { dept:'圖片處理', title:'圖片轉換與合成', desc:'resize、加背景色、圓形裁切、多圖合成、格式轉換、旋轉翻轉。一次呼叫可串聯多個操作。', usage:'image_transform {input:"...", operations:[{type:"resize", width:200}]}', tools:[] },
+
+  'file_diff':              { dept:'檔案系統 & 資料庫', title:'雙檔 unified diff 比對', desc:'純 Node 實作，零依賴。比對兩個文字檔產出 unified diff，自動偵測 UTF-8/UTF-16 BOM，可選忽略空白。取代 Bash git diff --no-index fallback。', usage:'file_diff {path_a:"...", path_b:"...", context:3, ignore_whitespace:false}', tools:[] },
 };
