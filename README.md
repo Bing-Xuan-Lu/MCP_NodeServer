@@ -88,6 +88,7 @@ MCP Server 安裝一次即可，每個需要使用的專案只要掛上連線設
 | `pre-compact.js` | PreCompact | Context 壓縮前自動存快照到 `~/.claude/sessions/`，偵測重試/失敗/大量修改模式並存踩坑紀錄，GC 清舊紀錄 |
 | `write-guard.js` | PreToolUse (Write\|Edit) | 依 `risk-tiers.json` 分級警告（🔴 高風險 / 🟡 中風險）、敏感檔案保護、Prompt Injection 偵測（非阻擋式） |
 | `llm-judge.js` | PostToolUse (Write\|Edit) | Write/Edit 後依風險層級注入自我審查清單，PHP 非測試檔自動提醒「事故→測試」習慣 |
+| `memory-auto-recall.js` | PreToolUse | 依 memory frontmatter `triggers` 比對 tool / file_path / 最近 prompt，命中且距上次注入 ≥ N 次 tool call 即注入提醒，解 memory attention 衰減 |
 
 Hook 腳本存放於 `hooks/` 目錄，設定在全域 `~/.claude/settings.json` 的 `hooks` 欄位。
 
@@ -114,6 +115,7 @@ MCP_NodeServer/
 │   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, apply_diff_batch, *_batch (read_files/list_files/create_file)（PROTECTED_PATTERNS 防寫入測試檔 + audit log）
 │   ├── php.js           ← run_php_script, run_php_code, run_php_test, send_http_request, tail_log, *_batch (http_requests/php_script)（PHP 執行 + tail_log 支援 container 參數走 Docker）
 │   ├── database.js      ← set_database, load_db_connection, get_db_schema, execute_sql（危險語句攔截 + confirm + audit log + ER_* 錯誤摘要）, *_batch, schema_diff, mysql_log_tail
+│   ├── gsheet.js        ← gsheet_fetch_with_state, gsheet_xlookup_trace（gspread 一條龍 + 查表鏈遞迴展開，python_runner 容器）
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   ├── bookmarks.js     ← Chrome 書籤管理 (12 工具)
 │   ├── sftp.js          ← sftp_connect/upload/download/list/delete, sftp_*_batch (list/upload/download/delete), sftp_preset
@@ -141,7 +143,8 @@ MCP_NodeServer/
 │   ├── session-start.js ← SessionStart：對話開場自動載入記憶與上次摘要
 │   ├── pre-compact.js   ← PreCompact：context 壓縮前存快照 + 踩坑偵測 + GC
 │   ├── write-guard.js   ← PreToolUse(Write|Edit)：risk-tiers 分級警告 + Prompt Injection 偵測
-│   └── llm-judge.js     ← PostToolUse(Write|Edit)：自我審查清單觸發器
+│   ├── llm-judge.js     ← PostToolUse(Write|Edit)：自我審查清單觸發器
+│   └── memory-auto-recall.js ← PreToolUse：memory frontmatter triggers 比對 → 動態 recall 注入
 ├── docs/                ← 舊版技能儀表板 (備份)
 ├── dashboard/           ← 新版動態技能儀表板 (index.html / js / style.css)
 ├── setup.ps1            ← 一鍵環境初始化

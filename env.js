@@ -35,6 +35,9 @@ export const MCP_BASE_PATHS = env('MCP_BASE_PATHS')
   ? env('MCP_BASE_PATHS').split(',').map(p => p.trim()).filter(Boolean)
   : null; // null = let config.js use its own default
 
+// ── Google Sheet 工具 ────────────────────────────────────
+export const GSHEET_CREDENTIALS_PATH = env('GSHEET_CREDENTIALS_PATH');
+
 // ── Hook: repetition-detector ────────────────────────────
 export const CLAUDE_HOOK_DEBUG     = envBool('CLAUDE_HOOK_DEBUG');
 export const CLAUDE_SLACK_WEBHOOK  = env('CLAUDE_SLACK_WEBHOOK');

@@ -1,7 +1,46 @@
 import fs from "fs/promises";
 import path from "path";
-import { resolveSecurePath } from "../../config.js";
+import { resolveSecurePath, CONFIG } from "../../config.js";
 import { validateArgs, normalizeArrayArg } from "../_shared/utils.js";
+
+/**
+ * apply_diff 路徑解析 + 自動掃描 fallback
+ * 相對路徑解析後若檔案不存在，掃 basePath 第一層子目錄找唯一 match（自動補專案前綴）
+ * - 找到唯一 1 個 → 回傳該路徑 + autoFixed note
+ * - 找到 2+ → 拋錯列出候選
+ * - 找到 0 → 回傳原解析路徑（讓後續 readFile 拋預設錯誤）
+ */
+async function resolveWithAutoScan(userPath) {
+  const direct = resolveSecurePath(userPath);
+  try { await fs.access(direct); return { path: direct, autoFixedFrom: null }; } catch {}
+  if (path.isAbsolute(userPath)) return { path: direct, autoFixedFrom: null };
+
+  const base = CONFIG.basePaths[0];
+  let entries;
+  try { entries = await fs.readdir(base, { withFileTypes: true }); }
+  catch { return { path: direct, autoFixedFrom: null }; }
+
+  const SKIP = new Set(['node_modules', 'vendor', '.git', '.idea', '.vscode']);
+  const candidates = [];
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    if (e.name.startsWith('.') || e.name.startsWith('_') || SKIP.has(e.name)) continue;
+    const cand = path.join(base, e.name, userPath);
+    try { await fs.access(cand); candidates.push(cand); } catch {}
+  }
+  if (candidates.length === 1) {
+    return { path: candidates[0], autoFixedFrom: direct };
+  }
+  if (candidates.length > 1) {
+    const list = candidates.slice(0, 5).map(c => `  - ${path.relative(base, c).replace(/\\/g, '/')}`).join('\n');
+    const extra = candidates.length > 5 ? `\n  ... 共 ${candidates.length} 個` : '';
+    throw new Error(
+      `找不到 ${userPath}，但 basePath 內有 ${candidates.length} 個同名候選：\n${list}${extra}\n` +
+      `請帶專案前綴（如 ProjectFolder/${userPath}）或傳絕對路徑明確指定。`
+    );
+  }
+  return { path: direct, autoFixedFrom: null };
+}
 
 // 防 Reward Hacking：保護測試相關檔案，防止 Claude 為了讓測試通過而修改測試本身
 const PROTECTED_PATTERNS = [
@@ -406,7 +445,8 @@ export async function handle(name, args) {
 
   if (name === "apply_diff") {
     checkProtected(args.path);
-    const fullPath = resolveSecurePath(args.path);
+    const resolved = await resolveWithAutoScan(args.path);
+    const fullPath = resolved.path;
     const raw = await fs.readFile(fullPath, "utf-8");
 
     // 偵測原始檔案的換行風格
@@ -490,7 +530,10 @@ export async function handle(name, args) {
     const occNote = matchCount > 1
       ? `（匹配 ${matchCount} 處，已處理 ${replacedCount}${isPartial ? `，剩 ${unprocessed} 處未處理，如需全部替換請傳 occurrence:"all"` : ""}）`
       : "";
-    return { content: [{ type: "text", text: `${icon} ${args.path}（第 ${startLine} 行，-${removedLines} +${addedLines} 行，淨 ${deltaStr}）${occNote}` }] };
+    const fixNote = resolved.autoFixedFrom
+      ? `\n🔀 自動補路徑：${args.path} → ${path.relative(CONFIG.basePaths[0], fullPath).replace(/\\/g, '/')}（原解析路徑不存在，basePath 子目錄找到唯一 match）`
+      : "";
+    return { content: [{ type: "text", text: `${icon} ${args.path}（第 ${startLine} 行，-${removedLines} +${addedLines} 行，淨 ${deltaStr}）${occNote}${fixNote}` }] };
   }
 
   if (name === "apply_diff_batch") {
@@ -505,7 +548,8 @@ export async function handle(name, args) {
     for (const diff of args.diffs) {
       try {
         checkProtected(diff.path);
-        const fullPath = resolveSecurePath(diff.path);
+        const resolved = await resolveWithAutoScan(diff.path);
+        const fullPath = resolved.path;
         const raw = await fs.readFile(fullPath, "utf-8");
         const hasCRLF = raw.includes("\r\n");
 
@@ -579,7 +623,10 @@ export async function handle(name, args) {
         const occNote = matchCount > 1
           ? `（匹配 ${matchCount}，處理 ${replacedCount}${isPartial ? `，剩 ${unprocessed} 未處理，如需全部替換請傳 occurrence:"all"` : ""}）`
           : "";
-        results.push(`${icon} ${diff.path}（第 ${startLine} 行，-${removedLines} +${addedLines} 行，淨 ${deltaStr}）${occNote}`);
+        const fixNote = resolved.autoFixedFrom
+          ? `（🔀 自動補：${path.relative(CONFIG.basePaths[0], fullPath).replace(/\\/g, '/')}）`
+          : "";
+        results.push(`${icon} ${diff.path}${fixNote}（第 ${startLine} 行，-${removedLines} +${addedLines} 行，淨 ${deltaStr}）${occNote}`);
         okCount++;
         if (isPartial) partialCount++;
       } catch (err) {
