@@ -80,4 +80,12 @@ const TOOLS = {
   'image_transform':        { dept:'圖片處理', title:'圖片轉換與合成', desc:'resize、加背景色、圓形裁切、多圖合成、格式轉換、旋轉翻轉。一次呼叫可串聯多個操作。', usage:'image_transform {input:"...", operations:[{type:"resize", width:200}]}', tools:[] },
 
   'file_diff':              { dept:'檔案系統 & 資料庫', title:'雙檔 unified diff 比對', desc:'純 Node 實作，零依賴。比對兩個文字檔產出 unified diff，自動偵測 UTF-8/UTF-16 BOM，可選忽略空白。取代 Bash git diff --no-index fallback。', usage:'file_diff {path_a:"...", path_b:"...", context:3, ignore_whitespace:false}', tools:[] },
+
+  'gsheet_fetch_with_state': { dept:'檔案系統 & 資料庫', title:'Google Sheet 一條龍 fetch', desc:'gspread 整合：可選 write_data 寫入輸入欄 → sleep N 秒等公式重算 → 批次 fetch FORMULA + UNFORMATTED_VALUE。避免「忘了寫入就抓 → 用過期 state 下結論」。需 python_runner 容器與 service account JSON。', usage:'gsheet_fetch_with_state {spreadsheet_id:"...", read_range:"web!A1:Z200", write_data:[{range:"web!A3", values:"X"}], sleep_sec:2}', tools:[] },
+
+  'gsheet_xlookup_trace':   { dept:'檔案系統 & 資料庫', title:'Google Sheet 查表鏈遞迴展開', desc:'從一個 cell ref 出發，遞迴展開 XLOOKUP / VLOOKUP / INDEX-MATCH / 一般 cell 引用，輸出展開樹（cell + formula + resolved value）。手動跨多層 fetch 公式的替代。', usage:'gsheet_xlookup_trace {spreadsheet_id:"...", start_cell:"\'web\'!D284", max_depth:4}', tools:[] },
+
+  'list_memory_triggers':   { dept:'Memory & Hook', title:'列 memory triggers 狀態', desc:'掃描專案 memory dir 所有 .md 的 frontmatter triggers 欄位，列出哪些已設、哪些缺。配合 memory-auto-recall hook 用。', usage:'list_memory_triggers {project_id:"d--Project-PG-dbox3", only_missing:false}', tools:[] },
+  'memory_add_triggers':    { dept:'Memory & Hook', title:'設定 memory triggers', desc:'為單筆 memory frontmatter 設定 / 更新 triggers（tools / path_patterns / prompt_keywords / reinject_after_tool_calls）。merge_mode 控制覆蓋或合併。', usage:'memory_add_triggers {memory_file:"d--Project-X/memory/foo.md", triggers:{tools:["Edit"], path_patterns:["autocalc"], prompt_keywords:["sheet"], reinject_after_tool_calls:25}}', tools:[] },
+  'memory_remove_triggers': { dept:'Memory & Hook', title:'移除 memory triggers', desc:'移除指定 memory 的 triggers 欄位，恢復為一般 memory（不被 memory-auto-recall hook 注入）。', usage:'memory_remove_triggers {memory_file:"..."}', tools:[] },
 };

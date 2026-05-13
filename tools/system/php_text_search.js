@@ -44,11 +44,18 @@ export const definitions = [
         },
         max_results: { type: "number", description: "結果上限（預設 100）", default: 100 },
         context_lines: { type: "number", description: "每個結果前後顯示行數（預設 0）", default: 0 },
+        force_full_scan: {
+          type: "boolean",
+          description: "明確覆寫全專案散搜門檻（無 scope 且專案 .php > 1500 時必要）。請先評估能否補 scope 或改用 DB schema 查詢。",
+          default: false,
+        },
       },
       required: ["project", "pattern"],
     },
   },
 ];
+
+const FULL_SCAN_THRESHOLD = 1500;
 
 function checkStructural(pattern, useRegex) {
   // pattern 形似 PHP 結構語法 → 拒絕並指引正確工具
@@ -90,6 +97,7 @@ export async function handle(name, args) {
     scope, glob: globPattern = "**/*.php",
     max_results: maxResults = 100,
     context_lines: contextLines = 0,
+    force_full_scan: forceFullScan = false,
   } = args;
 
   // 結構搜尋拒絕
@@ -139,6 +147,24 @@ export async function handle(name, args) {
   }
   if (files.length === 0) {
     return { content: [{ type: "text", text: `⚠️ 未找到符合 glob (${globPattern}) 的檔案。` }] };
+  }
+
+  // 大專案散搜守門：無 scope + 檔案數 > 門檻 → BLOCK（除非明確 force_full_scan）
+  const hasScope = scope && Array.isArray(scope) && scope.length > 0;
+  if (!hasScope && files.length > FULL_SCAN_THRESHOLD && !forceFullScan) {
+    return {
+      isError: true,
+      content: [{
+        type: "text",
+        text:
+          `❌ 全專案散搜被擋下：${files.length} 個 .php 檔超過門檻 ${FULL_SCAN_THRESHOLD}，命中率通常極低、燒 token。\n` +
+          `   pattern="${pattern}"\n\n` +
+          `請三擇一：\n` +
+          `  (A) 加 scope 縮小範圍（建議）：scope: ["adminControl/xxx", "cls/model"]\n` +
+          `  (B) 若搜 DB 欄位名 → 改用 set_database + execute_sql 查 INFORMATION_SCHEMA，比掃檔案精準 100 倍\n` +
+          `  (C) 若真的需要全掃 → 加 force_full_scan: true 並在對話內說明理由\n`,
+      }],
+    };
   }
 
   const hits = [];

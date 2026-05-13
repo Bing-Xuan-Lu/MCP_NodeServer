@@ -1302,6 +1302,45 @@ const PATTERNS = [
     },
   },
   {
+    // Layer 2.4d: php_text_search 全專案散搜守門
+    //   同 session 內第 2 次 php_text_search 無 scope 且未 force_full_scan → BLOCK
+    //   首次散搜由工具內 FULL_SCAN_THRESHOLD 守（>1500 .php 檔擋下），
+    //   這層補的是「跨次重複全掃」的攔截，避免每次都掃 13000 檔再喊燒 token。
+    id: 'php_text_search_no_scope',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'php_text_search') return null;
+
+      const args = entry.args || {};
+      const hasScope = Array.isArray(args.scope) && args.scope.length > 0;
+      if (hasScope) return null;
+      if (args.force_full_scan === true) return null;
+
+      // 統計歷史中同 session 的 php_text_search 無 scope 呼叫
+      const prevNoScope = history.filter(h => {
+        if (shortName(h.tool) !== 'php_text_search') return false;
+        const a = h.args || {};
+        if (Array.isArray(a.scope) && a.scope.length > 0) return false;
+        if (a.force_full_scan === true) return false;
+        return true;
+      });
+
+      if (prevNoScope.length === 0) return null; // 首次交給工具內 threshold 守
+
+      const pattern = (args.pattern || '').slice(0, 60);
+      return {
+        block: true,
+        message:
+          `[php_text_search] ❌ BLOCKED：本 session 已第 ${prevNoScope.length + 1} 次 php_text_search 無 scope 全專案散搜。\n` +
+          `  pattern="${pattern}"\n` +
+          `  全掃命中率通常極低、燒 token。請改用：\n` +
+          `    (A) 補 scope: ["adminControl/xxx", "cls/model"] 縮小範圍\n` +
+          `    (B) 若搜 DB 欄位名 → set_database + execute_sql 查 INFORMATION_SCHEMA\n` +
+          `    (C) 真要全掃 → force_full_scan: true 並說明理由\n`,
+      };
+    },
+  },
+  {
     // Layer 2.4b: Grep+Read on Same PHP File — 同一 PHP 檔反覆 Grep+Read 拼湊 method
     //   觸發：對同一 .php / Trait / Class 檔在最近 8 步內累計 Grep+Read ≥ 3 次
     //   建議改用 class_method_lookup 一次拿完整 method
@@ -1923,6 +1962,63 @@ const PATTERNS = [
              `  → 近 10 分鐘內未跑過 file_diff / git_diff / sftp_download，無法確認遠端是否有他人改動。\n` +
              `  → 建議先：sftp_download 拉遠端版本 + file_diff 對比，或 git_diff 確認本機改動範圍。\n` +
              `  → 若已確認可覆蓋（或 sftp.js 內建 force 比對已足夠），此提醒不再重複。\n`;
+    },
+  },
+  {
+    // Layer 2.82c: gspread 讀公式結果前若無近期寫入動作，警示可能用過期 state 下結論
+    // 觸發：run_python_script 跑 gspread fetch 公式結果，且近 30 分鐘無 batch_update / update_values
+    // 用途：autocalc 對齊類任務避免「fetch 了但 fetch 時 source 狀態對應的是別的 case」
+    id: 'gspread_stale_state',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'run_python_script') return null;
+      const code = entry.args?.code || entry.args?.script_content || '';
+      const scriptPath = entry.args?.script_path || '';
+
+      // 取 script 內容（直接 code 或從路徑讀）
+      let src = code;
+      if (!src && scriptPath) {
+        try {
+          const p = scriptPath.replace(/\\/g, '/');
+          src = fs.readFileSync(p, 'utf-8').slice(0, 16384);
+        } catch {}
+      }
+      if (!src) return null;
+
+      // 必含 gspread + FORMULA / UNFORMATTED_VALUE 之一
+      const hasGspread = /\bgspread\b/.test(src) || /\bopen_by_key\(|\bworksheet\(/.test(src);
+      const readsFormula = /value_render_option\s*=\s*['"]?(FORMULA|UNFORMATTED_VALUE)/i.test(src);
+      if (!hasGspread || !readsFormula) return null;
+
+      // 已 ack 過 → 跳過（同 session 一次）
+      const ackPath = path.join(LOG_DIR, 'gspread_stale_state_ack.flag');
+      try { if (fs.existsSync(ackPath)) return null; } catch {}
+
+      // 看 history 近 30 分鐘有沒有「寫 Sheet」動作（同樣是 run_python_script，但 code 含 update / batch_update / update_values / append_row）
+      const THIRTY_MIN = 30 * 60 * 1000;
+      const now = Date.now();
+      const sawWrite = history.some(h => {
+        if ((now - (h.ts || 0)) > THIRTY_MIN) return false;
+        if (shortName(h.tool) !== 'run_python_script') return false;
+        const hcode = h.args?.code || h.args?.script_content || '';
+        let hsrc = hcode;
+        if (!hsrc && h.args?.script_path) {
+          try { hsrc = fs.readFileSync(h.args.script_path.replace(/\\/g, '/'), 'utf-8').slice(0, 16384); } catch {}
+        }
+        if (!hsrc) return false;
+        return /\.update\s*\(|\.batch_update\s*\(|\.update_values\s*\(|\.update_cell\s*\(|\.update_acell\s*\(|\.append_row\s*\(|values_update/.test(hsrc);
+      });
+      if (sawWrite) return null;
+
+      // 落 ack 避免反覆擾人
+      try { fs.mkdirSync(LOG_DIR, { recursive: true }); fs.writeFileSync(ackPath, String(now)); } catch {}
+
+      return `[gspread Stale State] ⚠️ 即將讀 Sheet 公式結果（FORMULA / UNFORMATTED_VALUE），但近 30 分鐘無寫入 Sheet 的動作。\n` +
+             `  → 公式結果反映「Sheet 目前的輸入狀態」，若 web 輸入欄（如 A3/B3/C3/D3/F3/H3/I9/J3 等業務輸入）對應的是別的 case，\n` +
+             `    這次 fetch 出來的值對「當前 case」是過期狀態。\n` +
+             `  → 建議先：(1) 寫入當前 case 的輸入值 → (2) sleep 2-3 秒等 Sheet 重算 → (3) 再 fetch。\n` +
+             `  → 若 fetch 的不是 input-sensitive 的 cells（如 lookup table 本體、常數）可忽略此提醒。\n` +
+             `  → 同 session 此提醒只出現一次。\n`;
     },
   },
   {
