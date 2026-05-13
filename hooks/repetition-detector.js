@@ -649,6 +649,9 @@ const BASH_PATTERNS = [
   },
   {
     regex: /docker\s+exec\s+\S+\s+mysql/i,
+    // -e "SHOW / EXPLAIN / DESCRIBE / DESC / CREATE VIEW|TABLE|... / ALTER / DROP / USE / SET / RESET / FLUSH / ANALYZE / OPTIMIZE / CHECK / REPAIR" 等 DDL/meta query 放行
+    // 原因：execute_sql 對 SHOW CREATE VIEW / FULL COLUMNS / TABLE STATUS 等 meta 輸出常截斷不全，DDL 場景 docker exec mysql -e 是合理替代
+    skipIfMatch: /-e\s+["']?\s*(SHOW|EXPLAIN|DESCRIBE|DESC|CREATE|ALTER|DROP|USE|SET|RESET|FLUSH|ANALYZE|OPTIMIZE|CHECK|REPAIR)\b/i,
     signature: 'bash:docker-mysql',
     hint: 'set_database + execute_sql / execute_sql_batch（MCP 工具，免重複 docker exec 開銷）',
     warnOnFirst: true,
@@ -670,6 +673,7 @@ const BASH_PATTERNS = [
   },
   {
     regex: /\bmysql\s+(-[ueph]\s*\S+\s+)*.*(-e|--execute)/i,
+    skipIfMatch: /(-e|--execute)\s+["']?\s*(SHOW|EXPLAIN|DESCRIBE|DESC|CREATE|ALTER|DROP|USE|SET|RESET|FLUSH|ANALYZE|OPTIMIZE|CHECK|REPAIR)\b/i,
     signature: 'bash:direct-mysql',
     hint: 'set_database + execute_sql / execute_sql_batch（MCP 工具）',
     warnOnFirst: true,
@@ -833,7 +837,11 @@ function extractBashSignature(command) {
 function matchBashPattern(command) {
   if (!command) return null;
   for (const pat of BASH_PATTERNS) {
-    if (pat.regex.test(command)) return pat;
+    if (pat.regex.test(command)) {
+      // 若 pattern 帶 skipIfMatch：命令符合時視為合法用途，放行（用於 mysql DDL/SHOW/EXPLAIN 等 meta query）
+      if (pat.skipIfMatch && pat.skipIfMatch.test(command)) return null;
+      return pat;
+    }
   }
   return null;
 }
@@ -1873,6 +1881,48 @@ const PATTERNS = [
       return `[SFTP Local Test Gate] ⚠️ ${fnames}${more} 即將 sftp_upload，但最近 30 分鐘內未偵測到 localhost / 區網訪問記錄。\n` +
              `  → 確定先在 local 測過了嗎？跳過 local 直接上測試機常導致來回部署。\n` +
              `  → 若是 include/class/config 類檔案不需直接訪問，可忽略此提醒。\n`;
+    },
+  },
+  {
+    // Layer 2.82b: SFTP Force Without Diff — sftp_upload(_batch) 帶 force=true 但近 10 分鐘內無 file_diff / git_diff / sftp_download，提醒先 diff
+    // 警示而非阻擋；同 session 觸發後 ack（避免反覆擾人）
+    id: 'sftp_force_no_diff',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'sftp_upload' && tool !== 'sftp_upload_batch') return null;
+      if (entry.args?.force !== true) return null;
+
+      // 已 ack 過就不再提醒（同 session 一次）
+      const ackPath = path.join(LOG_DIR, 'sftp_force_ack.flag');
+      try { if (fs.existsSync(ackPath)) return null; } catch {}
+
+      // 收集本次 upload 的 local_path 集合
+      const items = tool === 'sftp_upload_batch'
+        ? (entry.args?.items || [])
+        : [entry.args || {}];
+      const targets = items.map(it => (it?.local_path || '').replace(/\\/g, '/').toLowerCase()).filter(Boolean);
+      if (targets.length === 0) return null;
+
+      const TEN_MIN = 10 * 60 * 1000;
+      const now = Date.now();
+      const diffTools = new Set(['file_diff', 'git_diff', 'sftp_download', 'sftp_download_batch']);
+      const sawDiff = history.some(h => {
+        if ((now - (h.ts || 0)) > TEN_MIN) return false;
+        if (!diffTools.has(shortName(h.tool))) return false;
+        // 任一 diff 動作都算（不嚴格綁定 local_path，避免誤判）
+        return true;
+      });
+      if (sawDiff) return null;
+
+      // 立刻 ack，下次 force 上傳直接放行
+      try { fs.mkdirSync(LOG_DIR, { recursive: true }); fs.writeFileSync(ackPath, String(now)); } catch {}
+
+      const sample = targets.slice(0, 3).map(p => p.split('/').pop()).join(', ');
+      const more = targets.length > 3 ? ` 等 ${targets.length} 個` : '';
+      return `[SFTP Force Guard] ⚠️ 即將 force 覆蓋遠端：${sample}${more}\n` +
+             `  → 近 10 分鐘內未跑過 file_diff / git_diff / sftp_download，無法確認遠端是否有他人改動。\n` +
+             `  → 建議先：sftp_download 拉遠端版本 + file_diff 對比，或 git_diff 確認本機改動範圍。\n` +
+             `  → 若已確認可覆蓋（或 sftp.js 內建 force 比對已足夠），此提醒不再重複。\n`;
     },
   },
   {

@@ -130,6 +130,58 @@ async function checkRemoteDrift(client, host, remotePath, force) {
   return { ok: true };
 }
 
+/**
+ * force=true 時的內容比對：下載遠端 → 與本機 byte-by-byte 比對
+ * 用於避免無聲覆蓋（遠端有差異時提示行差，內容相同時直接跳過上傳）
+ * @returns {Promise<{ same: true, bytes: number }
+ *                  | { same: false, remoteBytes: number, localBytes: number, lineDiff: { added: number, removed: number } }
+ *                  | { skip: true, reason: string }>}
+ */
+async function compareRemoteContent(client, remotePath, localAbs) {
+  let remoteBuf;
+  try {
+    remoteBuf = await client.get(remotePath);
+  } catch (err) {
+    return { skip: true, reason: `下載遠端失敗（${err.message}）` };
+  }
+  if (!Buffer.isBuffer(remoteBuf)) {
+    return { skip: true, reason: `遠端回傳非 Buffer（型別 ${typeof remoteBuf}）` };
+  }
+  let localBuf;
+  try {
+    localBuf = await fsP.readFile(localAbs);
+  } catch (err) {
+    return { skip: true, reason: `讀本機失敗（${err.message}）` };
+  }
+  if (remoteBuf.equals(localBuf)) {
+    return { same: true, bytes: localBuf.length };
+  }
+  // 概略行差（僅當兩邊看起來都是文字檔時才算）
+  let lineDiff = { added: 0, removed: 0 };
+  const isProbablyText = (buf) => {
+    const sample = buf.slice(0, Math.min(buf.length, 4096));
+    for (const b of sample) {
+      if (b === 0) return false;
+      if (b < 9 || (b > 13 && b < 32)) return false;
+    }
+    return true;
+  };
+  if (isProbablyText(remoteBuf) && isProbablyText(localBuf)) {
+    const rLines = remoteBuf.toString("utf-8").split(/\r?\n/);
+    const lLines = localBuf.toString("utf-8").split(/\r?\n/);
+    const rSet = new Set(rLines);
+    const lSet = new Set(lLines);
+    lineDiff.added = lLines.filter((l) => !rSet.has(l)).length;
+    lineDiff.removed = rLines.filter((l) => !lSet.has(l)).length;
+  }
+  return {
+    same: false,
+    remoteBytes: remoteBuf.length,
+    localBytes: localBuf.length,
+    lineDiff,
+  };
+}
+
 // ============================================
 // 工具定義
 // ============================================
@@ -622,6 +674,22 @@ export async function handle(name, args) {
         const drift = await checkRemoteDrift(client, check.config.host, remotePath, args.force);
         if (!drift.ok) return errorResp(drift.reason, drift.hint);
 
+        // force=true 內容比對：避免無聲覆蓋遠端他人改動
+        let cmp = null;
+        if (args.force && (drift.drifted || drift.noSnapshot)) {
+          cmp = await compareRemoteContent(client, remotePath, localAbs);
+          if (cmp.same) {
+            // 內容相同直接跳過上傳，順便刷新快照
+            try {
+              const curStat = await client.stat(remotePath);
+              saveSnapshot(check.config.host, remotePath, curStat);
+            } catch {}
+            return {
+              content: [{ type: "text", text: `🔄 內容相同已跳過上傳\n本機: ${localAbs}\n遠端: ${remotePath}（${cmp.bytes} bytes）${presetNote}` }],
+            };
+          }
+        }
+
         // 自動建立遠端目錄
         const remoteDir = remotePath.replace(/\/[^/]+$/, "");
         if (remoteDir) await client.mkdir(remoteDir, true).catch(() => {});
@@ -637,6 +705,11 @@ export async function handle(name, args) {
         if (drift.firstUpload) flags.push("🆕 首次上傳");
         if (drift.drifted) flags.push("⚠️ 已強制覆蓋（遠端有變動）");
         if (drift.noSnapshot) flags.push("⚠️ 已強制覆蓋（無快照）");
+        if (cmp && !cmp.same && cmp.lineDiff) {
+          flags.push(`📊 差異 ${cmp.remoteBytes}→${cmp.localBytes} bytes，行 +${cmp.lineDiff.added}/-${cmp.lineDiff.removed}`);
+        } else if (cmp && cmp.skip) {
+          flags.push(`⚠️ 無法比對內容（${cmp.reason}）`);
+        }
         const flagLine = flags.length ? `\n${flags.join(" / ")}` : "";
         return {
           content: [{ type: "text", text: `✅ 檔案上傳完成\n本機: ${localAbs}\n遠端: ${remotePath}${flagLine}${presetNote}` }],
@@ -760,6 +833,8 @@ export async function handle(name, args) {
       const results = [];
       let okCount = 0;
       let skipCount = 0;
+      let sameContentCount = 0;
+      let realDiffCount = 0;
 
       // Glob 展開：若 local_path 含萬用字元（* ?），展開為多個檔案
       const expandedItems = [];
@@ -832,6 +907,22 @@ export async function handle(name, args) {
               continue;
             }
 
+            // force=true 內容比對：避免無聲覆蓋
+            let cmp = null;
+            if (args.force && (drift.drifted || drift.noSnapshot)) {
+              cmp = await compareRemoteContent(client, remotePath, localAbs);
+              if (cmp.same) {
+                try {
+                  const curStat = await client.stat(remotePath);
+                  saveSnapshot(check.config.host, remotePath, curStat);
+                } catch {}
+                results.push(`🔄 ${localPath} → ${remotePath}：內容相同跳過上傳（${cmp.bytes}B）`);
+                sameContentCount++;
+                continue;
+              }
+              if (!cmp.skip) realDiffCount++;
+            }
+
             // 自動建立遠端目錄（若不存在）
             const remoteDir = remotePath.replace(/\/[^/]+$/, "");
             if (remoteDir) {
@@ -842,7 +933,10 @@ export async function handle(name, args) {
               const newStat = await client.stat(remotePath);
               saveSnapshot(check.config.host, remotePath, newStat);
             } catch {}
-            const tag = drift.firstUpload ? " 🆕" : (drift.drifted || drift.noSnapshot) ? " ⚠️覆蓋" : "";
+            let tag = drift.firstUpload ? " 🆕" : (drift.drifted || drift.noSnapshot) ? " ⚠️覆蓋" : "";
+            if (cmp && !cmp.same && cmp.lineDiff) {
+              tag += ` 📊${cmp.remoteBytes}→${cmp.localBytes}B/行+${cmp.lineDiff.added}-${cmp.lineDiff.removed}`;
+            }
             results.push(`✅ ${localPath} → ${remotePath}${tag}`);
             okCount++;
           }
@@ -853,6 +947,9 @@ export async function handle(name, args) {
 
       const summary = [`批次上傳完成：${okCount}/${args.items.length} 成功`];
       if (skipCount) summary.push(`（${skipCount} 個被 preset excludes 排除）`);
+      if (args.force && (sameContentCount || realDiffCount)) {
+        summary.push(`🛡 force 比對：${realDiffCount} 檔有實質差異 / ${sameContentCount} 檔內容相同跳過`);
+      }
       if (check.config._preset) summary.push(`📦 Preset: ${check.config._preset}`);
 
       return {

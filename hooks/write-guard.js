@@ -192,9 +192,11 @@ process.stdin.on('end', () => {
     const state = loadState();
     if (state.promptGuardActive) {
       const msg =
-        `[Write Guard] ❌ Edit/Write 暫時被擋（Prompt Guard 偵測到任務描述不完整）。\n` +
-        `  → 若是後端任務被誤判：直接改用 apply_diff（不受此限）即可繼續。\n` +
-        `  → 若任務確實需要更多資訊：先用純文字回覆使用者確認後再修改。\n`;
+        `[Write Guard] ❌ 所有寫入工具（Edit / Write / apply_diff / create_file / multi_file_inject）同步被擋。\n` +
+        `  原因：Prompt Guard 偵測到任務描述不完整，避免 Claude 在資訊不全時動手寫程式。\n` +
+        `  → 唯一正解：先用「純文字」回覆使用者確認需求方向，等使用者明確回應後再修改。\n` +
+        `  → 不要繞道嘗試其他寫入工具（apply_diff / create_file 等）— 它們同樣被擋。\n` +
+        `  → 此擋線同 session 內 prompt 處理完後自動解除（約 2 分鐘 TTL）。\n`;
       // exit 2 時 Claude Code 讀的是 stderr；同步寫 stdout 讓使用者也看得到
       process.stderr.write(msg);
       process.stdout.write(msg);
