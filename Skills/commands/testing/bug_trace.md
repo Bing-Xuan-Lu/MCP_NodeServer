@@ -193,6 +193,37 @@ $ARGUMENTS
 | 邏輯錯誤 | 條件判斷反轉/變數未定義 | 修正條件 |
 | 前後端不一致 | 表單 name 與 PHP 變數不對應 | 對齊命名 |
 | 規格不符 | 程式碼行為與規格書描述不一致 | 依規格書修正實作 |
+| **跨層映射不一致** | UI 顯示欄位 ↔ 後端變數 ↔ DB 欄位 名稱/型別錯位 | 補 mapping 表並對齊 |
+
+---
+
+### 步驟 5.5：跨層 mapping audit（可選；當症狀涉及欄位錯位、顯示空白、資料對不上時必做）
+
+當症狀是「某欄位顯示異常」「資料對不到表」「印出來的值跟 DB 不一致」時，光追呼叫鏈不夠 — 真正缺的是**三層對照表**：
+
+```
+UI/Template 顯示位置  ←→  後端變數/PHP key  ←→  DB 欄位/Sheet cell
+```
+
+操作方式：
+
+1. **找出症狀欄位的三個座標**
+   - UI 端：template 的位置（檔名 + 行號 + 顯示用變數名）
+   - 後端端：傳入 template 的變數來源（class::method 名稱 + key 名）
+   - 資料端：DB 欄位 / Sheet cell / 設定檔 key
+2. **逐層比對名稱與型別**
+   - 變數名是否一致（常見 typo：`paper_prep` vs `papper_prep`）
+   - 型別是否一致（DB int vs PHP string vs UI 格式化字串）
+3. **產出 mapping 表**附在報告
+
+範例：
+
+| 項目 | UI（template） | 後端（class::method） | 資料端（DB/Sheet） | 差異 |
+|------|---------------|---------------------|------------------|------|
+| 紙板費 | `estimate_print.php:380` `$d['paper_prep']` | `PricingService::calc()` expose `$d['paper_prep']` | `tbl_order_custom.paper_cost` | ⚠️ key 不同名 |
+| 印刷顏色 | 顯示文字 | `$cart['print_color']` | `cart.colorlist` | ⚠️ template 用 `print_color`，cart 用 `colorlist` |
+
+→ 直接定位「欄位錯位」這類 bug，不用一路追到 SQL。
 
 ---
 

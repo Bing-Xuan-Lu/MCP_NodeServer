@@ -141,6 +141,33 @@ execute_sql("SELECT * FROM {config_table} LIMIT 5")  ← 取得設定值
 
 ---
 
+### 步驟 3.5：跨層 mapping audit（可選；資料展示型模組必做）
+
+對於「資料展示型」模組（如報價單、列印頁、orderlist、購物車摘要、訂單詳情），光分析呼叫鏈仍不易發現「欄位錯位 / 顯示空白」類 bug。額外產出**三層對照表**：
+
+```
+UI 顯示位置  ←→  後端變數/PHP key  ←→  資料來源欄位（DB / Sheet / API）
+```
+
+操作步驟：
+
+1. 從前台 DOM 抽出所有顯示欄位（用 `browser_evaluate` 列出 `[data-field]` 或 label-value 對）
+2. 對每個欄位，定位 template 中的變數名稱（如 `$d['paper_prep']`）
+3. 反推後端 expose 此 key 的位置（class::method）
+4. 反推資料來源（DB 欄位 / Sheet cell / cart JSON 路徑）
+
+範例輸出表（納入「## 跨層映射表」章節）：
+
+| UI 欄位 | Template 變數 | 後端來源（class::method） | 資料端 | 備註 |
+|---------|-------------|----------------------|--------|------|
+| 紙板費單價 | `$d['paper_prep']` | `PricingService::calc()` L120 | `tbl_order_custom.paper_cost` / Sheet `param!D453` | ✅ 一致 |
+| 印刷顏色 | `$cart['print_color']` | （直接讀 cart JSON） | `cart.colorlist` | ⚠️ 命名不一致 |
+| mold 尺寸 | `$d['mold_size']` | **未 expose** | Sheet `mold!F15` | ❌ 後端 gap |
+
+此表特別適合事後對接 [[axshare_diff]] 或 [[php_details_key_audit_internal]]。
+
+---
+
 ### 步驟 4：產出邏輯文件
 
 輸出格式（每個模組一份）：

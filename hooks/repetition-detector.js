@@ -1561,40 +1561,43 @@ const PATTERNS = [
       const isPageLayerCss = /(\/(v3|page)\/|\/page\/v\d+\/|\/[^/]+\/(page|v3)\/)/.test(filePath);
       if (!isPageLayerCss) return null;
 
-      // 同 session 已 ack：history 出現過 css_legacy_override skill 命令、或 lastPrompt 含確認字樣
+      // 同 session 已 ack：跑過 /css_legacy_override skill、或 lastPrompt 帶確認字樣
+      // 為了減少 UX friction：除了原本長 ack phrase 外，也接受「短確認」（如 OK / 好 / 動手 / 繼續）
+      // — 因為使用者通常在看過 Claude 報的 3-check checklist 後才會短確認，再要求打全文太囉嗦
       let acked = false;
       try {
         const wgFile = path.join(os.tmpdir(), 'claude-write-guard', 'state.json');
         if (fs.existsSync(wgFile)) {
           const wg = JSON.parse(fs.readFileSync(wgFile, 'utf-8'));
-          const lp = (wg.lastPrompt || '').toLowerCase();
+          const lpRaw = (wg.lastPrompt || '').trim();
+          const lp = lpRaw.toLowerCase();
+          // 長 ack phrase（任何位置出現都算）
           if (/\/css_legacy_override|legacy.*已查|已跑.*legacy|確認.*覆寫|skip.*legacy/.test(lp)) acked = true;
+          // 短 ack（整個 prompt 就是這幾個字才算，避免長訊息裡剛好出現 ok 被誤判）
+          // 允許最多 12 個字元的短回覆，含常見肯定詞
+          if (
+            lpRaw.length <= 12 &&
+            /^(ok|okay|好|好的|好喔|可以|可以動手|做|做吧|動手|上|繼續|go|do it|沒問題|yes|對|對的|嗯)[\s。！!.]*$/i.test(lpRaw)
+          ) {
+            acked = true;
+          }
           if (wg.cssLegacyAcked && (Date.now() - (wg.ts || 0) < 30 * 60 * 1000)) acked = true;
         }
       } catch {}
 
-      // 檢查 history：本 session 是否已被本 hook 攔過（自動 ack 機制：第二次放行）
-      const prevBlocked = history.some(h => h._cssLegacyGateBlocked);
-      if (prevBlocked || acked) return null;
-
-      // 標記本次 entry 已被攔（給後續 entry 做 prevBlocked 判斷用）
-      entry._cssLegacyGateBlocked = true;
+      // 只接受顯式 ack（跑過 /css_legacy_override skill 或 prompt 帶確認字樣）
+      // 不再「重 retry 自動放行」— 那是 escape hatch，會讓 Claude 不檢查直接重試導致 gate 形同虛設
+      if (acked) return null;
 
       const fname = filePath.split('/').pop();
-      return {
-        block: true,
-        message:
-          `[CSS Legacy Gate] ❌ BLOCKED：嘗試寫入頁面層 CSS（${fname}），但本 session 尚未跑過 /css_legacy_override。\n` +
-          `  原因：頁面層 CSS 通常是用來覆寫 legacy 全域 CSS（screen.prefixer.css 等）的 !important，\n` +
-          `        如果只蓋桌機規則沒處理 @media (max-width: 768px) / 480px / hover，常導致：\n` +
-          `        ▸ 桌機驗收 OK、手機 popup 跑版\n` +
-          `        ▸ active state 失效、hover 變色錯誤\n` +
-          `  必要前置：\n` +
-          `    ▸ /css_legacy_override {目標CSS檔} {選擇器} — 自動掃 legacy 所有 @media 出現點，產出對照表 + 反制建議\n` +
-          `  快速通過（若確定不需要反制）：\n` +
-          `    ▸ 直接重發指令 — 本 hook 已記錄第一次攔截，第二次嘗試會自動放行\n` +
-          `    ▸ 或在 prompt 內提到「已查 legacy / 確認覆寫 / /css_legacy_override」字樣\n`,
-      };
+      return (
+        `[CSS Legacy Gate] ⚠️ 寫入頁面層 CSS（${fname}）— 若這次改動含 display/position/layout 反制 legacy，建議先檢查：\n` +
+        `  □ Specificity ≥ legacy 且 legacy 無 !important\n` +
+        `  □ @media 全斷點覆蓋（1024 / 768 / 480 / hover）\n` +
+        `  □ 排版位置使用者已確認 OK\n` +
+        `  推薦：/css_legacy_override {CSS檔} {選擇器} 自動產對照表\n` +
+        `  純色/字體/動畫/間距微調可忽略本訊息。\n`
+      );
     },
   },
   {
@@ -2285,16 +2288,29 @@ const PATTERNS = [
       const entryStr = fingerprint(entry);
       const count = history.filter(h => fingerprint(h) === entryStr).length + 1;
 
-      // UI 測試常在同一頁反覆 wait / re-navigate，門檻提高到 9
-      // browser_wait_for 額外接受 text/textGone 不同視為不同呼叫（已由 fingerprint args 區分）
+      // 動態門檻：
+      //   - browser_wait_for / browser_navigate：UI 測試常反覆 wait / re-navigate → 9
+      //   - run_php_script 跑 harness/diff/verify 類腳本：本來就需要反覆執行確認修改成效 → 12
+      //     (路徑含 `_harness/` 或檔名含 diff/verify/audit 字樣)
+      //   - 其他：5
       const tool = shortName(entry.tool);
-      const threshold = (tool === 'browser_wait_for' || tool === 'browser_navigate') ? 9 : 5;
+      const phpScriptPath = tool === 'run_php_script' ? (entry.args?.path || '') : '';
+      const isHarnessScript =
+        phpScriptPath &&
+        (/[\\/]_harness[\\/]/.test(phpScriptPath) ||
+          /(?:^|[\\/])([^\\/]*?)(diff|verify|audit)[^\\/]*\.php$/i.test(phpScriptPath));
+
+      let threshold = 5;
+      if (tool === 'browser_wait_for' || tool === 'browser_navigate') threshold = 9;
+      else if (isHarnessScript) threshold = 12;
 
       if (count < threshold) return null;
       const extraHint = (tool === 'browser_wait_for')
         ? '\n  → wait_for 持續失敗多半是前置條件沒成立：檢查 callback 是否真的有跑（先打 endpoint 看 raw body）、selector 是否仍存在、頁面是否被 navigate 走。'
         : (tool === 'browser_navigate')
         ? '\n  → 連續 navigate 同一 URL 通常代表頁面狀態不對：先 browser_close 重設 session，或檢查網址是否真的有變。'
+        : isHarnessScript
+        ? '\n  → harness/diff 類腳本已跑 12 次且 args 完全相同：建議檢視是不是只在等 cache / 沒換 case，或改帶不同 args 讓本 hook 視為新呼叫。'
         : '';
       return {
         block: true,

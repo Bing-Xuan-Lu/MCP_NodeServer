@@ -47,6 +47,8 @@
 | [feedback/workflow/feedback_ast_tools_priority.md](feedback/workflow/feedback_ast_tools_priority.md) | PHP 函式查詢必須用 AST 工具，禁 Grep 散搜（Hook L2.4 強制） |
 | [feedback/workflow/feedback_popup_style_reuse.md](feedback/workflow/feedback_popup_style_reuse.md) | 改 popup/彈窗前必須 Grep 既有 class 沿用骨架，禁自刻 inline style |
 | [feedback/workflow/feedback_batch_regex_php.md](feedback/workflow/feedback_batch_regex_php.md) | PHP 檔禁砍逗號 regex（誤切函式參數列），改走 Grep+apply_diff 或 AST |
+| [feedback/workflow/feedback_destructive_change_confirm.md](feedback/workflow/feedback_destructive_change_confirm.md) | 對 DB / Google Sheet / 線上 config 寫入皆視為破壞性，動手前列原值 vs 新值並確認 dropdown 合法值 |
+| [feedback/workflow/feedback_user_intent_anchor.md](feedback/workflow/feedback_user_intent_anchor.md) | 使用者連續糾正方向時停下實作，改把發現寫入 backlog/規格再動手 |
 
 ### Feedback — Tooling
 | 檔案 | 說明 |

@@ -1,11 +1,16 @@
 import { exec } from "child_process";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
 import util from "util";
 import { validateArgs } from "../_shared/utils.js";
 
 const execPromise = util.promisify(exec);
 
 const CONTAINER = "python_runner";
-const DEVELOP_MOUNT = "/develop"; // D:\Develop 掛載路徑
+const DEVELOP_MOUNT = "/develop"; // 對應 D:\MCP_Server（python/docker-compose.yml `..:/develop`）
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MCP_ROOT = path.resolve(__dirname, "..", "..");
 
 // ============================================
 // 工具定義
@@ -65,6 +70,7 @@ async function runPython({ code, file_path, args: scriptArgs }) {
   }
 
   let cmd;
+  let tmpScript = null;
 
   if (file_path) {
     // 檔案模式：將 Windows 路徑轉換為容器內路徑
@@ -72,9 +78,13 @@ async function runPython({ code, file_path, args: scriptArgs }) {
     const safeArgs = scriptArgs ? ` ${scriptArgs}` : "";
     cmd = `docker exec ${CONTAINER} python3 "${containerPath}"${safeArgs}`;
   } else if (code) {
-    // Inline 模式：透過 stdin 傳入避免引號逸出問題
-    const escaped = code.replace(/'/g, "'\\''");
-    cmd = `echo '${escaped}' | docker exec -i ${CONTAINER} python3`;
+    // Inline 模式：寫到 .tmp 再 docker exec 執行，避免 Windows cmd.exe 對 `echo 'code'` 的 quote 處理錯誤
+    const tmpDir = path.join(MCP_ROOT, ".tmp");
+    await fs.mkdir(tmpDir, { recursive: true });
+    tmpScript = path.join(tmpDir, `pyrun_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.py`);
+    await fs.writeFile(tmpScript, code, "utf-8");
+    const containerPath = `${DEVELOP_MOUNT}/.tmp/${path.basename(tmpScript)}`;
+    cmd = `docker exec ${CONTAINER} python3 "${containerPath}"`;
   } else {
     return {
       isError: true,
@@ -96,5 +106,7 @@ async function runPython({ code, file_path, args: scriptArgs }) {
       isError: true,
       content: [{ type: "text", text: `執行失敗：\n${msg}` }],
     };
+  } finally {
+    if (tmpScript) await fs.unlink(tmpScript).catch(() => {});
   }
 }
