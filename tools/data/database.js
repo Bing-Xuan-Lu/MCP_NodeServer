@@ -37,6 +37,8 @@ function parseMysqlBatchOutput(stdout) {
   return [rows, fields];
 }
 
+const DML_RE = /^\s*(INSERT|UPDATE|DELETE|REPLACE)\b/i;
+
 async function dockerExecRawQuery(config, sql) {
   // 預設僅唯讀；config.allow_write=true 時放行寫入語句
   // checkDangerousStmt + confirm 機制仍會在 execute_sql 入口把關 DELETE/UPDATE/DROP/TRUNCATE
@@ -49,13 +51,20 @@ async function dockerExecRawQuery(config, sql) {
   const { container, db_user = "root", db_password = "", database = "" } = config;
   if (!container) throw new Error(`docker_exec 模式需要 container 欄位（容器名稱）`);
 
+  // DML 語句 (INSERT/UPDATE/DELETE/REPLACE) 在 mysql --batch -e 不會輸出 affectedRows
+  // 解法：同一個 mysql session 跑完 DML 後追問 ROW_COUNT()，回傳合成的 ResultSetHeader
+  const isDML = DML_RE.test(sql);
+  const execSql = isDML
+    ? `${sql.replace(/;\s*$/, "")}; SELECT ROW_COUNT() AS __affected_rows`
+    : sql;
+
   const mysqlArgs = [
     "exec", "-i", container, "mysql", "--batch", "--default-character-set=utf8mb4",
     `-u${db_user}`,
   ];
   if (db_password) mysqlArgs.push(`-p${db_password}`);
   if (database) mysqlArgs.push(database);
-  mysqlArgs.push("-e", sql);
+  mysqlArgs.push("-e", execSql);
 
   // SSH 中繼：把 docker exec 命令組成遠端 shell 字串
   const buildRemoteCmd = () =>
@@ -79,7 +88,7 @@ async function dockerExecRawQuery(config, sql) {
               .on("close", (code) => {
                 conn.end();
                 if (code !== 0) return reject(new Error(`docker_exec 執行失敗 (exit ${code})：${stderr.slice(0, 500)}`));
-                resolve(parseMysqlBatchOutput(stdout));
+                resolve(isDML ? wrapDmlResult(stdout) : parseMysqlBatchOutput(stdout));
               })
               .on("data", (d) => { stdout += d.toString(); })
               .stderr.on("data", (d) => { stderr += d.toString(); });
@@ -113,11 +122,21 @@ async function dockerExecRawQuery(config, sql) {
 
   try {
     const { stdout } = await pExecFile(cmd, args, { maxBuffer: 50 * 1024 * 1024 });
-    return parseMysqlBatchOutput(stdout);
+    return isDML ? wrapDmlResult(stdout) : parseMysqlBatchOutput(stdout);
   } catch (err) {
     const stderr = err.stderr || err.message;
     throw new Error(`docker_exec 執行失敗：${stderr.slice(0, 500)}`);
   }
+}
+
+/**
+ * 將 DML + SELECT ROW_COUNT() 的 mysql --batch stdout 包成 mysql2 風格的 ResultSetHeader tuple，
+ * 讓 execute_sql 的 Array.isArray(res) 判斷可正確走 DML 分支顯示 affectedRows。
+ */
+function wrapDmlResult(stdout) {
+  const [rows] = parseMysqlBatchOutput(stdout);
+  const affectedRows = Number(rows[0]?.__affected_rows ?? 0);
+  return [{ affectedRows }, []];
 }
 
 /** 回傳 mysql2.Connection 介面相容物件，根據 connection_type 切換實作 */
