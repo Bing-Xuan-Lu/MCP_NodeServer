@@ -36,42 +36,64 @@ function _auditLog(toolName, args, status) {
   } catch (e) {}
 }
 
-// ── 動態載入工具模組 ───────────────────────────────────────
-import { globSync } from "glob";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// ── 載入工具模組（白名單 + 並行載入）─────────────────────────
+// 白名單而非 glob：載入失敗時清楚知道哪個模組壞了；
+// 並行 import：30 個模組同時跑比序列快很多（冷啟動加速）。
+// 新增工具模組時必須在此加一行（同 CLAUDE.md「新增 MCP 工具模組」步驟）。
+const TOOL_MODULE_FILES = [
+  "tools/notion_blocks.js",
+  "tools/browser/css_tools.js",
+  "tools/browser/dom_compare.js",
+  "tools/browser/playwright_tools.js",
+  "tools/data/database.js",
+  "tools/data/gsheet.js",
+  "tools/deploy/flyway.js",
+  "tools/deploy/git.js",
+  "tools/deploy/php.js",
+  "tools/deploy/sftp.js",
+  "tools/deploy/skill_factory.js",
+  "tools/file_io/cleanup.js",
+  "tools/file_io/excel.js",
+  "tools/file_io/filesystem.js",
+  "tools/file_io/images.js",
+  "tools/file_io/multi_inject.js",
+  "tools/file_io/pdf.js",
+  "tools/file_io/pptx.js",
+  "tools/file_io/word.js",
+  "tools/system/agent_coord.js",
+  "tools/system/bookmarks.js",
+  "tools/system/file_to_prompt.js",
+  "tools/system/memory_triggers.js",
+  "tools/system/php_class.js",
+  "tools/system/php_symbol.js",
+  "tools/system/php_text_search.js",
+  "tools/system/python.js",
+  "tools/utils/file_diff.js",
+  "tools/utils/image_diff.js",
+  "tools/utils/image_transform.js",
+];
 
 async function loadToolModules() {
-  // 掃描 tools/ 下的所有 .js 檔（不含 _shared/ 子目錄）
-  // 使用 glob pattern: tools/**/*.js (遞迴載入分類資料夾)
-  const toolFiles = globSync("tools/**/*.js", {
-    cwd: __dirname,
-    ignore: ["tools/_shared/**"]  // 排除 _shared 子目錄（僅供工具互相 import）
-  });
+  const results = await Promise.allSettled(
+    TOOL_MODULE_FILES.map(file => import(`./${file}`).then(m => ({ file, m })))
+  );
 
   const modules = [];
   const failed = [];
-  for (const file of toolFiles) {
-    try {
-      const module = await import(`./${file}`);
-      if (module.definitions && module.handle) {
-        modules.push(module);
-      }
-    } catch (err) {
-      failed.push({ file, error: err.message.split('\n')[0] });
-      console.error(`⚠️  Failed to load tool module: ${file}`, err.message);
+  for (const r of results) {
+    if (r.status === 'fulfilled') {
+      const { file, m } = r.value;
+      if (m.definitions && m.handle) modules.push(m);
+      else failed.push({ file, error: 'missing definitions/handle export' });
+    } else {
+      failed.push({ file: '(unknown)', error: r.reason?.message?.split('\n')[0] || String(r.reason) });
     }
   }
 
   if (failed.length > 0) {
     console.error(`\n🔴 ${failed.length} tool module(s) failed to load:`);
     for (const f of failed) console.error(`   ✗ ${f.file}: ${f.error}`);
-    console.error(`   → Check import paths after restructuring tools/\n`);
   }
-
   return modules;
 }
 
@@ -135,3 +157,25 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
 const transport = new StdioServerTransport();
 await server.connect(transport);
 console.error("✅ MCP Server v5.1.0 Started.");
+
+// ── Heartbeat：寫 ~/.claude/.mcp-alive/<server>.json，給 session-start hook 偵測 ──
+try {
+  const _ALIVE_DIR = join(_HOME, '.claude', '.mcp-alive');
+  mkdirSync(_ALIVE_DIR, { recursive: true });
+  const _ALIVE_FILE = join(_ALIVE_DIR, 'project-migration-assistant-pro.json');
+  const _writeBeat = () => {
+    try {
+      const payload = JSON.stringify({
+        server: 'project-migration-assistant-pro',
+        version: '5.1.0',
+        pid: process.pid,
+        started_at: new Date().toISOString(),
+        last_beat: Date.now(),
+      });
+      // writeFileSync 會更新 mtime，hook 用 mtime 判活度
+      import('fs').then(({ writeFileSync }) => writeFileSync(_ALIVE_FILE, payload, 'utf-8'));
+    } catch (e) {}
+  };
+  _writeBeat();
+  setInterval(_writeBeat, 10000).unref();
+} catch (e) {}

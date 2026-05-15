@@ -63,9 +63,11 @@ function matchesAny(text, patterns) {
 }
 
 /** 觸發 write-guard 阻擋並輸出訊息 */
-function emitGuard(message) {
+function emitGuard(message, reason) {
   const wgState = wgLoadState();
   wgState.promptGuardActive = true;
+  // 記錄觸發原因，給 write-guard / repetition-detector 在 BLOCK 訊息中還原
+  if (reason) wgState.promptGuardReason = String(reason).slice(0, 200);
   wgSaveState(wgState);
   process.stdout.write(message + '\n');
   process.exit(0);
@@ -382,7 +384,8 @@ process.stdin.on('end', () => {
           `\n` +
           `  ── 以下為 AI 指令 ──\n` +
           `  你 **禁止** 猜測使用者意圖並直接修改程式碼。\n` +
-          `  必須先列出你不確定的部分，請使用者釐清後才可執行。`
+          `  必須先列出你不確定的部分，請使用者釐清後才可執行。`,
+          `模糊指令（命中 ${[...hitTypes].join('/')}）`
         );
       }
     }
@@ -426,7 +429,8 @@ process.stdin.on('end', () => {
     emitGuard(
       `[Prompt Guard] 偵測到「${scenario.name}」任務，缺少以下關鍵資訊：\n` +
       missing.map(m => `  ▸ ${m}`).join('\n') +
-      `\n在開始執行前，請先詢問使用者補充上述資訊。`
+      `\n在開始執行前，請先詢問使用者補充上述資訊。`,
+      `場景「${scenario.name}」缺 ${missing.length}/${scenario.needed.length} 項：${missing.join(', ')}`
     );
   } catch (e) {
     process.stderr.write(`[user-prompt-guard] error: ${e.message}\n`);

@@ -2455,6 +2455,9 @@ const PATTERNS = [
       ]);
       if (!MCP_WRITE_TOOLS.has(tool)) return null;
 
+      // 例外：背景 sub-agent 寫檔不受 promptGuardActive 影響（與 write-guard.js 同步）
+      if (entry.parent_tool_use_id || entry.parentToolUseId) return null;
+
       try {
         const wgStateFile = path.join(os.tmpdir(), 'claude-write-guard', 'state.json');
         if (!fs.existsSync(wgStateFile)) return null;
@@ -2477,9 +2480,13 @@ const PATTERNS = [
           if (recentWrite) return null;
         }
 
+        const reasonLine = raw.promptGuardReason
+          ? `  判斷依據：${raw.promptGuardReason}\n`
+          : '';
         return {
           block: true,
           message: `[Prompt Guard] ❌ BLOCKED：${tool} 暫時被擋（Prompt Guard 偵測到任務描述不完整）。\n` +
+                   reasonLine +
                    `  → write-guard 已擋下 Edit/Write，MCP 寫入工具同樣受限，避免繞道。\n` +
                    `  → 請先用純文字回覆使用者確認需求後再寫入。\n` +
                    `  → 確認方式：使用者明確回覆「OK / 確認 / 繼續 / A / 1」等即可解除。\n`,
@@ -2663,6 +2670,7 @@ process.stdin.on('end', () => {
       args: toolInput,
       bashSig,
       ts: Date.now(),
+      parent_tool_use_id: data.parent_tool_use_id || data.parentToolUseId || null,
     };
 
     // 檢查所有模式

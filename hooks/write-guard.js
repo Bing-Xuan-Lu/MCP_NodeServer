@@ -189,11 +189,19 @@ process.stdin.on('end', () => {
     }
 
     // ── 方案 A：Prompt Guard 連動阻擋 ───────────────────
+    // 例外：背景 sub-agent 寫檔不受 promptGuardActive 影響
+    //   理由：Prompt Guard 是保護「使用者—主 Claude」對齊；sub-agent 由主 Claude 派遣時已附完整任務 prompt，
+    //   不該被使用者層級的 guard 連帶擋住（過去出包：兩個 background agent 收完整 5 段 prompt 仍被擋）。
+    const isSubAgent = !!(data.parent_tool_use_id || data.parentToolUseId);
     const state = loadState();
-    if (state.promptGuardActive) {
+    if (state.promptGuardActive && !isSubAgent) {
+      const reasonLine = state.promptGuardReason
+        ? `  判斷依據：${state.promptGuardReason}\n`
+        : '';
       const msg =
         `[Write Guard] ❌ 所有寫入工具（Edit / Write / apply_diff / create_file / multi_file_inject）同步被擋。\n` +
         `  原因：Prompt Guard 偵測到任務描述不完整，避免 Claude 在資訊不全時動手寫程式。\n` +
+        reasonLine +
         `  → 唯一正解：先用「純文字」回覆使用者確認需求方向，等使用者明確回應後再修改。\n` +
         `  → 不要繞道嘗試其他寫入工具（apply_diff / create_file 等）— 它們同樣被擋。\n` +
         `  → 此擋線同 session 內 prompt 處理完後自動解除（約 2 分鐘 TTL）。\n`;

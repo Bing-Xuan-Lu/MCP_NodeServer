@@ -245,7 +245,7 @@ export const definitions = [
         password: { type: "string", description: "密碼（直連模式）" },
         database: { type: "string", description: "資料庫名稱（同時作為 pool key；可用 preset 為別名）" },
         preset: { type: "string", description: "database 別名。若已用 remember:true 存過此名連線，僅傳 preset 即可重新載入並切換為預設連線（其他欄位可省略）" },
-        remember: { type: "boolean", description: "是否記住此連線設定（密碼除外）供下次自動載入" },
+        remember: { type: "boolean", description: "是否持久化連線設定（密碼除外）。預設 true，避免 MCP 重啟後 defaultDb 被舊檔覆蓋；明確傳 false 才不寫檔" },
         connection_type: {
           type: "string",
           enum: ["direct", "docker_exec"],
@@ -605,6 +605,8 @@ export async function handle(name, args) {
       && !args.container && !args.connection_type;
     if (onlyDbName && dbPool.has(args.database)) {
       defaultDb = args.database;
+      // 同步更新持久化檔案的 default，避免 MCP 重啟後切回舊預設
+      if (args.remember !== false) { await saveAllDbConfigs(); }
       const cfg = dbPool.get(args.database);
       const target = cfg.connection_type === "docker_exec"
         ? `docker:${cfg.container}${cfg.ssh_host ? `@${cfg.ssh_host}` : ""}`
@@ -672,9 +674,14 @@ export async function handle(name, args) {
       msg += `\n📊 目前共 ${dbPool.size} 個連線：${[...dbPool.keys()].join(", ")}（預設：${defaultDb}）`;
     }
 
-    if (args.remember) {
+    // 預設自動持久化（不含密碼），避免 MCP 重啟後 defaultDb 被舊設定蓋掉
+    // 過去問題：set_database 連測試機 → MCP 偶發重啟 → dbPool 從舊檔載入 → defaultDb 變回 localhost
+    // 顯式 remember: false 才不寫檔
+    if (args.remember !== false) {
       const saved = await saveAllDbConfigs();
-      if (saved) msg += "\n💾 連線設定已持久化至 .mcp_db_config.json";
+      if (saved) msg += args.remember === true
+        ? "\n💾 連線設定已持久化至 .mcp_db_config.json"
+        : "\n💾 連線設定已自動持久化（避免重啟掉連線；遠端密碼未存）。傳 remember: false 可關閉。";
     }
 
     return { content: [{ type: "text", text: msg }] };
