@@ -130,10 +130,72 @@ function findRecentPitfalls() {
   return files.length > 0 ? files[0] : null;
 }
 
+// === MCP heartbeat 偵測（已知會寫 heartbeat 的 server） ===
+const KNOWN_MCP_SERVERS = ['project-migration-assistant-pro'];
+const MCP_BEAT_FRESH_MS = 20000;   // heartbeat 視為新鮮的閾值
+const MCP_WAIT_MAX_MS = 5000;      // 最多等多久讓 MCP 寫 heartbeat
+const MCP_WAIT_STEP_MS = 500;
+
+async function checkMcpAlive(cwd) {
+  // 讀 cwd 的 .mcp.json，找出該專案註冊的 server
+  let configured = [];
+  try {
+    const mcpJsonPath = path.join(cwd, '.mcp.json');
+    if (fs.existsSync(mcpJsonPath)) {
+      const cfg = JSON.parse(fs.readFileSync(mcpJsonPath, 'utf-8'));
+      configured = Object.keys(cfg.mcpServers || {});
+    }
+  } catch (e) {}
+
+  // 只檢查我們已知會寫 heartbeat 的 server（避免對 Playwright 等誤報）
+  const toCheck = configured.filter(s => KNOWN_MCP_SERVERS.includes(s));
+  if (toCheck.length === 0) return null;
+
+  const aliveDir = path.join(HOME, '.claude', '.mcp-alive');
+  const deadline = Date.now() + MCP_WAIT_MAX_MS;
+  const dead = [];
+
+  for (const name of toCheck) {
+    const beatFile = path.join(aliveDir, `${name}.json`);
+    let alive = false;
+    while (Date.now() < deadline) {
+      try {
+        const st = fs.statSync(beatFile);
+        if ((Date.now() - st.mtimeMs) < MCP_BEAT_FRESH_MS) { alive = true; break; }
+      } catch (e) {}
+      await new Promise(r => setTimeout(r, MCP_WAIT_STEP_MS));
+    }
+    if (!alive) {
+      let lastSeen = null;
+      try { lastSeen = fs.statSync(beatFile).mtimeMs; } catch (e) {}
+      dead.push({ name, lastSeen });
+    }
+  }
+  return dead.length > 0 ? dead : null;
+}
+
 // === 主程式 ===
 async function main() {
   const output = [];
   const cwd = process.cwd().replace(/\\/g, '/');
+
+  // 0. MCP 連線偵測（在所有其他輸出之前，最顯眼）
+  try {
+    const dead = await checkMcpAlive(cwd);
+    if (dead) {
+      const lines = dead.map(d => {
+        if (d.lastSeen) {
+          const ageMin = Math.floor((Date.now() - d.lastSeen) / 60000);
+          return `  - ${d.name}（最後 heartbeat 在 ${ageMin} 分鐘前）`;
+        }
+        return `  - ${d.name}（從未啟動成功）`;
+      }).join('\n');
+      output.push(
+        `[MCP ⚠️] 偵測到 MCP server 未運行：\n${lines}\n` +
+        `  → 對應的 MCP 工具會失敗。請檢查 Claude Code 啟動訊息或重啟。`
+      );
+    }
+  } catch (e) {}
 
   try {
     const memDir = findProjectMemoryDir();
