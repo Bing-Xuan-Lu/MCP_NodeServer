@@ -113,9 +113,9 @@ MCP_NodeServer/
 ├── config.js            ← resolveSecurePath (預設 basePath 為 D:\Project\)
 ├── tools/               ← MCP 工具模組
 │   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, apply_diff_batch, *_batch (read_files/list_files/create_file)（PROTECTED_PATTERNS 防寫入測試檔 + audit log）
-│   ├── php.js           ← run_php_script, run_php_code, run_php_test, send_http_request, tail_log, *_batch (http_requests/php_script)（PHP 執行 + tail_log 支援 container 參數走 Docker）
+│   ├── php.js           ← run_php_script, run_php_code, run_php_test, send_http_request（含 body_filter regex tool 端 grep）, tail_log, *_batch (http_requests/php_script)（PHP 執行 + tail_log 支援 container 參數走 Docker）
 │   ├── database.js      ← set_database, load_db_connection, get_db_schema, execute_sql（危險語句攔截 + confirm + audit log + ER_* 錯誤摘要）, *_batch, schema_diff, mysql_log_tail
-│   ├── gsheet.js        ← gsheet_fetch_with_state（含 auto_recalc_check polling）, gsheet_xlookup_trace, trace_gsheet_formula, gsheet_get_metadata, gsheet_fetch_formatted（gspread 一條龍 + 查表鏈遞迴展開 + markdown 公式追蹤報告 + worksheet metadata 列舉 + FORMATTED_VALUE 顯示字串抓取，python_runner 容器）
+│   ├── gsheet.js        ← gsheet_fetch_with_state（含 auto_recalc_check polling + preserve_validation 跳過空字串寫入保留 dropdown）, gsheet_xlookup_trace, trace_gsheet_formula, gsheet_get_metadata, gsheet_fetch_formatted（gspread 一條龍 + 查表鏈遞迴展開 + markdown 公式追蹤報告 + worksheet metadata 列舉 + FORMATTED_VALUE 顯示字串抓取，python_runner 容器）
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   ├── bookmarks.js     ← Chrome 書籤管理 (12 工具)
 │   ├── sftp.js          ← sftp_connect/upload/download/list/delete, sftp_*_batch (list/upload/download/delete), sftp_preset
@@ -130,6 +130,7 @@ MCP_NodeServer/
 │   ├── image_diff.js    ← image_diff（設計稿 vs 截圖像素級比對，產生 diff 圖）
 │   ├── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
 │   ├── file_diff.js     ← file_diff（純 Node 雙檔 unified diff，零依賴）
+│   ├── analyze_csv.js   ← analyze_csv（CSV pivot/group/aggregate；取代 batch test 後手寫解析腳本）
 │   ├── agent_coord.js   ← agent_coord（多 Agent 協調：post/poll/status/delete/archive，JSON 檔案持久化）
 │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
 │   ├── css_tools.js     ← css_specificity_check, css_computed_winner（CSS specificity 分析與活頁面規則勝出查詢）

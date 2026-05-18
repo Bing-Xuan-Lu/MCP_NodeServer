@@ -30,7 +30,10 @@ export const definitions = [
         },
         write_data: {
           type: "array",
-          description: "寫入動作清單（選填）。每項：{ range: 'web!A3', values: 'X' 或 [['X','Y']] }",
+          description:
+            "寫入動作清單（選填）。每項：{ range: 'web!A3', values: 'X' 或 [['X','Y']] }。" +
+            "⚠️ 注意：寫入空字串 '' 在 USER_ENTERED 模式下會清空 cell，並可能連帶清掉該 cell 的 data validation rule。" +
+            "若需要保留 validation，請改用 preserve_validation: true（會跳過 values 為 '' 的 cell，不送 API）。",
           items: {
             type: "object",
             properties: {
@@ -39,6 +42,12 @@ export const definitions = [
             },
             required: ["range", "values"],
           },
+        },
+        preserve_validation: {
+          type: "boolean",
+          description:
+            "選填：若為 true，會跳過 values 為空字串 '' 的寫入項，避免清除 cell 的 data validation rule（dropdown / 範圍限制）。預設 false 以維持既有行為。",
+          default: false,
         },
         value_input_option: {
           type: "string",
@@ -232,6 +241,9 @@ baseline_watch = None
 if write_data and auto_check:
     baseline_watch = _fetch_one(auto_check['watch_cell'])
 
+preserve_validation = bool(params.get('preserve_validation', False))
+skipped_blank = []
+
 if write_data:
     payload = []
     for w in write_data:
@@ -240,11 +252,23 @@ if write_data:
             vals = [[vals]]
         elif vals and not isinstance(vals[0], list):
             vals = [vals]
+        # preserve_validation: 跳過 1x1 純空字串寫入，避免清除 cell data validation rule
+        if preserve_validation:
+            flat = []
+            for row in vals:
+                if isinstance(row, list):
+                    flat.extend(row)
+                else:
+                    flat.append(row)
+            if all((v is None or v == '') for v in flat):
+                skipped_blank.append(w['range'])
+                continue
         payload.append({'range': w['range'], 'values': vals})
-    sh.values_batch_update({
-        'valueInputOption': params.get('value_input_option', 'USER_ENTERED'),
-        'data': payload,
-    })
+    if payload:
+        sh.values_batch_update({
+            'valueInputOption': params.get('value_input_option', 'USER_ENTERED'),
+            'data': payload,
+        })
 
 if write_data and auto_check:
     max_polls = int(auto_check.get('max_polls', 10))
@@ -298,7 +322,8 @@ except AttributeError:
 
 print(json.dumps({
     'ok': True,
-    'wrote': len(write_data),
+    'wrote': len(write_data) - len(skipped_blank),
+    'skipped_blank_ranges': skipped_blank,
     'slept_sec': sleep_sec if (sleep_sec and write_data) else 0,
     'auto_recalc': None if not auto_check else {
         'watch_cell': auto_check['watch_cell'],
@@ -592,6 +617,7 @@ export async function handle(name, args) {
     const params = {
       spreadsheet_id: args.spreadsheet_id,
       write_data: args.write_data || [],
+      preserve_validation: !!args.preserve_validation,
       value_input_option: args.value_input_option || "USER_ENTERED",
       sleep_sec: args.sleep_sec ?? 2,
       auto_recalc_check: args.auto_recalc_check || null,

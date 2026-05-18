@@ -2409,9 +2409,9 @@ const PATTERNS = [
 
         try {
           const dirs = fs.readdirSync(projectDir, { withFileTypes: true })
-            .filter(d => d.isDirectory() && /^screenshot/i.test(d.name))
+            .filter(d => d.isDirectory() && /^(screenshot|_harness)/i.test(d.name))
             .map(d => d.name);
-          return dirs.length > 0 ? dirs : ['screenshot', 'screenshots'];
+          return dirs.length > 0 ? dirs : ['screenshot', 'screenshots', '_harness'];
         } catch {
           return ['screenshot', 'screenshots'];
         }

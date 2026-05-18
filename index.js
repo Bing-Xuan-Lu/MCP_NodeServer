@@ -68,6 +68,7 @@ const TOOL_MODULE_FILES = [
   "tools/system/php_symbol.js",
   "tools/system/php_text_search.js",
   "tools/system/python.js",
+  "tools/utils/analyze_csv.js",
   "tools/utils/file_diff.js",
   "tools/utils/image_diff.js",
   "tools/utils/image_transform.js",

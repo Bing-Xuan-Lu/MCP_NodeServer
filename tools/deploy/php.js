@@ -125,6 +125,15 @@ export const definitions = [
           },
         },
         max_response_size: { type: "integer", description: "回應 body 字元上限（預設 20000；設 0 或負數 = 不截斷）" },
+        body_filter: {
+          type: "string",
+          description:
+            "選填：regex pattern；指定時只回傳 body 中匹配的行（搭配 body_filter_context 加上下文）。" +
+            "用途：大 response 直接在 tool 端 grep 過濾，省去截斷後改用 file fallback 的笨重流程。",
+        },
+        body_filter_flags: { type: "string", description: "選填：regex flags，預設 'i'（不分大小寫）", default: "i" },
+        body_filter_context: { type: "integer", description: "選填：每個匹配行前後保留幾行上下文，預設 0", default: 0 },
+        body_filter_max_matches: { type: "integer", description: "選填：最多保留多少匹配（命中過多時截斷），預設 200", default: 200 },
       },
       required: ["url"],
     },
@@ -361,15 +370,49 @@ export async function handle(name, args) {
         }
       }
 
+      // body_filter：tool 端先 grep 過濾，省去大 response 截斷後改讀檔的流程
+      let filterNote = "";
+      let workingText = text;
+      if (args.body_filter) {
+        try {
+          const flags = args.body_filter_flags || "i";
+          const re = new RegExp(args.body_filter, flags);
+          const ctx = Math.max(0, args.body_filter_context | 0);
+          const maxMatches = args.body_filter_max_matches > 0 ? args.body_filter_max_matches : 200;
+          const lines = text.split(/\r?\n/);
+          const keep = new Set();
+          let matched = 0;
+          for (let i = 0; i < lines.length; i++) {
+            if (re.test(lines[i])) {
+              matched++;
+              if (matched > maxMatches) break;
+              for (let j = Math.max(0, i - ctx); j <= Math.min(lines.length - 1, i + ctx); j++) keep.add(j);
+            }
+          }
+          const sortedIdx = [...keep].sort((a, b) => a - b);
+          const out = [];
+          let prev = -2;
+          for (const i of sortedIdx) {
+            if (i !== prev + 1 && out.length > 0) out.push("...");
+            out.push(`${i + 1}: ${lines[i]}`);
+            prev = i;
+          }
+          workingText = out.join("\n");
+          filterNote = `\n🔍 body_filter "${args.body_filter}" — ${matched} 行匹配（${lines.length} 行掃完）${matched > maxMatches ? `, 已截到前 ${maxMatches}` : ""}`;
+        } catch (e) {
+          filterNote = `\n⚠️ body_filter regex 無效：${e.message}（回傳完整 body）`;
+        }
+      }
+
       const maxSize = args.max_response_size === undefined ? 20000 : args.max_response_size;
       const unlimited = !Number.isFinite(maxSize) || maxSize <= 0;
-      const totalLen = text.length;
-      const responseBody = unlimited ? text : text.substring(0, maxSize);
+      const totalLen = workingText.length;
+      const responseBody = unlimited ? workingText : workingText.substring(0, maxSize);
       const truncNote = (!unlimited && totalLen > maxSize)
-        ? `\n... ⚠️ 已截斷（${responseBody.length}/${totalLen} 字元，傳 max_response_size:0 取完整內容）`
+        ? `\n... ⚠️ 已截斷（${responseBody.length}/${totalLen} 字元，傳 max_response_size:0 取完整內容；或加 body_filter 縮小範圍）`
         : "";
       return {
-        content: [{ type: "text", text: `🌐 HTTP ${response.status}${cookieNote}\n${responseBody}${truncNote}` }],
+        content: [{ type: "text", text: `🌐 HTTP ${response.status}${cookieNote}${filterNote}\n${responseBody}${truncNote}` }],
       };
     } catch (error) {
       return { isError: true, content: [{ type: "text", text: `請求失敗: ${error.message}` }] };

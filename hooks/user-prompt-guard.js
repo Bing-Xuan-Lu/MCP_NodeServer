@@ -88,6 +88,11 @@ const VAGUE_SKIP = [
   /memory|skill|hook|mcp|settings|github|audit|dashboard|readme|commit|changelog/i,
   /閱讀|讀一下|摘要|文章|這篇|網頁|blog|分析|架構|規劃|設計/i,
   /解釋|說明|告訴我|列出|顯示|查看|查詢|(?:搜尋|找)(?!.*(?:清|刪|改|移|調|換)).*在哪/i,
+  // 具體目標：提到檔名/路徑/行號/命名空間/方法名，代表使用者已指定明確修改點，非模糊指令
+  // 例："改 estimate_print.php:73 的 accessory" / "去修 src/foo.vue 的 click handler" / "MyClass::doX 加判斷"
+  /\b[\w\-./\\]+\.(?:php|js|ts|vue|jsx|tsx|css|scss|less|html|sql|py|md)(?::\d+)?\b/i,
+  /:\d{2,}\b/,
+  /\b\w+::\w+\b|\b\w+->\w+\(/,
 ];
 
 // ── 0b. 模糊信號：動作 + 模糊指示詞 ──

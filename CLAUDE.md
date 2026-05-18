@@ -35,10 +35,10 @@ MCP_NodeServer/
 │   │   └── images.js    ← read_image, read_images_batch（圖片讀取 + 縮放，支援 PNG/JPG/WebP/GIF/SVG）
 │   ├── data/            ← 資料庫（DB）+ Google Sheet
 │   │   ├── database.js  ← set_database, load_db_connection, get_current_db, get_db_schema, execute_sql, get_db_schema_batch, execute_sql_batch, schema_diff, mysql_log_tail
-│   │   └── gsheet.js    ← gsheet_fetch_with_state（含 auto_recalc_check polling）, gsheet_xlookup_trace, trace_gsheet_formula, gsheet_get_metadata, gsheet_fetch_formatted（gspread 一條龍 + 查表鏈遞迴展開 + markdown 公式追蹤報告 + worksheet metadata 列舉 + FORMATTED_VALUE 顯示字串抓取，python_runner 容器）
+│   │   └── gsheet.js    ← gsheet_fetch_with_state（含 auto_recalc_check polling + preserve_validation 旗標：跳過空字串寫入以保留 data validation/dropdown）, gsheet_xlookup_trace, trace_gsheet_formula, gsheet_get_metadata, gsheet_fetch_formatted（gspread 一條龍 + 查表鏈遞迴展開 + markdown 公式追蹤報告 + worksheet metadata 列舉 + FORMATTED_VALUE 顯示字串抓取，python_runner 容器）
 │   ├── deploy/          ← 部署與版控工具（遠端操作、DB migration）
 │   │   ├── sftp.js      ← sftp_connect, sftp_upload, sftp_download, sftp_list, sftp_delete, sftp_*_batch, sftp_preset
-│   │   ├── php.js       ← run_php_script, run_php_code, run_php_test, send_http_request, tail_log, send_http_requests_batch, run_php_script_batch
+│   │   ├── php.js       ← run_php_script, run_php_code, run_php_test, send_http_request（支援 body_filter regex 在 tool 端 grep 過濾，避免大 response 落檔 fallback）, tail_log, send_http_requests_batch, run_php_script_batch
 │   │   ├── git.js       ← git_status, git_diff, git_log, git_stash_ops
 │   │   ├── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
 │   │   └── flyway.js    ← flyway_info, flyway_migrate, flyway_validate, flyway_repair, flyway_baseline（需 dev-flyway Docker，選用）
@@ -58,7 +58,8 @@ MCP_NodeServer/
 │   └── utils/           ← 通用工具與比對
 │       ├── image_diff.js ← image_diff（設計稿 vs 截圖像素級比對）
 │       ├── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
-│       └── file_diff.js ← file_diff（純 Node 雙檔 unified diff，零依賴；取代 Bash git diff fallback）
+│       ├── file_diff.js ← file_diff（純 Node 雙檔 unified diff，零依賴；取代 Bash git diff fallback）
+│       └── analyze_csv.js ← analyze_csv（CSV pivot/group/aggregate；filter + group_by + count/sum/avg/min/max/distinct/top_values，取代 batch test 後手寫 PHP/Node 解析腳本）
 ├── hooks/               ← Claude Code Session Hooks（全域 ~/.claude/settings.json 設定）
 │   ├── session-start.js ← SessionStart：對話開場載入記憶與上次摘要
 │   ├── repetition-detector.js ← PreToolUse：11層偵測（錯誤工具、散搜、低效、重複、同檔連修、自動修復），支援成本追蹤、Slack通知、debug模式

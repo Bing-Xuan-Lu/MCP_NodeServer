@@ -243,13 +243,23 @@ async function main() {
         if (pending.length > 0) {
           const isMcpProject = cwd.toLowerCase().includes('mcp') && cwd.toLowerCase().includes('server');
           if (isMcpProject) {
-            // MCP_Server：顯示詳情
+            // MCP_Server：顯示詳情 + pattern 分類統計（避免使用者只看到尾 5 筆而忽略累積問題）
+            const byPattern = {};
+            pending.forEach(l => {
+              try { const e = JSON.parse(l); byPattern[e.pattern] = (byPattern[e.pattern] || 0) + 1; } catch {}
+            });
+            const breakdown = Object.entries(byPattern)
+              .sort((a, b) => b[1] - a[1])
+              .map(([p, n]) => `  ${String(n).padStart(3)} × ${p}`)
+              .join('\n');
             const recent = pending.slice(-5).map(l => {
               const e = JSON.parse(l);
               return `  ${e.ts.slice(0, 16)} | ${e.project} | ${e.tool} | ${e.pattern}`;
             });
             output.push(
               `\n[Hook Complaints] 📢 有 ${pending.length} 筆未處理的 hook 投訴：\n` +
+              breakdown +
+              `\n  ── 最近 5 筆 ──\n` +
               recent.join('\n') +
               `\n  → 執行 /hook_complaints 查看詳情並處理`
             );
