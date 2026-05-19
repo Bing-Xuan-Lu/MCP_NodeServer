@@ -59,6 +59,7 @@ const TOOL_MODULE_FILES = [
   "tools/file_io/multi_inject.js",
   "tools/file_io/pdf.js",
   "tools/file_io/pptx.js",
+  "tools/file_io/video.js",
   "tools/file_io/word.js",
   "tools/system/agent_coord.js",
   "tools/system/bookmarks.js",

@@ -124,6 +124,7 @@ MCP_NodeServer/
 │   ├── pptx.js          ← read_pptx_file, read_pptx_files_batch (.pptx → Markdown/Text + 圖片)
 │   ├── pdf.js           ← read_pdf_file, read_pdf_files_batch (.pdf → Markdown/Text)
 │   ├── images.js        ← read_image, read_images_batch（圖片讀取 + 縮放，支援 PNG/JPG/WebP/GIF/SVG）
+│   ├── video.js         ← read_video（影片 → faster-whisper 字幕 + ffmpeg 關鍵幀，支援 MP4/MOV/MKV/WebM/AVI/M4V，python_runner 容器）
 │   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops（支援 container 參數走 Docker）
 │   ├── dom_compare.js   ← dom_compare（批次比對兩個 URL 的 CSS/HTML/JS 差異，需 Playwright）
 │   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage, browser_save_session, browser_restore_session（自帶 headless 瀏覽器，需 Playwright）

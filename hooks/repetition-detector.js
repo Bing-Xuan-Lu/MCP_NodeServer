@@ -444,7 +444,7 @@ function getSessionHost(history) {
 
 /**
  * 讀取最近 N 則使用者訊息（從 transcript JSONL 倒著讀，效能 OK）
- * 返回 [{ts, text}, ...]，最新在前
+ * 返回 [{ts, text, hasImage}, ...]，最新在前
  */
 let _CURRENT_TRANSCRIPT_PATH = '';
 function readRecentUserMessages(limit = 5) {
@@ -459,11 +459,15 @@ function readRecentUserMessages(limit = 5) {
         if (obj.type === 'user' && obj.message?.role === 'user') {
           const c = obj.message.content;
           let text = '';
+          let hasImage = false;
           if (typeof c === 'string') text = c;
           else if (Array.isArray(c)) {
             text = c.filter(x => x?.type === 'text').map(x => x.text || '').join('\n');
+            hasImage = c.some(x => x?.type === 'image' || x?.type === 'image_url');
           }
-          if (text.trim()) out.push({ ts: Date.parse(obj.timestamp || '') || 0, text });
+          if (text.trim() || hasImage) {
+            out.push({ ts: Date.parse(obj.timestamp || '') || 0, text, hasImage });
+          }
         }
       } catch {}
     }
@@ -2533,6 +2537,94 @@ const PATTERNS = [
     // Layer 7: Workload Reminder — 工作量高時提醒分發任務給其他 Agent
     //   追蹤 session 中 tool call 總數 + 工具多樣性，超過閾值時非阻擋提醒
     //   只提醒一次（用 _workloadReminded flag 防重複）
+    // Layer 2.87: Git-First Dependency Lookup — 使用者問當前依賴時，Claude 先翻 git history 是錯方向
+    //   依賴是「當前 code 狀態」問題，不是「歷史」問題；應先 grep / class_method_lookup / find_usages / find_dependencies
+    //   觸發：Bash 跑 git log/blame/show/grep + 最近使用者訊息含「誰用 / 誰依賴 / 哪裡會掛 / 砍/刪除/移除 + 要改/影響」
+    //   行為：warn（不擋），同 user-turn 提示一次後 ack 避免反覆
+    id: 'git_first_for_dependencies',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'Bash' && tool !== 'PowerShell') return null;
+      const cmd = entry.args?.command || '';
+      // 偵測「翻歷史找依賴」類型的 git 指令
+      if (!/\bgit\s+(log|blame|show|grep)\b/i.test(cmd)) return null;
+      // 純 git log / git show <commit> 查 commit 本身內容是合理的，這裡只擋「找 X 在 code 中被誰用」
+      // 簡化判定：使用者訊息是判斷依據，不過度看 cmd 結構
+
+      const recentMsgs = readRecentUserMessages(3);
+      const DEP_RE = /(誰(用|依賴|呼叫|引用)|哪(裡|些).*?(掛|用|依賴|引用|改|受影響)|砍.*?(改|影響|要|哪)|刪除.*?(改|影響|要|哪)|移除.*?(改|影響|要|哪)|哪些(檔案|頁面|module|模組|地方).*?(用|依賴|引用)|find\s+(usages|dependencies|references)|who\s+(uses|depends))/i;
+      const triggered = recentMsgs.some(m => DEP_RE.test(m.text || ''));
+      if (!triggered) return null;
+
+      // 同 user-turn 已提示過 → 跳過
+      const lastUserTs = recentMsgs[0]?.ts || 0;
+      const alreadyWarned = history.some(h =>
+        h._gitFirstDepWarned && (h.ts || 0) >= lastUserTs
+      );
+      if (alreadyWarned) return null;
+
+      entry._gitFirstDepWarned = true;
+      return `[Git-First Dep] ⚠️ 偵測到「找當前依賴」類問題，但你準備跑 \`${cmd.slice(0, 60).replace(/\n/g, ' ')}\`。\n` +
+             `  → 依賴是「當前 code 狀態」問題，不是「歷史」問題。git log/blame 只能看誰「曾經」改過，看不到現在誰真的依賴。\n` +
+             `  → 先用以下工具掃當前 code：\n` +
+             `    ▸ find_usages({ symbol: "..." }) — AST 精確找誰呼叫此符號\n` +
+             `    ▸ find_dependencies({ class_name: "..." }) — 找 class/method 依賴鏈\n` +
+             `    ▸ Grep（純文字搜尋 SQL 表名 / 字串常數）+ glob 縮範圍\n` +
+             `  → git 只該在「想知道某段 code 為什麼這樣寫」時用，不是找依賴的工具。\n`;
+    },
+  },
+  {
+    // Layer 2.88: Ambiguous UI Complaint — 使用者貼模糊抱怨 + 截圖，Claude 沒先反問就動手
+    //   UI 問題有 4 層：layout（位置/樣式）/ trigger（不該出現）/ data（顯示錯）/ interaction（操作沒反應）
+    //   截圖只證明「現象出現」，不證明使用者在意的層級。先反問 1 句省 6+ 輪繞遠路。
+    //   觸發：使用者最近訊息含「跑版/壞了/不對/有問題/怪/錯了」+ 附圖 + Claude 動手工具（非反問）
+    //   行為：warn（不擋），同 user-turn ack 後不再提示
+    id: 'ambiguous_ui_complaint',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      // 動手類工具（會直接開始 trace / 改 code），AskUserQuestion / 純文字回答不算
+      const ACTION_TOOLS = new Set([
+        'Bash', 'PowerShell', 'Read', 'Grep', 'Glob', 'Edit', 'Write',
+        'apply_diff', 'apply_diff_batch', 'create_file', 'create_file_batch',
+        'read_file', 'list_files', 'list_files_batch',
+        'browser_interact', 'browser_navigate', 'browser_click', 'browser_evaluate',
+        'browser_snapshot', 'browser_take_screenshot', 'page_audit', 'css_inspect',
+        'class_method_lookup', 'find_usages', 'symbol_index', 'trace_logic',
+        'php_text_search', 'send_http_request', 'execute_sql',
+      ]);
+      if (!ACTION_TOOLS.has(tool)) return null;
+
+      const recentMsgs = readRecentUserMessages(2);
+      if (recentMsgs.length === 0) return null;
+      const latest = recentMsgs[0];
+      if (!latest.hasImage) return null;
+
+      // 模糊 UI 抱怨關鍵字（不含具體層級線索的詞）
+      const AMBIGUOUS_RE = /(跑版|破版|壞了|壞掉|不對勁?|不對|有問題|怪怪的?|錯了|不正常|歪掉|歪了|跑掉|看起來|這樣)/;
+      // 排除已具體指明層級的詞（layout/trigger/data/interaction）
+      const SPECIFIC_RE = /(顏色|字型|字體|背景|邊框|間距|對齊|位置歪|尺寸|大小不對|疊在一起|沒出現|出不來|跳兩次|重複跳|沒反應|點不到|按不到|送不出去|金額.*?錯|數字.*?錯|資料.*?錯|顯示.*?空白|顯示.*?錯)/;
+      if (!AMBIGUOUS_RE.test(latest.text || '')) return null;
+      if (SPECIFIC_RE.test(latest.text || '')) return null;
+
+      // 同 user-turn 已提示過 → 跳過
+      const lastUserTs = latest.ts || 0;
+      const alreadyWarned = history.some(h =>
+        h._ambiguousUiWarned && (h.ts || 0) >= lastUserTs
+      );
+      if (alreadyWarned) return null;
+
+      entry._ambiguousUiWarned = true;
+      return `[Ambiguous UI] ⚠️ 偵測到模糊 UI 抱怨 + 附圖，你準備直接用 ${tool} 動手。\n` +
+             `  → 截圖只證明「現象出現」，不證明使用者在意的層級。先反問 1 句省繞路。\n` +
+             `  → UI 問題的 4 個層級（修法完全不同）：\n` +
+             `    (A) layout — 位置/樣式跑版（改 CSS）\n` +
+             `    (B) trigger — 不該出現卻出現 / 該出現沒出現（找觸發源）\n` +
+             `    (C) data — 顯示資料錯誤（追資料來源）\n` +
+             `    (D) interaction — 操作沒反應或反應錯（追事件 + AJAX gate）\n` +
+             `  → 建議：先用一句話問使用者在意哪一層，再開動手工具。/bug_trace 步驟 0「分層確認」即為此設計。\n`;
+    },
+  },
+  {
     id: 'workload_reminder',
     detect: (entry, history) => {
       // 已提醒過就不再觸發

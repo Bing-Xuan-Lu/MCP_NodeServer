@@ -56,6 +56,7 @@ const TOOLS = {
   'read_pptx_files_batch':  { dept:'系統、Excel、文件、Python 與 Git', title:'批次讀取 PowerPoint 簡報', desc:'一次讀取多個 .pptx 檔案。', usage:'read_pptx_files_batch {paths:["..."]}', tools:[] },
   'read_pdf_file':          { dept:'系統、Excel、文件、Python 與 Git', title:'讀取 PDF 文件', desc:'逐頁提取 PDF 文字內容，支援指定頁碼範圍（如 "1-5" 或 "3,7,10-12"）。', usage:'read_pdf_file {path:"...", pages:"1-5"}', tools:[] },
   'read_pdf_files_batch':   { dept:'系統、Excel、文件、Python 與 Git', title:'批次讀取 PDF 文件', desc:'一次讀取多個 PDF 檔案，回傳文字摘要。', usage:'read_pdf_files_batch {paths:["..."]}', tools:[] },
+  'read_video':             { dept:'系統、Excel、文件、Python 與 Git', title:'讀取影片（字幕 + 關鍵幀）', desc:'用 ffmpeg + faster-whisper 從影片抽出語音字幕與關鍵幀（每 N 秒 1 張）回傳給 Claude。支援 MP4/MOV/MKV/WebM/AVI/M4V。10 分鐘 1080p 影片 base 模型 + 每 15 秒 1 張 768px 關鍵幀 ≈ 50–70k token。', usage:'read_video {path:"video.mp4", whisper_model:"base", keyframe_interval:15}', tools:['Python','ffmpeg','faster-whisper'] },
   
   'git_status':             { dept:'系統、Excel、Python 與 Git', title:'Git 狀態檢查', desc:'查看目前 Git 工作目錄狀態 (git status)。支援 container 參數在 Docker 容器內執行。', usage:'git_status {container:"dev-php84"}', tools:[] },
   'git_diff':               { dept:'系統、Excel、Python 與 Git', title:'Git 改動比對', desc:'查看檔案改動內容 (git diff)，支援 staged 模式。支援 container 參數在 Docker 容器內執行。', usage:'git_diff {file_path:"...", staged:true, container:"dev-php84"}', tools:[] },
