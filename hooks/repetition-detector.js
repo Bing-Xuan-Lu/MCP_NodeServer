@@ -2625,6 +2625,46 @@ const PATTERNS = [
     },
   },
   {
+    // Layer 2.89: assumption_in_write — Write/Edit 前 AI input 含假設語句，警告但不阻擋
+    // 規則 1（思考優先）：AI 不確定時應停下問，不應自行假設後繼續動手
+    id: 'assumption_in_write',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (!['Write', 'Edit', 'apply_diff', 'create_file'].includes(tool)) return null;
+
+      // 從 entry 取 AI 說明文字（tool_use input 的 description / comment 欄，以及 new_string / content 前幾行）
+      const desc = [
+        entry.args?.description || '',
+        entry.args?.comment || '',
+        (entry.args?.new_string || '').slice(0, 300),
+        (entry.args?.content || '').slice(0, 300),
+      ].join(' ');
+
+      // 假設語句 pattern（中英文）
+      const ASSUMPTION_PATTERNS = [
+        /我(?:假設|猜測?|推測|猜想|認為應該|覺得應該)/,
+        /應該(?:是|為|會|都|就是)(?!.*確認|.*驗證|.*測試)/,
+        /(?:猜|估計|大概|可能)(?:是|為|會)/,
+        /(?:暫時|先)(?:假設|當作|視為|認為)/,
+        /(?:根據|依照).*(?:推測|猜測|猜想)/,
+        /(?:i\s+)?assum(?:e|ing|ption)/i,
+        /(?:i\s+)?guess(?:ing)?/i,
+        /(?:probably|likely|i\s+think)\s+(?:it\s+)?(?:is|should|would)/i,
+        /(?:不確定|不清楚|不知道).*(?:先|就|暫時)(?:這樣|如此|照著)/,
+      ];
+
+      const hit = ASSUMPTION_PATTERNS.find(p => p.test(desc));
+      if (!hit) return null;
+
+      const preview = desc.replace(/\s+/g, ' ').slice(0, 80);
+
+      return `[Assumption Guard] ⚠️ 偵測到 AI 在 ${tool} 前含假設語句。\n` +
+             `  → 片段：「${preview}…」\n` +
+             `  → 規則 1：不確定時應先問使用者，而非自行假設後動手。\n` +
+             `  → 若假設正確可繼續；若不確定，請先說明假設並等使用者確認。\n`;
+    },
+  },
+  {
     id: 'workload_reminder',
     detect: (entry, history) => {
       // 已提醒過就不再觸發
