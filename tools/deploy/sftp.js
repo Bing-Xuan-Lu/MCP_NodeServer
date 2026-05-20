@@ -283,17 +283,24 @@ export const definitions = [
   },
   {
     name: "sftp_download_batch",
-    description: "批次從遠端下載多組檔案/資料夾到本機（共用一條連線，減少 tool call）",
+    description:
+      "批次從遠端下載多組檔案/資料夾到本機（共用一條連線，減少 tool call）。\n" +
+      "路徑解析：item.local_path 為絕對路徑直用；相對路徑若給 project 參數則接 basePath/{project}/，" +
+      "否則接 basePath/（後者會落到根目錄如 D:/Project/_tmp_remote/，通常非預期）。",
     inputSchema: {
       type: "object",
       properties: {
+        project: {
+          type: "string",
+          description: "專案資料夾名稱（選填）。給此參數時，item.local_path 為相對路徑會解析為 basePath/{project}/{local_path}，建議搭配 `_tmp_remote/...` 將下載檔放進專案內而非 basePath 根目錄",
+        },
         items: {
           type: "array",
           items: {
             type: "object",
             properties: {
               remote_path: { type: "string", description: "遠端來源絕對路徑" },
-              local_path:  { type: "string", description: "本機目標路徑（相對 basePath 或絕對路徑）" },
+              local_path:  { type: "string", description: "本機目標路徑（相對 project 目錄、相對 basePath、或絕對）" },
             },
             required: ["remote_path", "local_path"],
           },
@@ -980,9 +987,17 @@ export async function handle(name, args) {
       const results = [];
       let okCount = 0;
 
+      // project 給時，相對 local_path 接 basePath/{project}/
+      const projectPrefix = (p) => {
+        if (!args?.project) return p;
+        if (path.isAbsolute(p)) return p;
+        return path.posix.join(args.project, String(p).replace(/\\/g, "/"));
+      };
+
       for (const item of args.items) {
         try {
-          const localAbs = resolveSecurePath(item.local_path);
+          const resolvedLocal = projectPrefix(item.local_path);
+          const localAbs = resolveSecurePath(resolvedLocal);
           const remoteInfo = await client.stat(item.remote_path);
 
           if (remoteInfo.isDirectory) {
@@ -993,7 +1008,7 @@ export async function handle(name, args) {
             await client.get(item.remote_path, localAbs);
             saveSnapshot(check.config.host, item.remote_path, remoteInfo);
           }
-          results.push(`✅ ${item.remote_path} → ${item.local_path}`);
+          results.push(`✅ ${item.remote_path} → ${resolvedLocal}`);
           okCount++;
         } catch (err) {
           results.push(`❌ ${item.remote_path} → ${item.local_path}：${err.message}`);

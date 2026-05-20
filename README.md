@@ -130,13 +130,16 @@ MCP_NodeServer/
 │   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage, browser_save_session, browser_restore_session（自帶 headless 瀏覽器，需 Playwright）
 │   ├── image_diff.js    ← image_diff（設計稿 vs 截圖像素級比對，產生 diff 圖）
 │   ├── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
-│   ├── file_diff.js     ← file_diff（純 Node 雙檔 unified diff，零依賴）
+│   ├── file_diff.js     ← file_diff（純 Node 雙檔 unified diff，零依賴；支援 project 參數）
 │   ├── analyze_csv.js   ← analyze_csv（CSV pivot/group/aggregate；取代 batch test 後手寫解析腳本）
+│   ├── csv_recompute_audit.js ← csv_recompute_audit（baseline CSV vs PHP 重算 diff 報告；情境：PricingService 對齊 Sheet baseline 避免 GSheet quota）
 │   ├── agent_coord.js   ← agent_coord（多 Agent 協調：post/poll/status/delete/archive，JSON 檔案持久化）
 │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
 │   ├── css_tools.js     ← css_specificity_check, css_computed_winner（CSS specificity 分析與活頁面規則勝出查詢）
 │   ├── php_class.js     ← class_method_lookup（PHP class/method 原始碼直接定位，自動解析 use Trait）
 │   ├── php_symbol.js    ← symbol_index, find_usages, find_hierarchy, find_dependencies, trace_logic（PHP AST 符號索引、交叉引用、邏輯追蹤）
+│   ├── js_symbol.js     ← js_symbol_index, js_symbol_lookup, js_find_usages, js_trace_logic（JS/TS/Vue AST 符號索引：function/class/object methods/`obj.method=fn` 賦值/`return {fn}` 工廠）
+│   ├── css_class.js     ← css_class_lookup, css_find_usages（CSS class 定義位置 + 跨檔引用：HTML/PHP/JS/Vue 內 class attribute / addClass / classList / 選擇器）
 │   └── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
 ├── skills/index.js      ← MCP Prompts 路由
 ├── Skills/commands/     ← Skill MD 檔（12 個部門子資料夾）
@@ -175,6 +178,9 @@ MCP_NodeServer/
 | `jszip` | MIT / GPL-3.0 | ZIP 解壓（.pptx 讀取用） |
 | `hyperformula` | GPL-3.0 | Excel 公式計算引擎 |
 | `php-parser` | BSD-3-Clause | PHP AST 解析（符號索引） |
+| `@babel/parser` | MIT | JS/TS/JSX/Vue AST 解析（js_symbol_*） |
+| `postcss` | MIT | CSS AST 解析（css_class_lookup） |
+| `postcss-selector-parser` | MIT | CSS selector 拆解 |
 
 ### Docker 映像檔
 

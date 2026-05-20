@@ -78,6 +78,16 @@ const TOOLS = {
   'find_dependencies':      { dept:'PHP 分析', title:'檔案 include/require 依賴', desc:'列出指定檔案的 include/require 依賴關係（它引用了誰、誰引用了它）。', usage:'find_dependencies {project:"...", file:"admin/model/order.php"}', tools:[] },
   'trace_logic':            { dept:'PHP 分析', title:'業務邏輯流程追蹤', desc:'追蹤 PHP 函式/方法的控制流：解析 if/switch/迴圈/呼叫/回傳，輸出樹狀流程圖。支援遞迴追蹤子呼叫（max_depth 2-3）。', usage:'trace_logic {project:"...", function_name:"cancelOrder", class_name:"OrderModel", max_depth:2}', tools:[] },
 
+  'js_symbol_index':        { dept:'JS 分析', title:'JS/TS/Vue 符號索引建立', desc:'掃描 JS/TS/Vue 專案建立 @babel AST 符號索引（function、class、object methods、`obj.method=fn` 賦值、`return {fn}` 工廠 pattern、export），快取 4 小時。供 js_symbol_lookup / js_find_usages / js_trace_logic 使用。', usage:'js_symbol_index {project:"...", paths:["js"]}', tools:[] },
+  'js_symbol_lookup':       { dept:'JS 分析', title:'JS 符號定義定位', desc:'找指定 JS 符號的定義位置 + 原始碼。支援 function 名稱、class 名稱、obj.method 點記號（如 _login_popup.Show）。處理 legacy jQuery factory return pattern。', usage:'js_symbol_lookup {project:"...", symbol:"_login_popup.Show"}', tools:[] },
+  'js_find_usages':         { dept:'JS 分析', title:'JS 符號引用查詢', desc:'找出 JS 符號的所有呼叫位置（function、class、obj.method）。基於 AST 精確匹配 CallExpression / NewExpression，比 Grep 準確（排除字串/註解內 false positive）。', usage:'js_find_usages {project:"...", symbol:"_login_popup.Show"}', tools:[] },
+  'js_trace_logic':         { dept:'JS 分析', title:'JS 函式邏輯流程追蹤', desc:'追蹤 JS 函式內部的控制流：解析 if/switch/for/while/try/呼叫/return/throw，輸出樹狀流程。適合理解 onclick → handler → fetch 事件鏈。', usage:'js_trace_logic {project:"...", symbol:"_login_popup.Show", file:"js/_popup.js"}', tools:[] },
+
+  'css_class_lookup':       { dept:'CSS 分析', title:'CSS Class 規則定位', desc:'找 CSS class 在 .css/.scss/.sass/.less 中的所有定義位置。回傳 selector、@media 上下文、行號、declarations，並區分主規則（leaf）、組合（compound）、祖先選擇器（ancestor）。', usage:'css_class_lookup {project:"...", class_name:"Popup-login"}', tools:[] },
+  'css_find_usages':        { dept:'CSS 分析', title:'CSS Class 跨檔引用查詢', desc:'找 CSS class 在 PHP/HTML/JS/Vue/JSX 中的引用位置。涵蓋 class= / className= / :class= attribute、jQuery addClass/removeClass/toggleClass/hasClass、classList.add/remove/toggle、querySelector、getElementsByClassName。', usage:'css_find_usages {project:"...", class_name:"Popup-login"}', tools:[] },
+
+  'csv_recompute_audit':    { dept:'檔案系統 & 資料庫', title:'Baseline CSV vs PHP 重算 Diff 報告', desc:'對照 baseline CSV 跑 PHP class::method 重算後輸出 diff 報告 CSV。情境：autocalc/PricingService 對齊 Sheet baseline，避免每次改算法就重跑 60 min GSheet quota。嚴格字串相等比對（不設 tolerance），支援 docker container 模式。', usage:'csv_recompute_audit {project:"PG_***", baseline_csv:"_harness/baseline.csv", output_csv:"_harness/audit.csv", class:"PricingService", method:"compute", args_from:["case_json"], mapping:{F825:"result.F825"}, container:"dev-php84"}', tools:[] },
+
   'image_transform':        { dept:'圖片處理', title:'圖片轉換與合成', desc:'resize、加背景色、圓形裁切、多圖合成、格式轉換、旋轉翻轉。一次呼叫可串聯多個操作。', usage:'image_transform {input:"...", operations:[{type:"resize", width:200}]}', tools:[] },
 
   'file_diff':              { dept:'檔案系統 & 資料庫', title:'雙檔 unified diff 比對', desc:'純 Node 實作，零依賴。比對兩個文字檔產出 unified diff，自動偵測 UTF-8/UTF-16 BOM，可選忽略空白。取代 Bash git diff --no-index fallback。', usage:'file_diff {path_a:"...", path_b:"...", context:3, ignore_whitespace:false}', tools:[] },

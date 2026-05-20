@@ -28,6 +28,48 @@ const BATCH_LIMIT = 15; // 超過 N 個不同檔案 → 阻擋（一輪對話實
 const STATE_DIR = path.join(os.tmpdir(), 'claude-write-guard');
 const STATE_FILE = path.join(STATE_DIR, 'state.json');
 
+// ── 診斷腳本豁免：_harness/ 下檔案 + 對話內已有 trace/diff 證據 ──
+// 用途：當使用者已要求調查、Claude 已跑完 trace_excel_logic / analyze_csv / case_diff* 等
+// 蒐證工具，後續寫 _harness/probe_*.php 應放行（不應被 Prompt Guard 連動擋）
+const HARNESS_PATH_RE = /[\\/]_harness[\\/]|[\\/]\.harness[\\/]/i;
+const EVIDENCE_TOOLS = [
+  'trace_excel_logic', 'trace_gsheet_formula', 'gsheet_xlookup_trace',
+  'analyze_csv', 'case_diff_full', 'case_diff_categorical',
+  'execute_sql', 'execute_sql_batch',
+  'gsheet_fetch_with_state', 'gsheet_fetch_formatted',
+  'run_php_script', 'run_php_code',
+  'symbol_index', 'find_usages', 'trace_logic', 'class_method_lookup',
+  'js_symbol_lookup', 'js_find_usages', 'js_trace_logic',
+];
+const AUDIT_LOG = path.join(HOME, '.claude', 'logs', 'mcp_audit.log');
+const EVIDENCE_WINDOW_MS = 30 * 60 * 1000; // 最近 30 分鐘
+
+function hasRecentEvidence() {
+  try {
+    if (!fs.existsSync(AUDIT_LOG)) return null;
+    // 讀末尾 64KB 即可（log append-only，最近紀錄在尾端）
+    const stat = fs.statSync(AUDIT_LOG);
+    const readBytes = Math.min(stat.size, 64 * 1024);
+    const fd = fs.openSync(AUDIT_LOG, 'r');
+    const buf = Buffer.alloc(readBytes);
+    fs.readSync(fd, buf, 0, readBytes, stat.size - readBytes);
+    fs.closeSync(fd);
+    const text = buf.toString('utf-8');
+    const cutoff = Date.now() - EVIDENCE_WINDOW_MS;
+    // log 格式: [ISO] toolName | args | status
+    for (const line of text.split('\n')) {
+      const m = line.match(/^\[([^\]]+)\]\s+(\S+)\s+\|/);
+      if (!m) continue;
+      const ts = Date.parse(m[1]);
+      if (Number.isNaN(ts) || ts < cutoff) continue;
+      if (EVIDENCE_TOOLS.includes(m[2])) {
+        return { tool: m[2], at: m[1] };
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 function loadState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
@@ -194,7 +236,25 @@ process.stdin.on('end', () => {
     //   不該被使用者層級的 guard 連帶擋住（過去出包：兩個 background agent 收完整 5 段 prompt 仍被擋）。
     const isSubAgent = !!(data.parent_tool_use_id || data.parentToolUseId);
     const state = loadState();
-    if (state.promptGuardActive && !isSubAgent) {
+
+    // 例外：_harness/ 診斷腳本 + 最近 30 分鐘有 trace/diff/CSV 等蒐證工具紀錄
+    //   理由：使用者已下達調查指令，Claude 已跑完蒐證鏈（trace_excel_logic / analyze_csv / case_diff*），
+    //   後續寫 _harness/probe_*.php 屬於「驗證假設」的合理下一步，不該被 Prompt Guard 連帶擋
+    //   過去出包：trace 完公式 + 7 筆 local 訂單對照都有了，仍因 Prompt Guard 餘溫擋寫 probe.php
+    let harnessExempt = null;
+    if (state.promptGuardActive && !isSubAgent && HARNESS_PATH_RE.test(filePath)) {
+      const evidence = hasRecentEvidence();
+      if (evidence) {
+        harnessExempt = evidence;
+        process.stdout.write(
+          `[Write Guard] 🔓 _harness/ 診斷腳本豁免 — 偵測到最近蒐證紀錄：` +
+          `${evidence.tool} @ ${evidence.at}\n` +
+          `  → Prompt Guard 仍 active 但本檔放行（已具備分析證據鏈）\n`
+        );
+      }
+    }
+
+    if (state.promptGuardActive && !isSubAgent && !harnessExempt) {
       const reasonLine = state.promptGuardReason
         ? `  判斷依據：${state.promptGuardReason}\n`
         : '';

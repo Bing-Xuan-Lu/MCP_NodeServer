@@ -88,11 +88,6 @@ const VAGUE_SKIP = [
   /memory|skill|hook|mcp|settings|github|audit|dashboard|readme|commit|changelog/i,
   /閱讀|讀一下|摘要|文章|這篇|網頁|blog|分析|架構|規劃|設計/i,
   /解釋|說明|告訴我|列出|顯示|查看|查詢|(?:搜尋|找)(?!.*(?:清|刪|改|移|調|換)).*在哪/i,
-  // 具體目標：提到檔名/路徑/行號/命名空間/方法名，代表使用者已指定明確修改點，非模糊指令
-  // 例："改 estimate_print.php:73 的 accessory" / "去修 src/foo.vue 的 click handler" / "MyClass::doX 加判斷"
-  /\b[\w\-./\\]+\.(?:php|js|ts|vue|jsx|tsx|css|scss|less|html|sql|py|md)(?::\d+)?\b/i,
-  /:\d{2,}\b/,
-  /\b\w+::\w+\b|\b\w+->\w+\(/,
 ];
 
 // ── 0b. 模糊信號：動作 + 模糊指示詞 ──
@@ -228,6 +223,10 @@ const SCENE_SKIP_PATTERNS = [
   /commit|git log|version|版本號|tag|changelog/i,
   /skill.*做|做.*skill|新增.*skill|建.*skill/i,
   /分析|差距|架構|規劃.*系統|系統.*規劃/i,
+  // 文件/規則/指引/CLAUDE.md/.claude 設定編輯類任務（含「CSS」等技術字眼但實際是文字編輯，不該觸發 frontend）
+  /CLAUDE\.md|\.claude[\\/]|~\/\.claude|MEMORY\.md|README\.md|\.mcp\.json|package\.json/i,
+  /(?:規則|指引|文件|文案|說明|prompt|系統提示|system prompt|文檔|docs?)\s*(?:擴|擴充|擴成|加|新增|更新|改|修|寫|補)/,
+  /(?:擴|擴成|加|新增|更新|改|修|寫|補|完善|整理)\s*(?:規則|指引|文件|文案|說明|prompt|系統提示|文檔)/,
 ];
 
 // 後端關鍵字：出現這些詞時，frontend 場景不適用（純後端問題誤判修正）

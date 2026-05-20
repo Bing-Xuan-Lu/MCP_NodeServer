@@ -55,12 +55,15 @@ MCP_NodeServer/
 │   │   ├── php_class.js ← class_method_lookup（PHP 原始碼直接定位，自動解析 use Trait）
 │   │   ├── php_symbol.js ← symbol_index, find_usages, find_hierarchy, find_dependencies, trace_logic（PHP AST 符號索引 + 邏輯追蹤）
 │   │   ├── php_text_search.js ← php_text_search（PHP 純文字搜尋；搜結構語法時自動指引改用 AST 工具）
+│   │   ├── js_symbol.js ← js_symbol_index, js_symbol_lookup, js_find_usages, js_trace_logic（JS/TS/Vue AST 符號索引：function/class/object methods + `obj.method=fn` 賦值 + `return {fn}` 工廠 pattern）
+│   │   ├── css_class.js ← css_class_lookup, css_find_usages（CSS class 定義位置 + 跨檔引用：HTML/PHP/JS/Vue 內 class attribute / addClass / classList / querySelector）
 │   │   └── memory_triggers.js ← list_memory_triggers, memory_add_triggers, memory_remove_triggers（管理 memory frontmatter `triggers`，給 memory-auto-recall hook 用）
 │   └── utils/           ← 通用工具與比對
 │       ├── image_diff.js ← image_diff（設計稿 vs 截圖像素級比對）
 │       ├── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
-│       ├── file_diff.js ← file_diff（純 Node 雙檔 unified diff，零依賴；取代 Bash git diff fallback）
-│       └── analyze_csv.js ← analyze_csv（CSV pivot/group/aggregate；filter + group_by + count/sum/avg/min/max/distinct/top_values，取代 batch test 後手寫 PHP/Node 解析腳本）
+│       ├── file_diff.js ← file_diff（純 Node 雙檔 unified diff，零依賴；取代 Bash git diff fallback；支援 project 參數讓相對路徑接 basePath/{project}/）
+│       ├── analyze_csv.js ← analyze_csv（CSV pivot/group/aggregate；filter + group_by + count/sum/avg/min/max/distinct/top_values，取代 batch test 後手寫 PHP/Node 解析腳本）
+│       └── csv_recompute_audit.js ← csv_recompute_audit（對照 baseline CSV 跑 PHP class::method 重算 → 輸出 diff CSV；嚴格字串相等比對；情境：autocalc/PricingService 對齊 Sheet baseline 避免重跑 GSheet quota）
 ├── hooks/               ← Claude Code Session Hooks（全域 ~/.claude/settings.json 設定）
 │   ├── session-start.js ← SessionStart：對話開場載入記憶與上次摘要
 │   ├── repetition-detector.js ← PreToolUse：11層偵測（錯誤工具、散搜、低效、重複、同檔連修、自動修復），支援成本追蹤、Slack通知、debug模式

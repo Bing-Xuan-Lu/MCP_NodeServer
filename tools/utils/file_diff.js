@@ -18,12 +18,17 @@ export const definitions = [
     description:
       "比對兩個本機檔案產出 unified diff（取代 Bash git diff fallback）。\n" +
       "支援文字檔（UTF-8/UTF-16 自動偵測），不支援 binary。\n" +
+      "路徑解析：絕對路徑直用；相對路徑若給 project 則接 basePath/{project}/，否則接 basePath/。\n" +
       "回傳 unified diff 字串，無差異時回傳「✅ 兩檔內容一致」。",
     inputSchema: {
       type: "object",
       properties: {
-        path_a: { type: "string", description: "檔案 A 路徑（相對 basePath 或絕對）" },
-        path_b: { type: "string", description: "檔案 B 路徑（相對 basePath 或絕對）" },
+        path_a: { type: "string", description: "檔案 A 路徑（相對 project 目錄、相對 basePath、或絕對）" },
+        path_b: { type: "string", description: "檔案 B 路徑（相對 project 目錄、相對 basePath、或絕對）" },
+        project: {
+          type: "string",
+          description: "專案資料夾名稱（選填）。給此參數時，相對路徑會解析為 basePath/{project}/{path}，避免落到 basePath 根目錄",
+        },
         context: {
           type: "number",
           description: "context lines（前後各 N 行），預設 3",
@@ -196,10 +201,17 @@ export async function handle(name, args) {
     return { content: [{ type: "text", text: "錯誤：缺少 path_a 或 path_b" }], isError: true };
   }
 
+  // project 給時，相對路徑接 basePath/{project}/
+  const prefixWithProject = (p) => {
+    if (!args?.project) return p;
+    if (path.isAbsolute(p)) return p;
+    return path.posix.join(args.project, p.replace(/\\/g, "/"));
+  };
+
   let absA, absB;
   try {
-    absA = resolveSecurePath(pathA);
-    absB = resolveSecurePath(pathB);
+    absA = resolveSecurePath(prefixWithProject(pathA));
+    absB = resolveSecurePath(prefixWithProject(pathB));
   } catch (e) {
     return { content: [{ type: "text", text: `路徑解析失敗：${e.message}` }], isError: true };
   }
