@@ -21,13 +21,13 @@ export const definitions = [
   {
     name: "list_memory_triggers",
     description:
-      "列出指定專案 memory 目錄下所有 .md 檔的 triggers 設定狀態（未設、已設、值內容）。配合 memory-auto-recall hook 使用。預設掃當前專案，可傳 project_id 改掃別的（如 'd--Project-PG-***'）。",
+      "列出指定專案 memory 目錄下所有 .md 檔的 triggers 設定狀態（未設、已設、值內容）。配合 memory-auto-recall hook 使用。預設掃當前專案，可傳 project_id 改掃別的（如 'd--Project-MyProject'）。",
     inputSchema: {
       type: "object",
       properties: {
         project_id: {
           type: "string",
-          description: "~/.claude/projects/ 下的專案 ID（如 d--Project-PG-***）。省略則用當前 CWD 推導。",
+          description: "~/.claude/projects/ 下的專案 ID（如 d--Project-MyProject）。省略則用當前 CWD 推導。",
         },
         only_missing: {
           type: "boolean",
@@ -46,7 +46,7 @@ export const definitions = [
       properties: {
         memory_file: {
           type: "string",
-          description: "memory .md 絕對路徑，或相對於 ~/.claude/projects/ 的路徑（如 d--Project-PG-***/memory/feedback_xxx.md）",
+          description: "memory .md 絕對路徑，或相對於 ~/.claude/projects/ 的路徑（如 d--Project-MyProject/memory/feedback_xxx.md）",
         },
         triggers: {
           type: "object",

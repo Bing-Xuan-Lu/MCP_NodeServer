@@ -70,7 +70,7 @@
 3. 額外檢查 DB 狀態：
    - 相關資料表是否有資料（空表 = 功能不可見）
    - 缺少的欄位（影響搜尋/顯示）
-   - docker exec dev-mariadb mysql -uroot --skip-password -e "USE ***; SELECT COUNT(*) FROM {table};"
+   - docker exec {mariadb_container} mysql -uroot --skip-password -e "USE {dbname}; SELECT COUNT(*) FROM {table};"
 ```
 
 ---

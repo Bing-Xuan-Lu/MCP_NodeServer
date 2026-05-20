@@ -70,7 +70,7 @@ $ARGUMENTS
 
 找出所有已存在的通配符（結尾為 `:*)`），然後標記被涵蓋的個別規則。
 
-範例：若存在 `Bash(docker exec:*)`，則 `Bash(docker exec dev-mariadb mysql -u root -e "USE db; SELECT 1;")` 可刪。
+範例：若存在 `Bash(docker exec:*)`，則 `Bash(docker exec {container} mysql -u root -e "USE db; SELECT 1;")` 可刪。
 
 #### 2b. 可合併為新通配符
 

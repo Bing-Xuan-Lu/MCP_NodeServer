@@ -152,7 +152,7 @@ UI 顯示位置  ←→  後端變數/PHP key  ←→  資料來源欄位（DB /
 操作步驟：
 
 1. 從前台 DOM 抽出所有顯示欄位（用 `browser_evaluate` 列出 `[data-field]` 或 label-value 對）
-2. 對每個欄位，定位 template 中的變數名稱（如 `$d['paper_prep']`）
+2. 對每個欄位，定位 template 中的變數名稱（如 `$d['unit_price']`）
 3. 反推後端 expose 此 key 的位置（class::method）
 4. 反推資料來源（DB 欄位 / Sheet cell / cart JSON 路徑）
 
@@ -160,9 +160,9 @@ UI 顯示位置  ←→  後端變數/PHP key  ←→  資料來源欄位（DB /
 
 | UI 欄位 | Template 變數 | 後端來源（class::method） | 資料端 | 備註 |
 |---------|-------------|----------------------|--------|------|
-| 紙板費單價 | `$d['paper_prep']` | `PricingService::calc()` L120 | `tbl_order_custom.paper_cost` / Sheet `param!D453` | ✅ 一致 |
-| 印刷顏色 | `$cart['print_color']` | （直接讀 cart JSON） | `cart.colorlist` | ⚠️ 命名不一致 |
-| mold 尺寸 | `$d['mold_size']` | **未 expose** | Sheet `mold!F15` | ❌ 後端 gap |
+| 商品單價 | `$d['unit_price']` | `PriceService::calc()` L120 | `tbl_order.price_total` / Sheet `param!D453` | ✅ 一致 |
+| 顏色選項 | `$cart['color']` | （直接讀 cart JSON） | `cart.color_list` | ⚠️ 命名不一致 |
+| 尺寸資訊 | `$d['size_info']` | **未 expose** | Sheet `mold!F15` | ❌ 後端 gap |
 
 此表特別適合事後對接 [[axshare_diff]] 或 [[php_details_key_audit_internal]]。
 

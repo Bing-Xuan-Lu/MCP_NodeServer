@@ -63,7 +63,7 @@ MCP_NodeServer/
 │       ├── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
 │       ├── file_diff.js ← file_diff（純 Node 雙檔 unified diff，零依賴；取代 Bash git diff fallback；支援 project 參數讓相對路徑接 basePath/{project}/）
 │       ├── analyze_csv.js ← analyze_csv（CSV pivot/group/aggregate；filter + group_by + count/sum/avg/min/max/distinct/top_values，取代 batch test 後手寫 PHP/Node 解析腳本）
-│       └── csv_recompute_audit.js ← csv_recompute_audit（對照 baseline CSV 跑 PHP class::method 重算 → 輸出 diff CSV；嚴格字串相等比對；情境：autocalc/PricingService 對齊 Sheet baseline 避免重跑 GSheet quota）
+│       └── csv_recompute_audit.js ← csv_recompute_audit（對照 baseline CSV 跑 PHP class::method 重算 → 輸出 diff CSV；嚴格字串相等比對；情境：報價/計算類 service 對齊 Sheet baseline 避免重跑 GSheet quota）
 ├── hooks/               ← Claude Code Session Hooks（全域 ~/.claude/settings.json 設定）
 │   ├── session-start.js ← SessionStart：對話開場載入記憶與上次摘要
 │   ├── repetition-detector.js ← PreToolUse：11層偵測（錯誤工具、散搜、低效、重複、同檔連修、自動修復），支援成本追蹤、Slack通知、debug模式

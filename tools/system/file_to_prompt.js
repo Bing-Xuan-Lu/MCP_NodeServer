@@ -24,7 +24,7 @@ export const definitions = [
         glob: {
           type: "string",
           description:
-            "glob pattern（如 PG_***/admin/**/*.php）。相對 basePath 解析。",
+            "glob pattern（如 myproject/admin/**/*.php）。相對 basePath 解析。",
         },
         exclude: {
           type: "array",

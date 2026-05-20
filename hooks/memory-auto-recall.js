@@ -15,7 +15,7 @@
  * frontmatter 範例：
  *   triggers:
  *     tools: [Edit, Write, mcp__*__apply_diff, mcp__*__create_file]
- *     path_patterns: ['_harness', 'autocalc', 'PricingService']
+ *     path_patterns: ['_harness', '{module}', 'PriceService']
  *     prompt_keywords: [sheet, 公式, harness, mapping]
  *     reinject_after_tool_calls: 30
  *

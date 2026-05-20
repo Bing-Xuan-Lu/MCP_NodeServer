@@ -318,7 +318,7 @@ export const definitions = [
       type: "object",
       properties: {
         url: { type: "string", description: "登入後的任意頁面 URL（用於擷取 cookies 和 storage）" },
-        session_key: { type: "string", description: "session 識別名稱，預設 'default'（建議用專案名，如 '***'）" },
+        session_key: { type: "string", description: "session 識別名稱，預設 'default'（建議用專案名，如 'myproject'）" },
         cookies: {
           type: "array",
           items: {

@@ -353,7 +353,7 @@ async function buildIndex(projectPath, scanPaths, excludePatterns) {
 
 /**
  * 偵測 projectPath 不存在時，於 basePath 一層子目錄中搜尋相同名稱的巢狀專案
- * 例：使用者輸入 `***_ERP_PHP` 但實際路徑是 `***_ERP/***_ERP_PHP`
+ * 例：使用者輸入 `MyProject_PHP` 但實際路徑是 `MyProject/MyProject_PHP`
  */
 async function resolveNestedProject(projectPath) {
   try { await fs.access(projectPath); return { path: projectPath, hint: null }; } catch {}

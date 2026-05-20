@@ -1,6 +1,6 @@
 // tools/utils/csv_recompute_audit.js
 // 對照 baseline CSV 跑 PHP class::method 重算後輸出 diff 報告 CSV
-// 情境：autocalc/PricingService 對齊 Sheet baseline，避免每次改算法都跑 60min GSheet quota
+// 情境：報價/計算類 service 對齊 Sheet baseline，避免每次改算法都跑 60min GSheet quota
 // 嚴格字串相等比對（無 tolerance）
 
 import { spawn } from "child_process";
@@ -13,7 +13,7 @@ export const definitions = [
     name: "csv_recompute_audit",
     description:
       "對照 baseline CSV 跑 PHP class::method 重算後輸出 diff 報告 CSV。\n" +
-      "情境：autocalc/PricingService 對齊 Sheet baseline，避免每次改算法都重跑 GSheet/API。\n" +
+      "情境：報價/計算類 service 對齊 Sheet baseline，避免每次改算法都重跑 GSheet/API。\n" +
       "嚴格字串相等比對（不設 tolerance；浮點數請在 PHP 端先 round）。\n" +
       "輸出 CSV 欄位：case_id, php_error, baseline_{col}, new_{col}, diff_{col}（每個 mapping 一組）",
     inputSchema: {
@@ -21,7 +21,7 @@ export const definitions = [
       properties: {
         project: {
           type: "string",
-          description: "PHP 專案資料夾名稱（相對 basePath，例：PG_***）",
+          description: "PHP 專案資料夾名稱（相對 basePath，例：myproject）",
         },
         baseline_csv: {
           type: "string",
@@ -31,7 +31,7 @@ export const definitions = [
           type: "string",
           description: "輸出 audit CSV 路徑（相對 project 或絕對）",
         },
-        class: { type: "string", description: "要呼叫的 PHP class 名（如 PricingService）" },
+        class: { type: "string", description: "要呼叫的 PHP class 名（如 PriceService）" },
         method: { type: "string", description: "要呼叫的 method 名（如 compute）" },
         args_from: {
           type: "array",

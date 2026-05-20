@@ -374,8 +374,8 @@ export const definitions = [
         user:        { type: "string", description: "使用者名稱（save 時填）" },
         password:    { type: "string", description: "密碼（save 時填，與 private_key_path 擇一）" },
         private_key_path: { type: "string", description: "私鑰絕對路徑（save 時填）" },
-        local_base:  { type: "string", description: "本機專案根目錄（如 D:\\Project\\PG_***），上傳時作為相對路徑基準" },
-        remote_base: { type: "string", description: "遠端部署根目錄（如 /var/www/html_***/），上傳時作為遠端路徑前綴" },
+        local_base:  { type: "string", description: "本機專案根目錄（如 D:\\Project\\myproject），上傳時作為相對路徑基準" },
+        remote_base: { type: "string", description: "遠端部署根目錄（如 /var/www/html/），上傳時作為遠端路徑前綴" },
         excludes:    {
           type: "array", items: { type: "string" },
           description: "部署時排除的相對路徑 pattern（如 ['config/database.php', '.env']）",
@@ -482,7 +482,7 @@ function resolvePresetPaths(localPath, remotePath, sftpConfig) {
   if (normalizedLocal.toLowerCase().startsWith(normalizedLB.toLowerCase())) {
     relativePart = normalizedLocal.slice(normalizedLB.length).replace(/^\//, "");
   } else if (normalizedLocal.toLowerCase().startsWith(normalizedLB.split("/").pop().toLowerCase())) {
-    // 像 PG_***/app/file.php 這種（basePath + project 相對路徑）
+    // 像 myproject/app/file.php 這種（basePath + project 相對路徑）
     const projectFolder = normalizedLB.split("/").pop();
     relativePart = normalizedLocal.slice(projectFolder.length).replace(/^\//, "");
   } else {

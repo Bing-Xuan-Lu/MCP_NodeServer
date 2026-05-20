@@ -132,7 +132,7 @@ MCP_NodeServer/
 │   ├── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
 │   ├── file_diff.js     ← file_diff（純 Node 雙檔 unified diff，零依賴；支援 project 參數）
 │   ├── analyze_csv.js   ← analyze_csv（CSV pivot/group/aggregate；取代 batch test 後手寫解析腳本）
-│   ├── csv_recompute_audit.js ← csv_recompute_audit（baseline CSV vs PHP 重算 diff 報告；情境：PricingService 對齊 Sheet baseline 避免 GSheet quota）
+│   ├── csv_recompute_audit.js ← csv_recompute_audit（baseline CSV vs PHP 重算 diff 報告；情境：報價/計算類 service 對齊 Sheet baseline 避免 GSheet quota）
 │   ├── agent_coord.js   ← agent_coord（多 Agent 協調：post/poll/status/delete/archive，JSON 檔案持久化）
 │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
 │   ├── css_tools.js     ← css_specificity_check, css_computed_winner（CSS specificity 分析與活頁面規則勝出查詢）

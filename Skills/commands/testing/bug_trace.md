@@ -239,7 +239,7 @@ UI/Template 顯示位置  ←→  後端變數/PHP key  ←→  DB 欄位/Sheet 
    - 後端端：傳入 template 的變數來源（class::method 名稱 + key 名）
    - 資料端：DB 欄位 / Sheet cell / 設定檔 key
 2. **逐層比對名稱與型別**
-   - 變數名是否一致（常見 typo：`paper_prep` vs `papper_prep`）
+   - 變數名是否一致（常見 typo：`unit_price` vs `unti_price`）
    - 型別是否一致（DB int vs PHP string vs UI 格式化字串）
 3. **產出 mapping 表**附在報告
 
@@ -247,8 +247,8 @@ UI/Template 顯示位置  ←→  後端變數/PHP key  ←→  DB 欄位/Sheet 
 
 | 項目 | UI（template） | 後端（class::method） | 資料端（DB/Sheet） | 差異 |
 |------|---------------|---------------------|------------------|------|
-| 紙板費 | `estimate_print.php:380` `$d['paper_prep']` | `PricingService::calc()` expose `$d['paper_prep']` | `tbl_order_custom.paper_cost` | ⚠️ key 不同名 |
-| 印刷顏色 | 顯示文字 | `$cart['print_color']` | `cart.colorlist` | ⚠️ template 用 `print_color`，cart 用 `colorlist` |
+| 商品單價 | `module_a/detail.php:380` `$d['unit_price']` | `PriceService::calc()` expose `$d['unit_price']` | `tbl_order.price_total` | ⚠️ key 不同名 |
+| 顏色選項 | 顯示文字 | `$cart['color']` | `cart.color_list` | ⚠️ template 用 `color`，cart 用 `color_list` |
 
 → 直接定位「欄位錯位」這類 bug，不用一路追到 SQL。
 

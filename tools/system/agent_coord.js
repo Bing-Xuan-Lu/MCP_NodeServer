@@ -26,7 +26,7 @@ export const definitions = [
         },
         project: {
           type: "string",
-          description: "專案名稱（作為隔離 namespace，如 PG_***）",
+          description: "專案名稱（作為隔離 namespace，如 myproject）",
         },
         channel: {
           type: "string",
