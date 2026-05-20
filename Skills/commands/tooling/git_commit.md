@@ -81,14 +81,81 @@ git diff --cached | grep -iE \
    執行 /gitignore_setup 可自動補全規則
 ```
 
-#### 判斷與行動
+#### 檢查四：客戶/專案/路徑/專業術語外洩掃描（最高優先級）
+
+**目的**：防止客戶實際名稱、模組名、檔名、業務術語、客戶路徑進入公開 GitHub。
+**強度**：命中即 BLOCK，無例外。使用者要求「不准任何客戶資訊進公開 repo」。
+
+**讀 blocklist**（依優先順序，存在即用，找不到才下一個）：
+
+1. `~/.claude/leak-blocklist.json`（使用者全域，跨專案共用，**不進任何版控**）
+2. 專案根目錄 `.leak-blocklist.json`（專案特定覆蓋）
+
+若兩者皆不存在 → 印一行警告「⚠️ 找不到 leak-blocklist.json，跳過外洩掃描」並繼續（不擋）。**永不自動建立 blocklist**，避免空白檔造成假安全感。
+
+**掃描方法**（呼叫 `hooks/leak-scan.js`，邏輯集中、可被 hook 共用）：
+
+```bash
+node hooks/leak-scan.js staged
+```
+
+**輸出狀態**（stdout 第一行）：
+
+- `CLEAN` → ✅ 通過，繼續步驟 2
+- `NO_BLOCKLIST` → ⚠️ 顯示警告（提示使用者建 `~/.claude/leak-blocklist.json` 才能享有保護），繼續步驟 2
+- `SKIP_NOT_GIT` → ℹ️ 不是 git repo，靜默通過
+- `SKIP_NO_REMOTE` → ℹ️ 純本機 repo，靜默通過
+- `SKIP_INTERNAL_GIT` → ℹ️ 內部 git（remote 全不在 public_remote_hosts），靜默通過；第 2 行 JSON 列出 remote URL 供確認
+- `LEAK_DETECTED` → 🚫 **立即 BLOCK**，第 2 行起為 JSON 命中清單；解析後印出友善報告
+
+**自動跳過邏輯**：scanner 只在 remote 指向公開 host（預設 `github.com` / `gitlab.com` / `bitbucket.org` / `codeberg.org` / `sr.ht`）時才掃。內部自架 gitlab、gitea 等會自動跳過，不需任何設定。
+
+**手動覆寫**：
+
+- 對內部 repo 也強掃 → `node hooks/leak-scan.js staged --force`（或 `LEAK_SCAN_FORCE=1`）
+- 對公開 repo 跳過 → `--skip`（或 `LEAK_SCAN_SKIP=1`，極少用）
+
+**新增公開 host**：編輯 `~/.claude/leak-blocklist.json` 的 `public_remote_hosts` 陣列。
+
+**外洩報告格式**（將 JSON `hits` 轉成可讀清單）：
+
+```
+🚫 偵測到客戶/專案外洩，已中止 commit！
+
+blocklist 來源：~/.claude/leak-blocklist.json
+
+命中明細（共 N 處）：
+  - {file} | 命中：{term}
+    > {snippet}
+  ...
+
+🔧 替換建議：
+  - 客戶名 → 佔位符（如 myproject / {ProjectFolder}）
+  - 業務術語 → 通用詞（如 ServiceA → PriceService）
+  - 客戶路徑 → D:\Project\{ProjectFolder} 或 /var/www/html/
+
+📝 例外路徑（不掃描）：
+  _internal/, memory/_private/, Skills/commands/_internal/
+
+📋 處理方式：
+  1. 修正命中檔案
+  2. git add -u
+  3. 重新執行 /git_commit
+  4. 若該命中為合法業務名（極罕見），把該詞從 ~/.claude/leak-blocklist.json 移除
+```
+
+> **重要**：使用者明確要求 — 不准用「是否要繼續？」這種問句繞過。命中就停，使用者必須修。
+
+#### 判斷與行動（綜合）
 
 | 情況 | 行動 |
 | --- | --- |
+| 客戶外洩命中 | **立即 BLOCK，不問是否繼續**，使用者必須修改後重跑 |
 | 偵測到危險檔名 | **立即停止**，列出檔案清單，建議先執行 `/gitignore_setup` |
 | 偵測到 Secret 關鍵字 | **立即停止**，顯示命中行，詢問是否繼續（需使用者明確確認） |
 | 偵測到套件目錄 | **警告但不停止**，提示執行 `/gitignore_setup` |
-| 掃描無異常 | 顯示「✅ 安全掃描通過」並繼續步驟 2 |
+| 找不到 leak-blocklist.json | **警告但不停止**，提示建立 |
+| 所有掃描無異常 | 顯示「✅ 安全掃描通過」並繼續步驟 2 |
 
 #### 停止時顯示的警告範例
 
