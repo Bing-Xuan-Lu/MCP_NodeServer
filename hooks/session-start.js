@@ -35,7 +35,7 @@ function findProjectMemoryDir() {
     const rest = parts.slice(1).join('-');
     candidates.push(`${drive}--${rest}`);
 
-    // Claude 可能把底線轉成連字號（PG_*** → PG-***）
+    // Claude 可能把底線轉成連字號（My_Project → My-Project）
     const restHyphen = rest.replace(/_/g, '-');
     if (restHyphen !== rest) candidates.push(`${drive}--${restHyphen}`);
 
@@ -130,6 +130,68 @@ function findRecentPitfalls() {
   return files.length > 0 ? files[0] : null;
 }
 
+// === MCP_Server root 偵測（給 preset 自動建議用） ===
+function findMcpServerRoot() {
+  // 1) 環境變數覆寫優先
+  if (process.env.MCP_SERVER_ROOT && fs.existsSync(process.env.MCP_SERVER_ROOT)) {
+    return process.env.MCP_SERVER_ROOT;
+  }
+  // 2) 常見 Windows 位置
+  const candidates = [
+    'D:/MCP_Server', 'D:/MCP_NodeServer',
+    'C:/MCP_Server', 'C:/MCP_NodeServer',
+    path.join(HOME, 'MCP_Server'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(path.join(c, '.mcp_sftp_presets.json'))) return c;
+  }
+  return null;
+}
+
+// === 依 cwd 推薦 DB / SFTP preset ===
+function suggestPresets(cwd) {
+  const root = findMcpServerRoot();
+  if (!root) return null;
+
+  let dbConnections = {};
+  let sftpPresets = {};
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(root, 'tools', '.mcp_db_config.json'), 'utf8'));
+    dbConnections = cfg.connections || {};
+  } catch {}
+  try {
+    sftpPresets = JSON.parse(fs.readFileSync(path.join(root, '.mcp_sftp_presets.json'), 'utf8'));
+  } catch {}
+
+  const cwdNorm = cwd.toLowerCase().replace(/\\/g, '/');
+  const cwdBase = path.basename(cwdNorm); // 例 "myproject"
+
+  // SFTP 用 local_base 精準比對
+  let sftpHit = null;
+  for (const [name, cfg] of Object.entries(sftpPresets)) {
+    const lb = (cfg.local_base || '').toLowerCase().replace(/\\/g, '/');
+    if (!lb) continue;
+    if (cwdNorm === lb || cwdNorm.startsWith(lb + '/') || lb.endsWith('/' + cwdBase) || lb.endsWith(cwdBase)) {
+      sftpHit = name;
+      break;
+    }
+  }
+
+  // DB 用 preset 名 vs cwd basename 模糊比對（去底線/連字號歧異）
+  const baseSimple = cwdBase.replace(/[-_]/g, '');
+  let dbHit = null;
+  for (const name of Object.keys(dbConnections)) {
+    const ns = name.toLowerCase().replace(/[-_]/g, '');
+    if (baseSimple.includes(ns) || ns.includes(baseSimple)) {
+      dbHit = name;
+      break;
+    }
+  }
+
+  if (!dbHit && !sftpHit) return null;
+  return { db: dbHit, sftp: sftpHit };
+}
+
 // === MCP heartbeat 偵測（已知會寫 heartbeat 的 server） ===
 const KNOWN_MCP_SERVERS = ['project-migration-assistant-pro'];
 const MCP_BEAT_FRESH_MS = 20000;   // heartbeat 視為新鮮的閾值
@@ -197,6 +259,20 @@ async function main() {
     }
   } catch (e) {}
 
+  // 0.5 Preset 自動建議（依 cwd 推 DB/SFTP preset）
+  try {
+    const presets = suggestPresets(cwd);
+    if (presets) {
+      const lines = [];
+      if (presets.db) lines.push(`  → set_database({ preset: "${presets.db}" })`);
+      if (presets.sftp) lines.push(`  → sftp_connect({ preset: "${presets.sftp}" })`);
+      output.push(
+        `[Preset] 偵測到當前專案對應 preset，需要 DB / SFTP 時直接用 preset 載入（不必再列 host/user/password）：\n` +
+        lines.join('\n')
+      );
+    }
+  } catch (e) {}
+
   try {
     const memDir = findProjectMemoryDir();
 
@@ -233,6 +309,32 @@ async function main() {
     }
 
     // 5. Hook 投訴偵測（所有專案都提醒，MCP_Server 顯示詳情）
+    //    各 pattern 對應的「具體避免方式」— 讓 Claude 不只看到「最近被投訴 N 次」，還知道為什麼會被擋與怎麼閃避
+    const PATTERN_TIPS = {
+      verification_cheat_detect:
+        '驗證捷徑被擋。避免：① 不准 mock window.confirm/open/fetch/print/alert/location 或 localStorage auth bypass；② browser_evaluate 不准直呼業務動詞（用 click 觸發 UI flow）；③ 不准空 catch / `except: pass` / `|| true` / PHP `@` 抑制錯誤；④ DML 後必須跑 SELECT 驗證才能宣告成功；⑤ 不准硬編 PASS/OK 或讓 mock 只回 true。',
+      screenshot_wrong_path:
+        'Playwright 截圖路徑錯。修法：browser_take_screenshot / browser_interact 的截圖一律存進 screenshot/ 目錄，不放專案根目錄。',
+      exact_same_call:
+        '完全相同 args 重複呼叫被擋（門檻 5 / browser_wait_for 9 / _harness 12）。修法：等不到 selector 就改策略不要再 wait；fetch 內容無變化先讀本地 cache；run_php_script 同檔 12 次表示測試發散，回頭看任務。',
+      grep_php_symbol:
+        'Grep 搜 PHP class/method 被擋。一律用 class_method_lookup / symbol_index / find_usages / trace_logic。Grep 留給變數名/字串/SQL 表名/註解。',
+      grep_read_same_php_file:
+        '同一 PHP 檔 Grep+Read 拼湊 3+ 次。直接 class_method_lookup 拿整段 method，或 symbol_index 列檔內結構。',
+      bash_wrong_tool:
+        '用 Bash 做 MCP 工具該做的事。DB → execute_sql、PHP → run_php_script、curl → send_http_request、SFTP/SSH → mcp 工具。',
+      css_inspect_gate:
+        '寫 CSS !important 或回報跑版前未跑 inspect。先 css_computed_winner / css_specificity_check / css_inspect 取證再改。',
+      assumption_in_write:
+        '寫入前的 AI input 含「我假設/應該是/猜測」等不確定語句。停下，先問使用者確認再動手。',
+      ambiguous_ui_complaint:
+        '使用者只給「跑版/壞了」+ 截圖就直接動工具。先反問 1 句確認層級（layout / trigger / data / interaction）再動手。',
+      ui_verify_mismatch:
+        '改完前端互動檔卻用 run_php_code echo/var_dump 驗證。改用 browser_interact 端到端，PHP 無法驗 Vue reactivity / 點擊。',
+      git_first_for_dependencies:
+        '查「誰用了 X / 砍 X 要改哪些」用了 git log/blame/show。依賴是當前狀態問題不是歷史問題；改用 find_usages / find_dependencies / Grep 字串。',
+    };
+
     try {
       const complaintsPath = path.join(HOME, '.claude', 'hook-complaints.jsonl');
       if (fs.existsSync(complaintsPath)) {
@@ -241,13 +343,15 @@ async function main() {
           try { return JSON.parse(l).status === 'pending'; } catch { return false; }
         });
         if (pending.length > 0) {
+          // pattern 分類統計（所有專案共用，給後面的具體建議用）
+          const byPattern = {};
+          pending.forEach(l => {
+            try { const e = JSON.parse(l); byPattern[e.pattern] = (byPattern[e.pattern] || 0) + 1; } catch {}
+          });
+
           const isMcpProject = cwd.toLowerCase().includes('mcp') && cwd.toLowerCase().includes('server');
           if (isMcpProject) {
-            // MCP_Server：顯示詳情 + pattern 分類統計（避免使用者只看到尾 5 筆而忽略累積問題）
-            const byPattern = {};
-            pending.forEach(l => {
-              try { const e = JSON.parse(l); byPattern[e.pattern] = (byPattern[e.pattern] || 0) + 1; } catch {}
-            });
+            // MCP_Server：顯示詳情 + pattern 分類統計
             const breakdown = Object.entries(byPattern)
               .sort((a, b) => b[1] - a[1])
               .map(([p, n]) => `  ${String(n).padStart(3)} × ${p}`)
@@ -267,6 +371,20 @@ async function main() {
             // 其他專案：簡短提醒
             output.push(
               `\n[Hook Complaints] 📢 有 ${pending.length} 筆 hook 投訴待處理。請到 MCP_Server 專案執行 /hook_complaints 審查。`
+            );
+          }
+
+          // 5b. 跨專案通用：對近期高頻 pattern 給具體閃避建議（門檻 ≥3 次才提醒，避免噪音）
+          const tipsToShow = Object.entries(byPattern)
+            .filter(([p, n]) => n >= 3 && PATTERN_TIPS[p])
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 4); // 最多 4 條
+          if (tipsToShow.length > 0) {
+            const tipLines = tipsToShow.map(([p, n]) =>
+              `  • ${p} (${n}×) — ${PATTERN_TIPS[p]}`
+            ).join('\n');
+            output.push(
+              `\n[Hook Tips] 🎯 近期高頻投訴的避免方式（這個 session 開始就請遵守）：\n` + tipLines
             );
           }
         }
