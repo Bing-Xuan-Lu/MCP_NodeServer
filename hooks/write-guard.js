@@ -182,6 +182,18 @@ process.stdin.on('end', () => {
     const isAllowed = ALLOWED_PATH_PATTERNS.some(p => p.test(normalizedPath));
     if (isAllowed) { process.exit(0); }
 
+    // ── Meta-dev 自我豁免 ─────────────────────────────────
+    // 寫入目標位於 MCP_Server 自身（改 hook / Skill / 工具本身）時：
+    //   - 跳過 Prompt Guard 連動阻擋
+    //   - 跳過批次編輯上限
+    // 仍保留風險警告、敏感檔案警告、Prompt Injection 偵測（這些是純資訊性提醒）。
+    // 理由：本 hook 是用來保護下游客戶專案的，meta-dev MCP 本身時這些 BLOCK 反成阻礙。
+    const SELF_REPO_PATTERNS = [
+      /[\\/]MCP_NodeServer[\\/]/i,
+      /[\\/]MCP_Server[\\/]/i,
+    ];
+    const isMetaDev = SELF_REPO_PATTERNS.some(p => p.test(filePath));
+
     const tiers = loadRiskTiers();
     const isHigh   = matchTier(filePath, tiers.high);
     const isMedium = !isHigh && matchTier(filePath, tiers.medium);
@@ -254,7 +266,7 @@ process.stdin.on('end', () => {
       }
     }
 
-    if (state.promptGuardActive && !isSubAgent && !harnessExempt) {
+    if (state.promptGuardActive && !isSubAgent && !harnessExempt && !isMetaDev) {
       const reasonLine = state.promptGuardReason
         ? `  判斷依據：${state.promptGuardReason}\n`
         : '';
@@ -271,12 +283,19 @@ process.stdin.on('end', () => {
       process.exit(2);
     }
 
+    // 印 Meta-dev 豁免訊息（若實際豁免了某個會 BLOCK 的條件）
+    if (isMetaDev && state.promptGuardActive && !isSubAgent && !harnessExempt) {
+      process.stdout.write(
+        '[Write Guard] 🔓 MCP_Server meta-dev 豁免 — Prompt Guard active 但本檔放行（改 hook/Skill/工具本身）\n'
+      );
+    }
+
     // ── 方案 B：批次編輯限制 ────────────────────────────
     const normalizedFile = filePath.toLowerCase();
     if (!state.files.includes(normalizedFile)) {
       state.files.push(normalizedFile);
     }
-    if (state.files.length > BATCH_LIMIT && !state.batchAcked) {
+    if (state.files.length > BATCH_LIMIT && !state.batchAcked && !isMetaDev) {
       // 擋第一次 → 標記 batchAcked，下次放行（警告已送達使用者）
       state.batchAcked = true;
       saveState(state);
