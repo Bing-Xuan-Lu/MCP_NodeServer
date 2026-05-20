@@ -99,15 +99,17 @@ export const definitions = [
     description:
       "抓 Google Sheet cell 的 FORMATTED_VALUE（套用 number format / date format / currency 之後的顯示字串）。" +
       "與 gsheet_fetch_with_state 的 UNFORMATTED_VALUE 互補：raw 1234.5 vs 顯示 '1,234.50'、raw 0.05 vs 顯示 '5%'、raw 45432 vs 顯示 '2024/05/12'。" +
-      "用於 debug「Sheet 與 PHP 列印頁顯示對不上」類問題：兩邊都是已格式化字串，要比的就是 FORMATTED。",
+      "用於 debug「Sheet 與 PHP 列印頁顯示對不上」類問題：兩邊都是已格式化字串，要比的就是 FORMATTED。\n" +
+      "⚠️ spreadsheet_id 與 read_range **必填**，無預設值；空 args `{}` 必定失敗。\n" +
+      "❓ 若不知道有哪些 worksheet 名稱 → 先呼叫 `gsheet_get_metadata` 列出，再回頭呼叫本工具。",
     inputSchema: {
       type: "object",
       properties: {
-        spreadsheet_id: { type: "string", description: "Google Sheet ID" },
+        spreadsheet_id: { type: "string", description: "Google Sheet ID（網址中的 /d/{this}/edit；必填）" },
         credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH（未設則必填）" },
         read_range: {
           type: ["string", "array"],
-          description: "要讀的 range（單一字串或陣列），例：'web!A1:Z200' 或 [\"web!A1:Z10\", \"data!B5\"]",
+          description: "要讀的 range（必填）。格式：'<worksheet>!<A1notation>'，例：'web!A1:Z200' 或 ['web!A1:Z10', 'data!B5']。**worksheet 名稱不可省略**，不知道就先用 gsheet_get_metadata 查。",
         },
       },
       required: ["spreadsheet_id", "read_range"],
