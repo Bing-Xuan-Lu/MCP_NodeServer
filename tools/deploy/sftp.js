@@ -1,5 +1,6 @@
 import SftpClient from "ssh2-sftp-client";
 import { Client as SSH2Client } from "ssh2";
+import crypto from "crypto";
 import fs from "fs";
 import fsP from "fs/promises";
 import path from "path";
@@ -83,9 +84,12 @@ function getSnapshot(host, remotePath) {
 
 /**
  * 上傳前 drift 檢查
- * @returns {{ ok: true } | { ok: false, reason: string, hint: string[] }}
+ * @param {object} config  SFTP 連線設定（含 host，供 hash 比對重用連線）
+ * @param {string} [localAbs]  本機檔案絕對路徑（無快照時用來算 hash 比對）
+ * @returns {{ ok: true } | { ok: true, skipUpload: true, reason: string } | { ok: false, reason: string, hint: string[] }}
  */
-async function checkRemoteDrift(client, host, remotePath, force) {
+async function checkRemoteDrift(client, config, remotePath, force, localAbs) {
+  const host = config.host;
   let remoteStat;
   try {
     remoteStat = await client.stat(remotePath);
@@ -99,6 +103,27 @@ async function checkRemoteDrift(client, host, remotePath, force) {
 
   if (!snap) {
     if (force) return { ok: true, noSnapshot: true };
+
+    // 無 session 快照（常見於重開 session 後首次上傳）→ 改用 hash 即時比對，
+    // 不再盲目擋下要求先 download。只有偵測到遠端有本機沒有的「內容差異」才擋。
+    if (localAbs) {
+      const h = await compareByHash(client, config, remotePath, localAbs);
+      if (h.same)     return { ok: true, skipUpload: true, reason: "hashSame" };  // 內容完全相同 → 免上傳
+      if (h.eolOnly)  return { ok: true, hashEolOnly: true };                     // 僅換行差異 → 放行覆蓋
+      if (h.contentDiff) {
+        return {
+          ok: false,
+          reason: `⚠️ 遠端有本機沒有的改動（hash 比對：內容不同）：${remotePath}`,
+          hint: [
+            `可能有第三方（或其他 session）修改過此檔案`,
+            `先 sftp_download 取回遠端版本，用 file_diff 看行差並合併`,
+            `若確定要覆蓋遠端版本，加上 force: true 重新呼叫`,
+          ],
+        };
+      }
+      // h.error → hash 比對失敗，退回原本保守擋下
+    }
+
     return {
       ok: false,
       reason: `⚠️ 遠端已有此檔案但本 session 未曾下載過快照，可能覆蓋他人改動：${remotePath}`,
@@ -311,6 +336,33 @@ export const definitions = [
     },
   },
   {
+    name: "sftp_diff_hash",
+    description:
+      "用 MD5 比對本機與遠端檔案是否相同，不下載全文（遠端跑 md5sum，本機算 crypto，只傳 hash）。" +
+      "部署前掃 drift 的首選：一次 SSH 比對整批，只有回報「內容不同」的檔案才需要再 sftp_download + file_diff 看行差。" +
+      "結果分四類：identical（相同）/ content_diff（內容不同）/ eol_only（僅換行 CRLF/LF 差異）/ missing（單邊缺檔）。" +
+      "支援 glob pattern 與 preset 路徑映射（同 sftp_upload_batch）。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              local_path:  { type: "string", description: "本機路徑（相對 basePath 或 preset local_base）。支援 glob（如 admin/**/*.php）" },
+              remote_path: { type: "string", description: "遠端絕對路徑（有 preset 且省略時自動用 remote_base + local_path 推算）" },
+            },
+            required: ["local_path"],
+          },
+          description: "比對項目陣列",
+        },
+        show_identical: { type: "boolean", description: "是否在輸出列出相同的檔案（預設 false，只列有差異/缺檔的）" },
+      },
+      required: ["items"],
+    },
+  },
+  {
     name: "sftp_delete_batch",
     description: "批次刪除多個遠端檔案或目錄（共用一條連線，減少 tool call）",
     inputSchema: {
@@ -444,6 +496,140 @@ async function createClient(config) {
   }
   await client.connect(opts);
   return client;
+}
+
+// ============================================
+// 內部：執行單一 SSH 指令（hash 比對用，不經過 ssh_exec 安全層）
+// 僅供本模組內部唯讀指令（md5sum）使用
+// ============================================
+function runSSHCommand(config, command, timeoutSec = 60) {
+  return new Promise((resolve) => {
+    const conn = new SSH2Client();
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        conn.end();
+        resolve({ ok: false, error: `SSH 指令逾時（${timeoutSec}s）` });
+      }
+    }, timeoutSec * 1000);
+
+    conn.on("ready", () => {
+      conn.exec(command, (err, stream) => {
+        if (err) {
+          settled = true;
+          clearTimeout(timer);
+          conn.end();
+          resolve({ ok: false, error: err.message });
+          return;
+        }
+        let stdout = "";
+        let stderr = "";
+        stream.on("data", (d) => { stdout += d.toString(); });
+        stream.stderr.on("data", (d) => { stderr += d.toString(); });
+        stream.on("close", (code) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          conn.end();
+          resolve({ ok: true, code, stdout, stderr });
+        });
+      });
+    });
+    conn.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok: false, error: err.message });
+    });
+
+    const connOpts = { host: config.host, port: config.port || 22, username: config.user };
+    if (config.privateKey) connOpts.privateKey = config.privateKey;
+    else connOpts.password = config.password || "";
+    conn.connect(connOpts);
+  });
+}
+
+// ============================================
+// 內部：計算本機檔案的 raw + normalized(去 \r) MD5
+// ============================================
+function localHashes(buf) {
+  const raw = crypto.createHash("md5").update(buf).digest("hex");
+  // 去除 CR（\r = 0x0d）後再算，用來偵測「僅換行差異」
+  const normalized = crypto
+    .createHash("md5")
+    .update(Buffer.from(buf.filter((b) => b !== 0x0d)))
+    .digest("hex");
+  return { raw, normalized };
+}
+
+// shell 單引號安全包裝
+function shQuote(p) {
+  return `'${String(p).replace(/'/g, "'\\''")}'`;
+}
+
+// ============================================
+// 內部：優先重用 SFTP 已開啟的底層 SSH 連線執行指令（省 handshake）
+// 取不到底層 client 時退回 runSSHCommand 另開連線
+// ============================================
+function execOnClient(sftpClient, config, command, timeoutSec = 60) {
+  const ssh = sftpClient && sftpClient.client;
+  if (ssh && typeof ssh.exec === "function") {
+    return new Promise((resolve) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) { settled = true; resolve({ ok: false, error: `SSH 指令逾時（${timeoutSec}s）` }); }
+      }, timeoutSec * 1000);
+      try {
+        ssh.exec(command, (err, stream) => {
+          if (err) {
+            if (!settled) { settled = true; clearTimeout(timer); resolve({ ok: false, error: err.message }); }
+            return;
+          }
+          let stdout = "", stderr = "";
+          stream.on("data", (d) => { stdout += d.toString(); });
+          stream.stderr.on("data", (d) => { stderr += d.toString(); });
+          stream.on("close", (code) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve({ ok: true, code, stdout, stderr });
+          });
+        });
+      } catch (e) {
+        if (!settled) { settled = true; clearTimeout(timer); resolve({ ok: false, error: e.message }); }
+      }
+    });
+  }
+  return runSSHCommand(config, command, timeoutSec);
+}
+
+// ============================================
+// 內部：用 hash 即時比對本機 vs 遠端單檔（無 session 快照時的判斷依據）
+// @returns {{ same:true } | { eolOnly:true } | { contentDiff:true } | { error:string }}
+// ============================================
+async function compareByHash(sftpClient, config, remotePath, localAbs) {
+  let localBuf;
+  try {
+    localBuf = await fsP.readFile(localAbs);
+  } catch (e) {
+    return { error: `讀本機失敗（${e.message}）` };
+  }
+  const L = localHashes(localBuf);
+  const q = shQuote(remotePath);
+  const cmd =
+    `if [ -f ${q} ]; then ` +
+    `r=$(md5sum < ${q} | cut -d' ' -f1); ` +
+    `n=$(tr -d '\\r' < ${q} | md5sum | cut -d' ' -f1); ` +
+    `echo "$r|$n"; else echo "MISSING"; fi`;
+  const res = await execOnClient(sftpClient, config, cmd, 60);
+  if (!res.ok) return { error: res.error };
+  const out = (res.stdout || "").trim();
+  if (!out || out === "MISSING") return { error: "遠端 md5sum 無輸出（可能無 md5sum 或無讀取權限）" };
+  const [r, n] = out.split("|").map((s) => s.trim());
+  if (r === L.raw) return { same: true };
+  if (n === L.normalized) return { eolOnly: true };
+  return { contentDiff: true };
 }
 
 // ============================================
@@ -677,9 +863,20 @@ export async function handle(name, args) {
           content: [{ type: "text", text: `✅ 目錄上傳完成\n本機: ${localAbs}\n遠端: ${remotePath}${presetNote}` }],
         };
       } else {
-        // Drift 偵測（單檔）
-        const drift = await checkRemoteDrift(client, check.config.host, remotePath, args.force);
+        // Drift 偵測（單檔）—— 無快照時內含 hash 即時比對
+        const drift = await checkRemoteDrift(client, check.config, remotePath, args.force, localAbs);
         if (!drift.ok) return errorResp(drift.reason, drift.hint);
+
+        // 無快照 + hash 比對判定內容相同 → 直接跳過上傳，順便刷新快照
+        if (drift.skipUpload) {
+          try {
+            const curStat = await client.stat(remotePath);
+            saveSnapshot(check.config.host, remotePath, curStat);
+          } catch {}
+          return {
+            content: [{ type: "text", text: `🔄 內容相同（hash 一致）已跳過上傳\n本機: ${localAbs}\n遠端: ${remotePath}${presetNote}` }],
+          };
+        }
 
         // force=true 內容比對：避免無聲覆蓋遠端他人改動
         let cmp = null;
@@ -712,6 +909,7 @@ export async function handle(name, args) {
         if (drift.firstUpload) flags.push("🆕 首次上傳");
         if (drift.drifted) flags.push("⚠️ 已強制覆蓋（遠端有變動）");
         if (drift.noSnapshot) flags.push("⚠️ 已強制覆蓋（無快照）");
+        if (drift.hashEolOnly) flags.push("↩️ 無快照 hash 比對：僅換行差異，已覆蓋");
         if (cmp && !cmp.same && cmp.lineDiff) {
           flags.push(`📊 差異 ${cmp.remoteBytes}→${cmp.localBytes} bytes，行 +${cmp.lineDiff.added}/-${cmp.lineDiff.removed}`);
         } else if (cmp && cmp.skip) {
@@ -906,11 +1104,22 @@ export async function handle(name, args) {
             results.push(`✅ ${localPath} → ${remotePath}`);
             okCount++;
           } else {
-            // Drift 偵測（單檔）
-            const drift = await checkRemoteDrift(client, check.config.host, remotePath, args.force);
+            // Drift 偵測（單檔）—— 無快照時內含 hash 即時比對
+            const drift = await checkRemoteDrift(client, check.config, remotePath, args.force, localAbs);
             if (!drift.ok) {
-              results.push(`⚠️ ${localPath} → ${remotePath}：遠端有變動（未加 force），已略過`);
+              results.push(`⚠️ ${localPath} → ${remotePath}：${drift.reason.includes("內容不同") ? "遠端有本機沒有的改動（hash 不同），已略過" : "遠端有變動（未加 force），已略過"}`);
               skipCount++;
+              continue;
+            }
+
+            // 無快照 + hash 判定內容相同 → 跳過上傳
+            if (drift.skipUpload) {
+              try {
+                const curStat = await client.stat(remotePath);
+                saveSnapshot(check.config.host, remotePath, curStat);
+              } catch {}
+              results.push(`🔄 ${localPath} → ${remotePath}：內容相同（hash 一致）跳過上傳`);
+              sameContentCount++;
               continue;
             }
 
@@ -940,7 +1149,7 @@ export async function handle(name, args) {
               const newStat = await client.stat(remotePath);
               saveSnapshot(check.config.host, remotePath, newStat);
             } catch {}
-            let tag = drift.firstUpload ? " 🆕" : (drift.drifted || drift.noSnapshot) ? " ⚠️覆蓋" : "";
+            let tag = drift.firstUpload ? " 🆕" : (drift.drifted || drift.noSnapshot) ? " ⚠️覆蓋" : drift.hashEolOnly ? " ↩️僅換行" : "";
             if (cmp && !cmp.same && cmp.lineDiff) {
               tag += ` 📊${cmp.remoteBytes}→${cmp.localBytes}B/行+${cmp.lineDiff.added}-${cmp.lineDiff.removed}`;
             }
@@ -1025,6 +1234,127 @@ export async function handle(name, args) {
       return errorResp(`SFTP 連線失敗：${err.message}`, ["確認 SFTP 連線設定是否正確"]);
     } finally {
       if (client) await client.end().catch(() => {});
+    }
+  }
+
+  // ── sftp_diff_hash ──
+  if (name === "sftp_diff_hash") {
+    const check = requireSftp();
+    if (!check.ok) return check.error;
+
+    if (!args.items || args.items.length === 0) {
+      return errorResp("items 陣列不可為空。");
+    }
+
+    try {
+      // 1) glob 展開（同 sftp_upload_batch 邏輯）
+      const expanded = [];
+      for (const item of args.items) {
+        if (!item || typeof item.local_path !== "string" || !item.local_path) continue;
+        if (/[*?{]/.test(item.local_path)) {
+          const localBase = check.config?._local_base || "";
+          const prefix = localBase
+            ? resolveSecurePath(localBase).replace(/\\/g, "/")
+            : resolveSecurePath(".").replace(/\\/g, "/");
+          const fullPattern = `${prefix}/${item.local_path}`.replace(/\\/g, "/");
+          const matched = await glob(fullPattern, { nodir: true });
+          for (const m of matched) {
+            expanded.push({ local_path: path.relative(prefix, m).replace(/\\/g, "/") });
+          }
+        } else {
+          expanded.push(item);
+        }
+      }
+
+      // 2) 解析路徑配對 + 算本機 hash
+      const pairs = [];
+      for (const item of expanded) {
+        const { localPath, remotePath } = resolvePresetPaths(item.local_path, item.remote_path, check.config);
+        if (!remotePath) {
+          pairs.push({ localPath, remotePath: null, status: "no_remote_path" });
+          continue;
+        }
+        let localAbs;
+        try {
+          localAbs = resolveSecurePath(localPath);
+        } catch {
+          pairs.push({ localPath, remotePath, status: "local_resolve_error" });
+          continue;
+        }
+        if (!fs.existsSync(localAbs)) {
+          pairs.push({ localPath, remotePath, localMissing: true });
+          continue;
+        }
+        const buf = await fsP.readFile(localAbs);
+        pairs.push({ localPath, remotePath, ...localHashes(buf) });
+      }
+
+      const valid = pairs.filter((p) => p.remotePath && !p.localMissing && p.raw);
+      if (valid.length === 0 && pairs.every((p) => !p.remotePath)) {
+        return errorResp("沒有可比對的項目（無法推算 remote_path）。", [
+          "明確指定 remote_path，或用含 remote_base 的 preset 連線",
+        ]);
+      }
+
+      // 3) 一條 SSH 指令算所有遠端 raw + normalized MD5
+      const remoteMap = new Map(); // remotePath → { raw, norm } | { missing: true }
+      if (valid.length > 0) {
+        const fileList = valid.map((p) => shQuote(p.remotePath)).join(" ");
+        // 對每檔輸出 "path|<raw>|<norm>"；不存在輸出 "path|MISSING|MISSING"
+        const remoteCmd =
+          `for f in ${fileList}; do ` +
+          `if [ -f "$f" ]; then ` +
+          `r=$(md5sum < "$f" | cut -d' ' -f1); ` +
+          `n=$(tr -d '\\r' < "$f" | md5sum | cut -d' ' -f1); ` +
+          `echo "$f|$r|$n"; ` +
+          `else echo "$f|MISSING|MISSING"; fi; done`;
+        const res = await runSSHCommand(check.config, remoteCmd, 120);
+        if (!res.ok) {
+          return errorResp(`遠端 md5sum 執行失敗：${res.error}`, [
+            "確認遠端為 Linux 且有 md5sum（coreutils 標配）",
+            "確認 sftp_connect 帳號對這些路徑有讀取權限",
+          ]);
+        }
+        for (const line of res.stdout.split("\n")) {
+          const idx = line.lastIndexOf("|", line.lastIndexOf("|") - 1);
+          if (idx < 0) continue;
+          const p = line.slice(0, idx).trim();
+          const rest = line.slice(idx + 1).split("|");
+          if (rest.length < 2) continue;
+          const [r, n] = rest;
+          if (r.trim() === "MISSING") remoteMap.set(p, { missing: true });
+          else remoteMap.set(p, { raw: r.trim(), norm: n.trim() });
+        }
+      }
+
+      // 4) 比對分類
+      const buckets = { identical: [], content_diff: [], eol_only: [], remote_missing: [], local_missing: [], error: [] };
+      for (const p of pairs) {
+        if (!p.remotePath) { buckets.error.push(`${p.localPath}（無法推算 remote_path）`); continue; }
+        if (p.localMissing) { buckets.local_missing.push(`${p.localPath} → ${p.remotePath}`); continue; }
+        if (p.status === "local_resolve_error") { buckets.error.push(`${p.localPath}（本機路徑解析失敗）`); continue; }
+        const rm = remoteMap.get(p.remotePath);
+        if (!rm || rm.missing) { buckets.remote_missing.push(`${p.localPath} → ${p.remotePath}`); continue; }
+        if (rm.raw === p.raw) { buckets.identical.push(`${p.localPath}`); continue; }
+        if (rm.norm === p.normalized) { buckets.eol_only.push(`${p.localPath} → ${p.remotePath}`); continue; }
+        buckets.content_diff.push(`${p.localPath} → ${p.remotePath}`);
+      }
+
+      // 5) 格式化輸出
+      const out = [];
+      const total = pairs.length;
+      const diffCount = buckets.content_diff.length + buckets.eol_only.length + buckets.remote_missing.length + buckets.local_missing.length;
+      out.push(`🔍 Hash 比對：${total} 檔，${buckets.identical.length} 相同 / ${diffCount} 有差異`);
+      if (buckets.content_diff.length) out.push(`\n❗ 內容不同（${buckets.content_diff.length}）— 需 sftp_download + file_diff 看行差：\n  ${buckets.content_diff.join("\n  ")}`);
+      if (buckets.eol_only.length) out.push(`\n↩️ 僅換行差異 CRLF/LF（${buckets.eol_only.length}）— 內容相同，可視為一致：\n  ${buckets.eol_only.join("\n  ")}`);
+      if (buckets.remote_missing.length) out.push(`\n📭 遠端缺檔（${buckets.remote_missing.length}）— 尚未部署：\n  ${buckets.remote_missing.join("\n  ")}`);
+      if (buckets.local_missing.length) out.push(`\n📥 本機缺檔（${buckets.local_missing.length}）：\n  ${buckets.local_missing.join("\n  ")}`);
+      if (buckets.error.length) out.push(`\n⚠️ 無法比對（${buckets.error.length}）：\n  ${buckets.error.join("\n  ")}`);
+      if (args.show_identical && buckets.identical.length) out.push(`\n✅ 相同（${buckets.identical.length}）：\n  ${buckets.identical.join("\n  ")}`);
+
+      return { content: [{ type: "text", text: out.join("\n") }] };
+    } catch (err) {
+      return errorResp(`hash 比對失敗：${err.message}`, ["確認 SFTP 連線設定與遠端路徑"]);
     }
   }
 

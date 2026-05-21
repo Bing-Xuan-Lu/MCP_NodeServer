@@ -38,7 +38,7 @@ MCP_NodeServer/
 │   │   ├── database.js  ← set_database, load_db_connection, get_current_db, get_db_schema, execute_sql, get_db_schema_batch, execute_sql_batch, schema_diff, mysql_log_tail
 │   │   └── gsheet.js    ← gsheet_fetch_with_state（含 auto_recalc_check polling + preserve_validation 旗標：跳過空字串寫入以保留 data validation/dropdown）, gsheet_xlookup_trace, trace_gsheet_formula, gsheet_get_metadata, gsheet_fetch_formatted（gspread 一條龍 + 查表鏈遞迴展開 + markdown 公式追蹤報告 + worksheet metadata 列舉 + FORMATTED_VALUE 顯示字串抓取，python_runner 容器）
 │   ├── deploy/          ← 部署與版控工具（遠端操作、DB migration）
-│   │   ├── sftp.js      ← sftp_connect, sftp_upload, sftp_download, sftp_list, sftp_delete, sftp_*_batch, sftp_preset
+│   │   ├── sftp.js      ← sftp_connect, sftp_upload, sftp_download, sftp_list, sftp_delete, sftp_*_batch, sftp_preset, sftp_diff_hash（MD5 比對本機 vs 遠端不下載全文；分類 identical/content_diff/eol_only/missing）。sftp_upload 在「無 session 快照」時改用 hash 即時比對：內容相同免上傳、僅換行差異放行、真內容不同才擋（解重開 session 被盲擋問題）
 │   │   ├── php.js       ← run_php_script, run_php_code, run_php_test, send_http_request（支援 body_filter regex 在 tool 端 grep 過濾，避免大 response 落檔 fallback）, tail_log, send_http_requests_batch, run_php_script_batch
 │   │   ├── git.js       ← git_status, git_diff, git_log, git_stash_ops
 │   │   ├── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
