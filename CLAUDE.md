@@ -73,7 +73,8 @@ MCP_NodeServer/
 │   ├── write-guard.js   ← PreToolUse(Write|Edit)：敏感檔案寫入警告 + JS/CSS 修改時提醒 bump version
 │   ├── llm-judge.js     ← PostToolUse(Write|Edit)：高/中風險檔案自我審查清單 + PHP docker lint + JS/CSS bump version 提醒
 │   ├── user-prompt-guard.js ← UserPromptSubmit：模糊指令偵測（全域強制）+ 場景缺上下文提醒（前端/後端/QC/Playwright）
-│   └── skill-router.js  ← UserPromptSubmit：Skill 關鍵字偵測，依分數自動建議相關 Skill
+│   ├── skill-router.js  ← UserPromptSubmit：Skill 關鍵字偵測，依分數自動建議相關 Skill
+│   └── verify-pass-guard.js ← Stop：回合結束掃 assistant 最後訊息，攔「N/N PASS / 全部通過」但無逐行/逐格明細證據的驗證偷懶（合計對 ≠ 明細對；防迴圈：stop_hook_active 放行 + 同宣告去重 + 每 session 上限 3 次）
 ├── skills/index.js      ← MCP Prompts 路由（注意：小寫 skills，不是 Skills）
 └── Skills/              ← Skill MD 檔
     ├── *_agent.md       ← MCP Prompts 內容

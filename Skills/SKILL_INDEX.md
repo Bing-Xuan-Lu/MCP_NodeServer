@@ -67,6 +67,7 @@
 - `/claude_sync` — 同步本機 Claude 狀態（memory + hooks）與專案 Git（pull/push/status，範圍 all/memory/hooks/global）
 - `/memory_audit` — 審計與整理 Claude 記憶系統（死連結、孤兒、重複、過時偵測）
 - `/session_audit` — 跨 session 趨勢健檢：掃 JSONL 統計工具熱點、重複呼叫、token 燃燒、檔案熱區，產出 backlog
+- `/session_recall` — 跨對話回顧：回顧某一場 session 做了什麼/做完沒/卡在哪/動過哪些檔，或跨專案搜關鍵字找場次（唯讀）
 - `/settings_cleanup` — 掃描並整理 settings.json 權限規則，合併重複、移除垃圾
 - `/hook_complaints` — 查閱與處理其他專案 session 回報的 hook 誤擋紀錄
 - `/mcp_pull_sync` — git pull 後同步設定（npm install、Skill 部署、Hook 檢查、重啟提示）
