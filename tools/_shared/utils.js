@@ -309,6 +309,52 @@ export function safeJsonParse(jsonStr, fallback = null) {
 }
 
 /**
+ * 計算 CSS selector 的 specificity。
+ * 簡化版：分別計 ID(a) / class+attr+pseudo-class(b) / type+pseudo-element(c)，
+ * 回傳 { a, b, c, score, text }。score = a*100 + b*10 + c。
+ * （:not/:is/:where/:has 本身不計，引數內容不展開計算——與 DevTools 近似但非完全等價）
+ *
+ * @param {string} selectorStr - 單一 selector（不含逗號分隔）
+ * @returns {{a:number,b:number,c:number,score:number,text:string}}
+ */
+export function calcSpecificity(selectorStr) {
+  let s = (selectorStr || "").trim();
+
+  // 移除 ::pseudo-elements 先計數
+  const pseudoElements = (s.match(/::(before|after|first-line|first-letter|marker|placeholder|selection|backdrop)/g) || []).length;
+  s = s.replace(/::(before|after|first-line|first-letter|marker|placeholder|selection|backdrop)/g, "");
+
+  // 移除屬性選擇器，先計數
+  const attrs = (s.match(/\[[^\]]*\]/g) || []).length;
+  s = s.replace(/\[[^\]]*\]/g, "");
+
+  // 計算 ID
+  const ids = (s.match(/#[a-zA-Z_-][\w-]*/g) || []).length;
+
+  // 計算 pseudo-classes（:hover, :nth-child() 等，但排除 :not/:is/:where/:has）
+  const pseudoClasses = (s.match(/:(?!not|is|where|has)[a-zA-Z][\w-]*(\([^)]*\))?/g) || []).length;
+
+  // 計算 class selectors
+  const classes = (s.match(/\.[a-zA-Z_-][\w-]*/g) || []).length;
+
+  // 計算 type selectors（標籤名）— 先清掉已計數的部分
+  let cleaned = s
+    .replace(/#[a-zA-Z_-][\w-]*/g, "")
+    .replace(/\.[a-zA-Z_-][\w-]*/g, "")
+    .replace(/:[a-zA-Z][\w-]*(\([^)]*\))?/g, "")
+    .replace(/[>+~\s,]/g, " ")
+    .replace(/\*/g, "")
+    .trim();
+  const types = cleaned.split(/\s+/).filter(t => t && /^[a-zA-Z]/.test(t)).length;
+
+  const a = ids;
+  const b = classes + attrs + pseudoClasses;
+  const c = types + pseudoElements;
+
+  return { a, b, c, score: a * 100 + b * 10 + c, text: `(${a},${b},${c})` };
+}
+
+/**
  * 正規化陣列參數：容忍 JSON 字串 / 單值 / undefined。
  * 用於 *_batch 工具避免「陣列被序列化成字串後被逐字元迭代」的 bug。
  *

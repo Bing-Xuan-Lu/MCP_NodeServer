@@ -127,7 +127,8 @@ MCP_NodeServer/
 │   ├── video.js         ← read_video（影片 → faster-whisper 字幕 + ffmpeg 關鍵幀，支援 MP4/MOV/MKV/WebM/AVI/M4V，python_runner 容器）
 │   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops（支援 container 參數走 Docker）
 │   ├── dom_compare.js   ← dom_compare（批次比對兩個 URL 的 CSS/HTML/JS 差異，需 Playwright）
-│   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage, browser_save_session, browser_restore_session（自帶 headless 瀏覽器，需 Playwright）
+│   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage（含 detectOverridden 死宣告偵測）, browser_save_session, browser_restore_session（自帶 headless 瀏覽器，需 Playwright）
+│   ├── print_layout.js  ← print_layout_test（列印版面測試：產真實分頁 PDF → poppler render 每頁 PNG → 頁圖 + 頁數 + 字體嵌入 + selector 落點，需 Playwright + python_runner）
 │   ├── image_diff.js    ← image_diff（設計稿 vs 截圖像素級比對，產生 diff 圖）
 │   ├── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
 │   ├── file_diff.js     ← file_diff（純 Node 雙檔 unified diff，零依賴；支援 project 參數）

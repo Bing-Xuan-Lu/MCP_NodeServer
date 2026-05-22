@@ -70,6 +70,8 @@ const TOOLS = {
   'css_specificity_check':  { dept:'CSS 分析', title:'CSS Specificity 分析', desc:'分析 CSS 檔案中所有包含目標 selector 的規則，回傳行號、specificity 分數、屬性清單。覆寫前先確認權重避免反覆迭代。', usage:'css_specificity_check {file:"...", selector:".imgbox"}', tools:[] },
   'css_computed_winner':    { dept:'CSS 分析', title:'CSS 規則勝出查詢', desc:'對活頁面查詢指定元素的某個 CSS property 最終由哪條規則勝出（類似 DevTools Computed 展開看來源），含所有競爭規則與 specificity。', usage:'css_computed_winner {url:"...", selector:".box", property:"grid-column"}', tools:['Playwright'] },
 
+  'print_layout_test':      { dept:'CSS 分析', title:'列印版面測試', desc:'用 Playwright 產真實分頁 PDF（走 Chromium 列印引擎，等同瀏覽器 Ctrl+P）→ 每頁 render 成 PNG 回傳供視覺檢查，附總頁數、字體是否嵌入、指定 selector 估算落在第幾頁。專治簽收貼底/元素跨頁切斷/多空白頁/掃 min-height 臨界值。內建 beforeprint 派發、printBackground、displayHeaderFooter。需 python_runner 容器（缺 poppler 自動補裝）。', usage:'print_layout_test {url:"...", selectors:["#signature"], displayHeaderFooter:true}', tools:['Playwright','python_runner'] },
+
   'class_method_lookup':    { dept:'PHP 分析', title:'PHP Class/Method 原始碼定位', desc:'給定 class 名稱 + method 名稱（可選），直接回傳函式完整原始碼（含行號），一次到位取代 Grep→Read 兩步。省略 method 則回傳 class 概覽。', usage:'class_method_lookup {project:"...", class_name:"news", method_name:"getAll"}', tools:[] },
 
   'symbol_index':           { dept:'PHP 分析', title:'PHP 符號索引建立', desc:'掃描 PHP 專案建立 AST 符號索引（class、method、function），快取 10 分鐘，供 find_usages / find_hierarchy / find_dependencies 使用。', usage:'symbol_index {project:"..."}', tools:[] },

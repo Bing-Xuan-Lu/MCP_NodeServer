@@ -45,6 +45,7 @@ const TOOL_MODULE_FILES = [
   "tools/browser/css_tools.js",
   "tools/browser/dom_compare.js",
   "tools/browser/playwright_tools.js",
+  "tools/browser/print_layout.js",
   "tools/data/database.js",
   "tools/data/gsheet.js",
   "tools/deploy/flyway.js",

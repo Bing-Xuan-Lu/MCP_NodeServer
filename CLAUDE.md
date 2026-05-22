@@ -45,8 +45,9 @@ MCP_NodeServer/
 │   │   └── flyway.js    ← flyway_info, flyway_migrate, flyway_validate, flyway_repair, flyway_baseline（需 dev-flyway Docker，選用）
 │   ├── browser/         ← 瀏覽器自動化與網頁檢查（UI testing、CSS 分析）
 │   │   ├── dom_compare.js ← dom_compare（批次比對兩個 URL 的 CSS/HTML/JS 差異；使用 browser_pool）
-│   │   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage, browser_save_session, browser_restore_session
-│   │   └── css_tools.js ← css_specificity_check, css_computed_winner（使用 browser_pool）
+│   │   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage（含 detectOverridden 死宣告偵測）, browser_save_session, browser_restore_session
+│   │   ├── css_tools.js ← css_specificity_check, css_computed_winner（使用 browser_pool）
+│   │   └── print_layout.js ← print_layout_test（列印版面測試：Playwright 產真實分頁 PDF → poppler render 每頁 PNG → 回傳頁圖 + 頁數 + 字體嵌入 + selector 落點；需 python_runner 容器，缺 poppler 自動補裝）
 │   ├── system/          ← 系統工具（多 Agent 協調、外部程式執行、程式碼分析）
 │   │   ├── python.js    ← run_python_script (Docker)
 │   │   ├── bookmarks.js ← Chrome 書籤管理（12 個工具）

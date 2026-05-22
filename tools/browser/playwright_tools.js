@@ -4,7 +4,7 @@
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
-import { validateArgs } from "../_shared/utils.js";
+import { validateArgs, calcSpecificity } from "../_shared/utils.js";
 
 const SESSION_DIR = path.join(os.homedir(), ".claude", "sessions");
 
@@ -281,12 +281,15 @@ export const definitions = [
   {
     name: "css_coverage",
     description:
-      "分析頁面的 CSS 使用率：哪些規則被用到、哪些是死的（deadSelectors）。用於 CSS 檔清理/去重前的安全評估。可指定只分析特定 CSS 檔案。",
+      "分析頁面的 CSS 使用率：哪些規則被用到、哪些是死的（deadSelectors = selector 完全沒對到任何元素）。用於 CSS 檔清理/去重前的安全評估。可指定只分析特定 CSS 檔案。\n進階：開 detectOverridden=true 額外偵測「死宣告」——selector 有對到元素、但整條規則的宣告全被更高 specificity / inline style / !important 蓋掉（DevTools 會劃線、byte coverage 卻當它已使用）。注意：@media/@keyframes/@font-face/@page 內的規則為渲染變體，會排除在死宣告分析外避免誤判（如 @media print 的列印專用 class）。",
     inputSchema: {
       type: "object",
       properties: {
         url: { type: "string", description: "要分析的頁面 URL" },
         cssFile: { type: "string", description: "選填：只分析指定的 CSS 檔案名（URL 包含此字串的 stylesheet）" },
+        detectOverridden: { type: "boolean", description: "選填：偵測死宣告（selector 命中但宣告全被覆蓋）。預設 false。開啟會逐元素跑 CDP 比對，較慢。" },
+        sampleLimit: { type: "number", description: "選填：detectOverridden 時每條規則最多取樣幾個命中元素判定（預設 20）" },
+        maxElements: { type: "number", description: "選填：detectOverridden 全程最多檢查的元素總數上限（預設 400，避免大頁面跑太久）" },
         viewport: {
           type: "object",
           properties: { width: { type: "number" }, height: { type: "number" } },
@@ -1575,12 +1578,113 @@ async function handleStyleSnapshot(args) {
 }
 
 // ============================================
+// css_coverage 死宣告偵測 helpers
+// ============================================
+
+// 找出 cssText 中所有 @media/@supports/@keyframes/@font-face/@page 區塊的字元範圍。
+// 用於把渲染變體規則（如 @media print 的列印專用 class）排除在死宣告分析外，避免誤判。
+function findAtRuleRanges(cssText) {
+  const ranges = [];
+  const re = /@(media|supports|keyframes|-webkit-keyframes|font-face|page|document|-moz-document)\b/gi;
+  let m;
+  while ((m = re.exec(cssText)) !== null) {
+    const start = m.index;
+    // 從 @rule 後找第一個 '{'，再做括號配對找對應 '}'
+    let i = cssText.indexOf("{", re.lastIndex);
+    if (i === -1) break;
+    let depth = 0;
+    let end = -1;
+    for (; i < cssText.length; i++) {
+      if (cssText[i] === "{") depth++;
+      else if (cssText[i] === "}") {
+        depth--;
+        if (depth === 0) { end = i; break; }
+      }
+    }
+    if (end === -1) end = cssText.length;
+    ranges.push([start, end]);
+    re.lastIndex = end + 1;
+  }
+  return ranges;
+}
+
+function isInAtRule(index, ranges) {
+  for (const [s, e] of ranges) {
+    if (index >= s && index <= e) return true;
+  }
+  return false;
+}
+
+// 從規則 body 文字解析出宣告的屬性名（含 !important 標記）。
+function parsePropNames(bodyStr) {
+  const out = [];
+  for (const part of (bodyStr || "").split(";")) {
+    const t = part.trim();
+    if (!t || t.startsWith("/*")) continue;
+    const idx = t.indexOf(":");
+    if (idx === -1) continue;
+    const name = t.substring(0, idx).trim().toLowerCase();
+    if (!name || name.startsWith("@") || name.includes("{")) continue;
+    out.push({ name, important: /!\s*important/i.test(t) });
+  }
+  return out;
+}
+
+// 給定某元素的 matched CSS rules（CDP 格式）+ inline props，判定「目標 selector」是否
+// 為某 property 的勝出來源（依 !important → specificity → cascade 順序）。
+// matchedCSSRules 由 CDP 回傳，陣列順序為 cascade 由低到高優先（後者較高）。
+function ruleWinsProperty(targetSelector, prop, matchedCSSRules, inlineProps) {
+  const competing = [];
+  if (inlineProps && inlineProps[prop] !== undefined) {
+    competing.push({ selector: "[inline style]", important: false, score: 10000, order: -1, isInline: true });
+  }
+  for (let order = 0; order < matchedCSSRules.length; order++) {
+    const rule = matchedCSSRules[order].rule;
+    if (!rule?.selectorList || rule.origin === "user-agent") continue;
+    for (const cssProp of (rule.style.cssProperties || [])) {
+      if (cssProp.name === prop && cssProp.text && !cssProp.text.startsWith("/*") && !cssProp.disabled) {
+        const isImportant = cssProp.important || /!\s*important/i.test(cssProp.text);
+        const spec = calcSpecificity(rule.selectorList.text);
+        competing.push({
+          selector: rule.selectorList.text,
+          important: isImportant,
+          score: spec.score,
+          order,
+          isInline: rule.origin === "inline",
+        });
+      }
+    }
+  }
+  if (competing.length === 0) return false;
+  // 勝出：!important 優先 → specificity 高 → cascade 後者（order 大）優先
+  competing.sort((a, b) => {
+    if (a.important !== b.important) return a.important ? -1 : 1;
+    if (a.score !== b.score) return b.score - a.score;
+    return b.order - a.order;
+  });
+  const winner = competing[0];
+  // 目標規則的 selectorList 文字可能含逗號群組；CDP 回傳的 selectorList.text 已是該節點匹配的群組原文
+  return !winner.isInline && selectorTextMatches(winner.selector, targetSelector);
+}
+
+// 比對勝出規則的 selectorList 文字與目標單一 selector 是否同源（容忍逗號群組與空白差異）。
+function selectorTextMatches(winnerSelectorText, targetSelector) {
+  const norm = (s) => s.replace(/\s+/g, " ").trim();
+  const target = norm(targetSelector);
+  if (norm(winnerSelectorText) === target) return true;
+  return winnerSelectorText.split(",").some(s => norm(s) === target);
+}
+
+// ============================================
 // css_coverage 實作
 // ============================================
 async function handleCssCoverage(args) {
   const {
     url,
     cssFile,
+    detectOverridden = false,
+    sampleLimit = 20,
+    maxElements = 400,
     viewport = { width: 1920, height: 1080 },
     timeout = 30000,
     cookies = [],
@@ -1637,6 +1741,10 @@ async function handleCssCoverage(args) {
     // 用 CDP 取得更精確的 selector 級別分析
     let usedSelectors = [];
     let deadSelectors = [];
+    let atRuleSelectorsSkipped = 0; // @media/@keyframes 內未命中的 selector：不當死碼（渲染變體誤判防護）
+    // 死宣告偵測用：收集「selector + 宣告屬性 + 是否在 @-rule 內」
+    const parsedRules = [];      // { sel, props:[{name,important}], file, inAtRule }
+    let overriddenAnalysis = null;
 
     try {
       const cdp = await context.newCDPSession(page);
@@ -1648,30 +1756,21 @@ async function handleCssCoverage(args) {
       });
       await cdp.send("CSS.enable");
 
-      // 取得所有 stylesheet 的規則
-      for (const [sheetId, header] of sheetHeaders) {
-        // 如果指定了 cssFile，只分析匹配的
-        if (cssFile && !header.sourceURL?.includes(cssFile)) continue;
-        if (header.isInline) continue;
-
-        try {
-          const { ruleUsage } = await cdp.send("CSS.takeCoverageDelta");
-          // ruleUsage 不太穩定，改用 DOM.querySelector 測試
-        } catch {}
-      }
-
-      // 另一種方式：從 coverage 結果提取 selector 文字，用 querySelector 驗證
-      // 更可靠的做法：解析 CSS 文字提取 selectors
+      // 從 coverage 結果提取 selector 文字 + 宣告，用 querySelector 驗證 selector 是否命中
       for (const entry of coverageData) {
         if (cssFile && !entry.url.includes(cssFile)) continue;
 
         const cssText = entry.text;
-        // 簡易 CSS selector 提取（非 @media/@keyframes 內的 selector）
-        const selectorRegex = /([^{}@/]+)\s*\{[^}]*\}/g;
+        const fileName = entry.url.split("/").pop().split("?")[0] || entry.url;
+        const atRuleRanges = findAtRuleRanges(cssText);
+        // 同時捕捉規則 body（group 2）以解析宣告屬性
+        const selectorRegex = /([^{}@/]+)\s*\{([^}]*)\}/g;
         let match;
         while ((match = selectorRegex.exec(cssText)) !== null) {
           const rawSelector = match[1].trim();
           if (!rawSelector || rawSelector.startsWith("@") || rawSelector.startsWith("/*")) continue;
+          const inAtRule = isInAtRule(match.index, atRuleRanges);
+          const propNames = parsePropNames(match[2]);
 
           // 處理逗號分隔的多選擇器
           const sels = rawSelector.split(",").map(s => s.trim()).filter(Boolean);
@@ -1681,6 +1780,13 @@ async function handleCssCoverage(args) {
               const found = await page.$(sel);
               if (found) {
                 if (!usedSelectors.includes(sel)) usedSelectors.push(sel);
+                if (detectOverridden && propNames.length > 0) {
+                  parsedRules.push({ sel, props: propNames, file: fileName, inAtRule });
+                }
+              } else if (inAtRule) {
+                // @-rule（@media/@keyframes…）內的 selector 為渲染變體，
+                // 對當前 render 未命中不代表死碼（如 @media print 列印專用 class），不列入 deadSelectors
+                atRuleSelectorsSkipped++;
               } else {
                 if (!deadSelectors.includes(sel)) deadSelectors.push(sel);
               }
@@ -1691,9 +1797,88 @@ async function handleCssCoverage(args) {
         }
       }
 
+      // 死宣告偵測：對命中元素的規則逐屬性判定是否被覆蓋
+      if (detectOverridden) {
+        const { root } = await cdp.send("DOM.getDocument", { depth: -1 });
+        const matchCache = new Map(); // nodeId -> { matchedCSSRules, inlineProps }
+        async function getMatched(nodeId) {
+          if (matchCache.has(nodeId)) return matchCache.get(nodeId);
+          let data = { matchedCSSRules: [], inlineProps: {} };
+          try {
+            const { matchedCSSRules = [] } = await cdp.send("CSS.getMatchedStylesForNode", { nodeId });
+            const inlineProps = {};
+            try {
+              const { inlineStyle } = await cdp.send("CSS.getInlineStylesForNode", { nodeId });
+              for (const p of (inlineStyle?.cssProperties || [])) {
+                if (p.text && !p.disabled) inlineProps[p.name] = p.value;
+              }
+            } catch {}
+            data = { matchedCSSRules, inlineProps };
+          } catch {}
+          matchCache.set(nodeId, data);
+          return data;
+        }
+
+        const deadDeclarations = [];   // 整條規則宣告全被覆蓋
+        const partialOverridden = [];  // 部分屬性被覆蓋
+        let elementsExamined = 0;
+        let skippedAtRule = 0;
+        let budgetExhausted = false;
+
+        for (const rule of parsedRules) {
+          if (rule.inAtRule) { skippedAtRule++; continue; }
+          let nodeIds = [];
+          try {
+            const r = await cdp.send("DOM.querySelectorAll", { nodeId: root.nodeId, selector: rule.sel });
+            nodeIds = r.nodeIds || [];
+          } catch { continue; }
+          if (nodeIds.length === 0) continue;
+
+          const sample = nodeIds.slice(0, sampleLimit);
+          const liveProps = new Set();
+          const allProps = rule.props.map(p => p.name);
+          for (const nodeId of sample) {
+            if (elementsExamined >= maxElements) { budgetExhausted = true; break; }
+            elementsExamined++;
+            const { matchedCSSRules, inlineProps } = await getMatched(nodeId);
+            for (const p of allProps) {
+              if (liveProps.has(p)) continue;
+              if (ruleWinsProperty(rule.sel, p, matchedCSSRules, inlineProps)) liveProps.add(p);
+            }
+            if (liveProps.size === allProps.length) break; // 全活，無需再驗
+          }
+          const overridden = allProps.filter(p => !liveProps.has(p));
+          if (overridden.length === 0) continue;
+          const record = {
+            selector: rule.sel,
+            file: rule.file,
+            matchedElements: nodeIds.length,
+            sampled: sample.length,
+            overriddenProps: overridden,
+            liveProps: [...liveProps],
+          };
+          if (overridden.length === allProps.length) deadDeclarations.push(record);
+          else partialOverridden.push(record);
+          if (budgetExhausted) break;
+        }
+
+        overriddenAnalysis = {
+          elementsExamined,
+          skippedAtRuleRules: skippedAtRule,
+          budgetExhausted,
+          deadDeclarationCount: deadDeclarations.length,
+          partialOverriddenCount: partialOverridden.length,
+          deadDeclarations: deadDeclarations.slice(0, 100),
+          partialOverridden: partialOverridden.slice(0, 50),
+        };
+      }
+
       await cdp.detach().catch(() => {});
-    } catch {
+    } catch (e) {
       // CDP selector 分析失敗不影響 byte-level coverage
+      if (detectOverridden && !overriddenAnalysis) {
+        overriddenAnalysis = { error: `死宣告偵測失敗：${e.message}` };
+      }
     }
 
     await context.close();
@@ -1712,11 +1897,21 @@ async function handleCssCoverage(args) {
         usedSelectors: usedSelectors.length,
         deadSelectors: deadSelectors.length,
         deadSelectorsList: deadSelectors.slice(0, 100), // 最多顯示 100 個
+        ...(atRuleSelectorsSkipped > 0 ? { atRuleSelectorsSkipped } : {}),
       } : {}),
+      ...(overriddenAnalysis ? { overriddenAnalysis } : {}),
     };
 
-    const summary = `CSS Coverage: ${result.summary.coverage} (${result.summary.usedBytes}/${result.summary.totalBytes} bytes)` +
-      (deadSelectors.length > 0 ? `\n${deadSelectors.length} dead selectors found` : "");
+    let summary = `CSS Coverage: ${result.summary.coverage} (${result.summary.usedBytes}/${result.summary.totalBytes} bytes)` +
+      (deadSelectors.length > 0 ? `\n${deadSelectors.length} dead selectors (selector 完全沒對到元素)` : "");
+    if (overriddenAnalysis && !overriddenAnalysis.error) {
+      summary += `\n死宣告偵測：${overriddenAnalysis.deadDeclarationCount} 條規則宣告全被覆蓋、${overriddenAnalysis.partialOverriddenCount} 條部分覆蓋` +
+        `（檢查 ${overriddenAnalysis.elementsExamined} 個元素，排除 ${overriddenAnalysis.skippedAtRuleRules} 條 @-rule 規則）` +
+        (overriddenAnalysis.budgetExhausted ? `\n⚠️ 已達 maxElements 上限，結果可能不完整，可調高 maxElements` : "") +
+        `\n⚠️ caveat：未涵蓋 @media/print 等渲染變體；死宣告應再以 css_computed_winner 對單一屬性複核後才刪。`;
+    } else if (overriddenAnalysis?.error) {
+      summary += `\n${overriddenAnalysis.error}`;
+    }
 
     return {
       content: [{ type: "text", text: summary + "\n\n" + JSON.stringify(result, null, 2) }],

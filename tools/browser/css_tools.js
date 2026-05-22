@@ -4,7 +4,7 @@
 
 import fs from "fs/promises";
 import { resolveSecurePath } from "../../config.js";
-import { validateArgs } from "../_shared/utils.js";
+import { validateArgs, calcSpecificity } from "../_shared/utils.js";
 import { createBrowserPool } from "../_shared/browser_pool.js";
 
 // ============================================
@@ -99,49 +99,6 @@ export const definitions = [
     },
   },
 ];
-
-// ============================================
-// Specificity 計算
-// ============================================
-function calcSpecificity(selectorStr) {
-  // 移除 :not() 內容但保留其引數的 specificity
-  // 簡化版：計算 ID / class+attr+pseudo-class / type+pseudo-element
-  let s = selectorStr.trim();
-
-  // 移除 ::pseudo-elements 先計數
-  const pseudoElements = (s.match(/::(before|after|first-line|first-letter|marker|placeholder|selection|backdrop)/g) || []).length;
-  s = s.replace(/::(before|after|first-line|first-letter|marker|placeholder|selection|backdrop)/g, "");
-
-  // 移除屬性選擇器，先計數
-  const attrs = (s.match(/\[[^\]]*\]/g) || []).length;
-  s = s.replace(/\[[^\]]*\]/g, "");
-
-  // 計算 ID
-  const ids = (s.match(/#[a-zA-Z_-][\w-]*/g) || []).length;
-
-  // 計算 pseudo-classes（:hover, :nth-child() 等，但排除 :not/:is/:where/:has）
-  const pseudoClasses = (s.match(/:(?!not|is|where|has)[a-zA-Z][\w-]*(\([^)]*\))?/g) || []).length;
-
-  // 計算 class selectors
-  const classes = (s.match(/\.[a-zA-Z_-][\w-]*/g) || []).length;
-
-  // 計算 type selectors（標籤名）
-  // 先清掉已計數的部分
-  let cleaned = s
-    .replace(/#[a-zA-Z_-][\w-]*/g, "")
-    .replace(/\.[a-zA-Z_-][\w-]*/g, "")
-    .replace(/:[a-zA-Z][\w-]*(\([^)]*\))?/g, "")
-    .replace(/[>+~\s,]/g, " ")
-    .replace(/\*/g, "")
-    .trim();
-  const types = cleaned.split(/\s+/).filter(t => t && /^[a-zA-Z]/.test(t)).length;
-
-  const a = ids;
-  const b = classes + attrs + pseudoClasses;
-  const c = types + pseudoElements;
-
-  return { a, b, c, score: a * 100 + b * 10 + c, text: `(${a},${b},${c})` };
-}
 
 // ============================================
 // CSS 檔案規則提取器（輕量級，無需 postcss）
