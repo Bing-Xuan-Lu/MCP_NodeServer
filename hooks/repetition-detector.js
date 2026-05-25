@@ -1089,6 +1089,46 @@ const PATTERNS = [
     },
   },
   {
+    // Layer 1.7: ssh_exec → docker exec mysql/php/python — BLOCK
+    //   ssh_exec 透過 SSH 到遠端再下 docker exec 是 Bash docker exec 的繞道路徑。
+    //   修法：execute_sql({ connection_type:"docker_exec", preset:... }) /
+    //         run_php_script({ container:... }) / run_python_script
+    id: 'ssh_exec_docker_exec',
+    detect: (entry, _history) => {
+      const t = shortName(entry.tool);
+      if (t !== 'ssh_exec') return null;
+      const cmd = entry.args?.command || '';
+      // fallback override：尾端 `# mcp-fallback: <reason>` 放行（會被 L1.6 計數）
+      if (MCP_FALLBACK_RE.test(cmd)) {
+        process.stderr.write(`[ssh_exec_docker_exec] allow: mcp-fallback comment\n`);
+        return null;
+      }
+      let target = null;
+      let hint = null;
+      // 例外：DDL / meta query 放行（與 BASH_PATTERNS docker-mysql 同政策）
+      const ddlSkip = /-e\s+["']?\s*(SHOW|EXPLAIN|DESCRIBE|DESC|CREATE|ALTER|DROP|USE|SET|RESET|FLUSH|ANALYZE|OPTIMIZE|CHECK|REPAIR)\b/i;
+      if (/docker\s+exec\s+\S+\s+mysql/i.test(cmd)) {
+        if (ddlSkip.test(cmd)) return null;
+        target = 'mysql';
+        hint = 'set_database({ connection_type:"docker_exec", container, ... }) + execute_sql / execute_sql_batch';
+      } else if (/docker\s+exec\s+\S+\s+php\b/i.test(cmd)) {
+        target = 'php';
+        hint = 'run_php_script / run_php_code / run_php_script_batch（帶 container 參數）';
+      } else if (/docker\s+exec\s+\S+\s+python/i.test(cmd)) {
+        target = 'python';
+        hint = 'run_python_script（python_runner 容器）';
+      }
+      if (!target) return null;
+      return {
+        block: true,
+        message: `[L1.7 ssh_exec docker exec] ❌ BLOCKED（target=${target}）\n` +
+                 `  → ssh_exec 走 SSH 過去再下 docker exec，等同 Bash docker exec 的繞道路徑。\n` +
+                 `  → 請改用：${hint}\n` +
+                 `  → 真有理由必須這樣下，在命令尾加 \`# mcp-fallback: <reason>\` 放行（會留審計紀錄）。\n`,
+      };
+    },
+  },
+  {
     // Layer 1.5: Ghost Tool — 偵測文字內容中提到已刪除 / 已改名的工具名稱（共通黑名單）
     // 黑名單檔：~/.claude/hooks/ghost-tools.json（hot-reload，每次觸發重讀）
     id: 'ghost_tool_reference',
@@ -1645,6 +1685,117 @@ const PATTERNS = [
       return `[Batch Replace] ⚠️ 偵測到跨檔相同替換（${files.length} 檔，${count} 次）。\n` +
              `  → 替換內容：「${preview}」\n` +
              `  → 建議改用 sed/node 腳本一次掃完所有檔案。\n`;
+    },
+  },
+  {
+    // Layer 2.75: Status Value Audit — 修改業務狀態值前提醒先 audit 全專案 filter
+    //   觸發：Edit/Write/apply_diff/create_file 內容含
+    //         `'status' => 'XXX'` 或 `"status" => "XXX"` PHP 陣列 syntax，新值為純大寫
+    //         或 SQL `INSERT INTO ... status ... VALUES` / `UPDATE ... SET status =`
+    //   行為：純警告（不擋），提醒先 Glob list.php + Grep status= 列完整 filter
+    //   原因：新增業務狀態值容易撞既有 tab filter（list.php WHERE status IN (...)），
+    //         先 audit 再改才不會出現「新值落在沒對應 tab 的狀態」
+    id: 'status_value_audit',
+    detect: (entry, _history) => {
+      const tool = shortName(entry.tool);
+      const WRITE_TOOLS = new Set(['Edit', 'Write', 'apply_diff', 'apply_diff_batch', 'create_file', 'create_file_batch']);
+      if (!WRITE_TOOLS.has(tool)) return null;
+
+      const filePath = entry.args?.file_path || entry.args?.path || '';
+      // 只在 PHP / SQL 檔案範圍偵測，避免誤殺 JS/Vue 的 status: 'loading' 等 UI 狀態
+      if (filePath && !/\.(php|sql|inc)$/i.test(filePath) && !/items/.test(JSON.stringify(entry.args || {}))) {
+        // batch 工具沒有單一 file_path，落到內容檢查
+      }
+
+      // 收集所有可能含修改內容的字串欄位
+      const fields = [
+        entry.args?.new_string,
+        entry.args?.content,
+        entry.args?.new_content,
+        entry.args?.diff,
+      ].filter((v) => typeof v === 'string');
+      if (entry.args?.items && Array.isArray(entry.args.items)) {
+        for (const it of entry.args.items) {
+          if (typeof it?.content === 'string') fields.push(it.content);
+          if (typeof it?.new_string === 'string') fields.push(it.new_string);
+          if (typeof it?.diff === 'string') fields.push(it.diff);
+        }
+      }
+      if (fields.length === 0) return null;
+      const haystack = fields.join('\n');
+
+      // Pattern 1：PHP 陣列 'status' => 'UPPERCASE_VALUE'
+      const phpArrayRe = /['"]status['"]\s*=>\s*['"]([A-Z][A-Z0-9_]{1,30})['"]/;
+      // Pattern 2：SQL INSERT / UPDATE 帶 status 欄位
+      const sqlInsertRe = /INSERT\s+INTO\s+\w+[^;]*\bstatus\b/i;
+      const sqlUpdateRe = /UPDATE\s+\w+\s+SET\s+[^;]*\bstatus\s*=/i;
+
+      const phpMatch = haystack.match(phpArrayRe);
+      const sqlMatch = sqlInsertRe.test(haystack) || sqlUpdateRe.test(haystack);
+      if (!phpMatch && !sqlMatch) return null;
+
+      const valueHint = phpMatch ? `偵測到值「${phpMatch[1]}」` : '偵測到 SQL 對 status 欄位的寫入';
+      return `[L2.75 Status Audit] ⚠️ 你正在修改業務狀態值（${valueHint}）。\n` +
+             `  → 動手前請先 audit：\n` +
+             `     1. Glob "**/list.php" 列出所有列表頁\n` +
+             `     2. Grep "status\\s*=" 在 list.php / model 範圍，列出既有 tab filter 完整值表\n` +
+             `     3. 確認新值是否該歸到既有 tab、或要新增 tab\n` +
+             `  → 漏掉這步常見後果：新狀態值的訂單在所有 tab 都看不到、或落到錯誤 tab\n` +
+             `  → 純提醒不阻擋；確認 audit 過就繼續寫。\n`;
+    },
+  },
+  {
+    // Layer 2.76: Status Value Thrashing — 同檔同狀態值反覆 Edit ≥3 次 → BLOCK
+    //   觸發：同檔案內，相同 status / payment_chk 值出現在 ≥3 次 Edit 的 new_string
+    //   行為：BLOCK，要求停下做全 audit 再選方向
+    //   原因：反覆改同一狀態值代表「方向錯」（漏 audit、撞 filter、邊改邊試），
+    //         不是「改錯字」這種正常修改；強制停下避免無限調整
+    id: 'status_value_thrashing',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      const WRITE_TOOLS = new Set(['Edit', 'apply_diff']);
+      if (!WRITE_TOOLS.has(tool)) return null;
+
+      const filePath = entry.args?.file_path || entry.args?.path || '';
+      if (!filePath) return null;
+
+      // 從當前 entry 抽出 status / payment_chk 值（PHP 陣列 syntax）
+      const VALUE_RE = /['"](?:status|payment_chk)['"]\s*=>\s*['"]([A-Z][A-Z0-9_]{1,30})['"]/g;
+      const cur = entry.args?.new_string || entry.args?.diff || '';
+      if (typeof cur !== 'string') return null;
+      const curValues = new Set();
+      let m;
+      while ((m = VALUE_RE.exec(cur)) !== null) curValues.add(m[1]);
+      if (curValues.size === 0) return null;
+
+      // 掃 history 同檔同 value 的次數
+      for (const targetValue of curValues) {
+        let count = 1; // 含當前
+        for (const h of history) {
+          const ht = shortName(h.tool);
+          if (!WRITE_TOOLS.has(ht)) continue;
+          const hPath = h.args?.file_path || h.args?.path || '';
+          if (hPath !== filePath) continue;
+          const hNew = h.args?.new_string || h.args?.diff || '';
+          if (typeof hNew !== 'string') continue;
+          const re = new RegExp(`['"](?:status|payment_chk)['"]\\s*=>\\s*['"]${targetValue}['"]`);
+          if (re.test(hNew)) count++;
+        }
+        if (count >= 3) {
+          return {
+            block: true,
+            message: `[L2.76 Status Thrashing] ❌ BLOCKED：同檔同狀態值反覆修改 ${count} 次。\n` +
+                     `  檔案：${filePath}\n` +
+                     `  反覆值：${targetValue}（status / payment_chk）\n` +
+                     `  → 反覆改同一狀態值代表「方向錯」（漏 audit / 撞 filter / 邊改邊試）。\n` +
+                     `  → 請停下來，先做全 audit：\n` +
+                     `     1. Glob "**/list.php" + Grep "${targetValue}" 列出所有引用點\n` +
+                     `     2. 確認該值在每個 tab filter 的歸屬\n` +
+                     `     3. 把方案攤給使用者選，不要再硬改\n`,
+          };
+        }
+      }
+      return null;
     },
   },
   {

@@ -19,6 +19,8 @@ const REQUIRED_HOOKS = {
     { command: `node "${hooksDir}/pre-compact.js"` },
   ],
   PreToolUse: [
+    { matcher: '.*',                                    command: `node "${hooksDir}/mcp-down-guard.js"` },
+    { matcher: '.*',                                    command: `node "${hooksDir}/todowrite-reminder-escalator.js"` },
     { matcher: '.*',                                    command: `node "${hooksDir}/repetition-detector.js"` },
     { matcher: 'Write|Edit',                            command: `node "${hooksDir}/write-guard.js"` },
     { matcher: '.*',                                    command: `node "${hooksDir}/user-prompt-guard.js"` },

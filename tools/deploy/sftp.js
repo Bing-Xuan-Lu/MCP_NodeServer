@@ -105,7 +105,8 @@ async function checkRemoteDrift(client, config, remotePath, force, localAbs) {
     if (force) return { ok: true, noSnapshot: true };
 
     // 無 session 快照（常見於重開 session 後首次上傳）→ 改用 hash 即時比對，
-    // 不再盲目擋下要求先 download。只有偵測到遠端有本機沒有的「內容差異」才擋。
+    // 不再盲目擋下要求先 download。內容相同免上傳、僅換行差異放行、真內容不同才擋。
+    // 注意：hash 比對「只能判斷不同，不能判斷誰新」，所以擋下時必須提示跑 file_diff 確認方向。
     if (localAbs) {
       const h = await compareByHash(client, config, remotePath, localAbs);
       if (h.same)     return { ok: true, skipUpload: true, reason: "hashSame" };  // 內容完全相同 → 免上傳
@@ -113,11 +114,12 @@ async function checkRemoteDrift(client, config, remotePath, force, localAbs) {
       if (h.contentDiff) {
         return {
           ok: false,
-          reason: `⚠️ 遠端有本機沒有的改動（hash 比對：內容不同）：${remotePath}`,
+          reason: `⚠️ 本機與遠端內容不一致（hash 不同，方向待確認）：${remotePath}`,
           hint: [
-            `可能有第三方（或其他 session）修改過此檔案`,
-            `先 sftp_download 取回遠端版本，用 file_diff 看行差並合併`,
-            `若確定要覆蓋遠端版本，加上 force: true 重新呼叫`,
+            `hash 比對只能判斷「不同」，無法判斷哪邊新`,
+            `先用 file_diff(local_path, remote_path, source="sftp") 比對行差，看本機是新版還是遠端是新版`,
+            `→ 若本機是新版（你剛改完要部署）：加上 force: true 重新呼叫`,
+            `→ 若遠端是新版（他人 / 其他 session 改過）：先 sftp_download 合併再上傳`,
           ],
         };
       }
@@ -1107,7 +1109,7 @@ export async function handle(name, args) {
             // Drift 偵測（單檔）—— 無快照時內含 hash 即時比對
             const drift = await checkRemoteDrift(client, check.config, remotePath, args.force, localAbs);
             if (!drift.ok) {
-              results.push(`⚠️ ${localPath} → ${remotePath}：${drift.reason.includes("內容不同") ? "遠端有本機沒有的改動（hash 不同），已略過" : "遠端有變動（未加 force），已略過"}`);
+              results.push(`⚠️ ${localPath} → ${remotePath}：${drift.reason.includes("內容不一致") ? "本機與遠端內容不一致（方向待確認，跑 file_diff 比對），已略過" : "遠端有變動（未加 force），已略過"}`);
               skipCount++;
               continue;
             }
