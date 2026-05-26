@@ -1588,6 +1588,65 @@ const PATTERNS = [
     },
   },
   {
+    // Layer 2.10c: Layout Suspect JS Edit
+    //   使用者剛回報 popup / 跑版 / 錯位 / 樣式問題（cssInspectRequired flag 啟動），
+    //   但 Claude 下一個 Edit/Write 動的是 .js / .vue / .ts 而不是 .css —
+    //   提醒「確定不是 CSS 問題嗎？」（純警告，不擋）。
+    //   過去案例：使用者抱怨 popup 跑版，prompt-guard 已提醒先 inspect CSS，
+    //   但 Claude 仍直接動 JS handler，繞了一圈才回去查 CSS。
+    id: 'layout_suspect_js_edit',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      const writeTools = new Set(['Edit', 'Write', 'apply_diff', 'create_file', 'apply_diff_batch', 'multi_file_inject']);
+      if (!writeTools.has(tool)) return null;
+
+      const filePath = (entry.args?.file_path || entry.args?.path || '').replace(/\\/g, '/').toLowerCase();
+      // JS / Vue / TS 家族（不含 .css）
+      if (!/\.(jsx?|tsx?|vue|mjs|cjs|svelte)$/.test(filePath)) return null;
+
+      // 讀 write-guard 共享 state
+      let cssInspectRequired = false;
+      let lastPrompt = '';
+      try {
+        const wgFile = path.join(os.tmpdir(), 'claude-write-guard', 'state.json');
+        if (fs.existsSync(wgFile)) {
+          const wg = JSON.parse(fs.readFileSync(wgFile, 'utf-8'));
+          if (Date.now() - (wg.ts || 0) < 30 * 60 * 1000) {
+            cssInspectRequired = !!wg.cssInspectRequired;
+            lastPrompt = (wg.lastPrompt || '').toLowerCase();
+          }
+        }
+      } catch {}
+
+      if (!cssInspectRequired) return null;
+
+      // 已在本 session 跑過 inspect 工具 → 代表 Claude 真的查過 CSS 才決定改 JS，放行
+      const INSPECT_TOOLS = new Set([
+        'css_computed_winner', 'css_specificity_check', 'css_inspect',
+        'mcp__project-migration-assistant-pro__css_computed_winner',
+        'mcp__project-migration-assistant-pro__css_specificity_check',
+        'mcp__project-migration-assistant-pro__css_inspect',
+      ]);
+      if (history.some(h => INSPECT_TOOLS.has(h.tool) || INSPECT_TOOLS.has(shortName(h.tool)))) return null;
+
+      // 使用者最近 prompt 已明確表示「就是 JS 問題 / 不是 CSS」→ 放行
+      if (/不是.{0,4}css|不是.{0,4}樣式|是.{0,4}(?:js|邏輯|事件|功能)|跟.{0,4}css.{0,4}無關|popup.{0,4}沒(?:跳|彈|觸發|顯示)/i.test(lastPrompt)) {
+        return null;
+      }
+
+      const fname = filePath.split('/').pop();
+      return (
+        `[Layout Suspect] ⚠️ 使用者剛回報「排版 / 跑版 / popup 樣式 / 錯位」相關問題，但你現在要動的是 ${fname}（JS/Vue/TS）。\n` +
+        `  → 確定不是 CSS 問題嗎？popup 跑版 / 元素錯位 / 樣式蓋不掉 9 成是 CSS specificity / @media / z-index / position 衝突，不是 JS 邏輯。\n` +
+        `  → 建議先查 CSS 拿事實再決定改哪：\n` +
+        `    ▸ mcp__css_computed_winner(url, selector, property) — 看哪條規則贏\n` +
+        `    ▸ mcp__css_specificity_check(url, selector) — 列出所有命中規則\n` +
+        `    ▸ mcp__css_inspect(url, selector) — 取 computed style + 來源行號\n` +
+        `  → 若已確認是 JS 邏輯問題（popup 沒觸發 / 事件綁錯 / 資料沒回填），請向使用者明說「我確認不是 CSS」後再繼續改 JS。\n`
+      );
+    },
+  },
+  {
     // Layer 2.10b: CSS Legacy Skill Gate
     //   寫入 css/v3/**/*.css、page/**/*.css，或 screen.prefixer / legacy global CSS 鄰近檔時，
     //   第一次 BLOCK 提示「先跑 /css_legacy_override」（避免桌機改完破手機）；同 session 已提示過則放行。

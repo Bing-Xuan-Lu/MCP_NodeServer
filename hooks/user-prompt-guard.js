@@ -332,13 +332,19 @@ process.stdin.on('end', () => {
     }
 
     // ── CSS Trouble 偵測：使用者回報排版/跑版/樣式問題 → 強制下次 .css 寫入前先 inspect ──
+    // 也觸發 repetition-detector 的 layout_suspect_js_edit：若 Claude 改成動 .js/.vue
+    // 而非 .css，會跳警告「確定不是 CSS 問題嗎？」
     const CSS_TROUBLE_PATTERNS = [
       /排版.*?(?:有問題|壞|錯|怪|跑版|不對|亂)/,
       /跑版|版面.*?(?:壞|跑|亂)|樣式.*?(?:壞|跑|亂|蓋)/,
       /css.*?(?:沒生效|沒用|不work|蓋不掉|被蓋)/i,
-      /位置.*?(?:不對|偏|跑掉|歪)/,
+      /位置.*?(?:不對|偏|跑掉|歪|錯位)/,
+      /錯位/,
       /(?:沒有?生效|沒套到|沒吃到).*?(?:css|樣式|class)/i,
       /(?:對齊|置中|靠左|靠右).*?(?:不對|失敗|沒用)/,
+      // popup 跑版類：popup / 彈窗 / modal / dialog + 樣式/位置抱怨 或 純 popup + 跑版/錯位
+      /(?:popup|彈窗|modal|dialog).*?(?:跑版|錯位|歪|偏|蓋住|遮住|遮到|遮蔽|擋住|樣式|css|排版|定位|疊|錯|不對)/i,
+      /(?:跑版|錯位|歪|偏|蓋住|遮住|遮到|遮蔽|擋住).*?(?:popup|彈窗|modal|dialog)/i,
     ];
     if (CSS_TROUBLE_PATTERNS.some(p => p.test(prompt))) {
       const wgState = wgLoadState();
