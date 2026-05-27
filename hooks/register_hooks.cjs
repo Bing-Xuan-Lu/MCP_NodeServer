@@ -22,6 +22,8 @@ const REQUIRED_HOOKS = {
     { matcher: '.*',                                    command: `node "${hooksDir}/mcp-down-guard.js"` },
     { matcher: '.*',                                    command: `node "${hooksDir}/todowrite-reminder-escalator.js"` },
     { matcher: '.*',                                    command: `node "${hooksDir}/repetition-detector.js"` },
+    { matcher: 'Write|Edit|apply_diff|apply_diff_batch|create_file|create_file_batch|multi_file_inject|execute_sql|execute_sql_batch|run_php_script|run_php_code|ssh_exec',
+                                                        command: `node "${hooksDir}/agent-coord-stale-contract.js"` },
     { matcher: 'Write|Edit',                            command: `node "${hooksDir}/write-guard.js"` },
     { matcher: '.*',                                    command: `node "${hooksDir}/user-prompt-guard.js"` },
     { matcher: '.*',                                    command: `node "${hooksDir}/skill-router.js"` },

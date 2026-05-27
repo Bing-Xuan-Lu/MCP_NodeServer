@@ -13,7 +13,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { HOME } from '../env.js';
+import { HOME, MCP_ROOT as MCP_ROOT_FROM_ENV } from '../env.js';
 const SESSIONS_DIR = path.join(HOME, '.claude', 'sessions');
 const PROJECTS_DIR = path.join(HOME, '.claude', 'projects');
 const LEARNED_DIR = path.join(HOME, '.claude', 'skills', 'learned');
@@ -26,7 +26,7 @@ function findProjectMemoryDir() {
   const parts = cwd.split('/').filter(Boolean);
 
   // 組出 Claude projects 目錄的 ID 格式
-  // Windows: D:/Develop/MCP_NodeServer → d--Develop-MCP_NodeServer
+  // Windows: D:/MCP_Server → d--MCP-Server（drive: + 路徑用 -- 開頭，路徑中 / 和 _ 轉成 -）
   // 嘗試多種格式
   const candidates = [];
 
@@ -132,14 +132,17 @@ function findRecentPitfalls() {
 
 // === MCP_Server root 偵測（給 preset 自動建議用） ===
 function findMcpServerRoot() {
-  // 1) 環境變數覆寫優先
+  // 1) 環境變數覆寫優先（MCP_SERVER_ROOT 或 env.js 匯出的 MCP_ROOT）
   if (process.env.MCP_SERVER_ROOT && fs.existsSync(process.env.MCP_SERVER_ROOT)) {
     return process.env.MCP_SERVER_ROOT;
   }
-  // 2) 常見 Windows 位置
+  if (MCP_ROOT_FROM_ENV && fs.existsSync(path.join(MCP_ROOT_FROM_ENV, '.mcp_sftp_presets.json'))) {
+    return MCP_ROOT_FROM_ENV;
+  }
+  // 2) 常見 Windows 位置 fallback
   const candidates = [
-    'D:/MCP_Server', 'D:/MCP_NodeServer',
-    'C:/MCP_Server', 'C:/MCP_NodeServer',
+    'D:/MCP_Server',
+    'C:/MCP_Server',
     path.join(HOME, 'MCP_Server'),
   ];
   for (const c of candidates) {

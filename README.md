@@ -119,6 +119,7 @@ MCP_NodeServer/
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   ├── bookmarks.js     ← Chrome 書籤管理 (12 工具)
 │   ├── sftp.js          ← sftp_connect/upload/download/list/delete, sftp_*_batch (list/upload/download/delete), sftp_preset, sftp_diff_hash (MD5 比對不下載全文)
+│   ├── docker_ops.js    ← docker_cp（本機 container ↔ 主機檔案拷貝；basePath 白名單 + container 名 + path regex 防注入；遠端機器仍走 ssh_exec）
 │   ├── python.js        ← run_python_script (via Docker python_runner)
 │   ├── word.js          ← read_word_file, read_word_files_batch (.docx → Markdown/HTML/Text)
 │   ├── pptx.js          ← read_pptx_file, read_pptx_files_batch (.pptx → Markdown/Text + 圖片)

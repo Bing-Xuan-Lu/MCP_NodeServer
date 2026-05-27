@@ -20,7 +20,13 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { HOME } from '../env.js';
+import { HOME, MCP_ROOT } from '../env.js';
+
+// 把 MCP_ROOT 變成可比對的 regex 片段（吃掉路徑分隔符差異）
+const MCP_ROOT_RE = new RegExp(
+  MCP_ROOT.replace(/\\/g, '/').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\//g, '[\\\\/]'),
+  'i'
+);
 const GLOBAL_RISK_TIERS = path.join(HOME, '.claude', 'risk-tiers.json');
 
 // ── 方案 A+B 設定 ────────────────────────────────────────
@@ -148,7 +154,7 @@ const CACHE_BUST_EXTENSIONS = ['.js', '.css'];
 const ALLOWED_PATH_PATTERNS = [
   /\.claude\/commands\//i,
   /\.claude\/hooks\//i,
-  /MCP_NodeServer\//i,
+  MCP_ROOT_RE,
 ];
 
 // ── Prompt Injection 偵測（HTML / PHP 模板）────────────────
@@ -188,11 +194,7 @@ process.stdin.on('end', () => {
     //   - 跳過批次編輯上限
     // 仍保留風險警告、敏感檔案警告、Prompt Injection 偵測（這些是純資訊性提醒）。
     // 理由：本 hook 是用來保護下游客戶專案的，meta-dev MCP 本身時這些 BLOCK 反成阻礙。
-    const SELF_REPO_PATTERNS = [
-      /[\\/]MCP_NodeServer[\\/]/i,
-      /[\\/]MCP_Server[\\/]/i,
-    ];
-    const isMetaDev = SELF_REPO_PATTERNS.some(p => p.test(filePath));
+    const isMetaDev = MCP_ROOT_RE.test(filePath);
 
     const tiers = loadRiskTiers();
     const isHigh   = matchTier(filePath, tiers.high);

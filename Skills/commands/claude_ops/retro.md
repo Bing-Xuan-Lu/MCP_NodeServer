@@ -207,8 +207,10 @@ Glob pattern="~/.claude/projects/*/memory/MEMORY.md"
 掃描對話中是否有值得寫入 MCP backlog 的改進機會（Tool 面向未涵蓋的 Skill 改進、新增 Skill 機會等），詢問使用者確認後用 `apply_diff` append 到：
 
 ```
-D:\Develop\MCP_NodeServer\improvements_backlog.md
+{MCP_ROOT}/improvements_backlog.md
 ```
+
+> `{MCP_ROOT}` = MCP_Server 專案根目錄，請依本機路徑替換（如 `D:\MCP_Server\improvements_backlog.md`）。
 
 格式：`- [ ] [類型] 描述 ← {當前專案名} (YYYY-MM-DD)`
 

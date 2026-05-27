@@ -642,14 +642,13 @@ function isBashAllowed(command) {
 
 const BASH_PATTERNS = [
   {
-    // docker cp：檔案傳輸，無對應 MCP 工具（與 docker exec 不同），不警告也不擋
-    // silent=true：L1/L2 不輸出訊息，僅取 bashSig 供 L3 同類去重
+    // docker cp：已有對應 MCP 工具 docker_cp（tools/deploy/docker_ops.js，2026-05-27 新增）
+    //   有安全防護 basePath 白名單 + container 名 + container_path regex 檢查，比裸 Bash 安全。
     regex: /^\s*docker\s+cp\b/i,
     signature: 'bash:docker-cp',
-    hint: '',
-    warnOnFirst: false,
+    hint: 'docker_cp（MCP 工具，自動處理 basePath 白名單 + 命令注入防護）',
+    warnOnFirst: true,
     block: false,
-    silent: true,
   },
   {
     regex: /docker\s+exec\s+\S+\s+mysql/i,
@@ -2459,6 +2458,72 @@ const PATTERNS = [
       }
 
       return null;
+    },
+  },
+  {
+    // L3b: Consecutive Batch Eligible — 同一個 batch-eligible 工具連續 ≥4 次（不分子類別）就主動提示
+    //   背景：same_category_repeat 對 execute_sql 是依 SQL 類型+表名分桶，
+    //         4 個不同表的 SELECT 不會觸發，但其實全都可以塞進 execute_sql_batch 一次跑。
+    //   觸發條件：最近 N 次 tool call 中，連續 ≥4 次都是同一個 batch-eligible 工具（含 _batch 版互通）。
+    //   單次警告：同 session 同工具的 batch 提示只發一次，避免每多一次又跳一次。
+    id: 'consecutive_batch_eligible',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (!BATCH_HINTS[tool]) return null;
+
+      // 數「最近連續」幾次：從尾端往回掃，遇到非同工具就停
+      let consecutive = 1; // 含本次
+      for (let i = history.length - 1; i >= 0; i--) {
+        if (shortName(history[i].tool) === tool) {
+          consecutive++;
+        } else {
+          break;
+        }
+      }
+      if (consecutive < 4) return null;
+
+      // 同 session 同工具只警告一次（用 history 中是否已有過此提示作粗略判斷）
+      // 註：以 session 狀態檔記錄更乾淨；此處用「連續次數 == 4 才提」作 dedupe
+      if (consecutive !== 4) return null;
+
+      const batchTool = BATCH_HINTS[tool];
+      return (
+        `[Repetition Detector] 📦 BATCH 提示：${tool} 已連續呼叫 ${consecutive} 次。\n` +
+        `  → 改用「${batchTool}」一次處理多筆，每次 round-trip 省 ~200 tokens。\n` +
+        `  → 跨 4 場 session retro 證實：execute_sql 連用 57+ 次都單發，是最常被忽略的 batch 機會。\n` +
+        `  （同 session 同工具僅提一次；繼續單發不再警告。）\n`
+      );
+    },
+  },
+  {
+    // L2.84b: Consecutive Same-URL Navigate — 連續導航同一 URL ≥3 次即警告（早於 exact_same_call 9 次門檻）
+    //   背景：page audit / wait_for 後常會反射性重 navigate 同一頁，但頁面狀態沒清掉重來等於白燒。
+    //   觸發：最近 N 次 tool call 連續都是同一 URL 的 browser_navigate（不分哪個 playwright instance）。
+    //   單次警告（連續 == 3 時提一次），避免每多一次又跳一次。
+    id: 'consecutive_same_url_navigate',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'browser_navigate') return null;
+      const currentUrl = entry.args?.url || '';
+      if (!currentUrl) return null;
+
+      let consecutive = 1;
+      for (let i = history.length - 1; i >= 0; i--) {
+        const h = history[i];
+        if (shortName(h.tool) !== 'browser_navigate') break;
+        if ((h.args?.url || '') !== currentUrl) break;
+        consecutive++;
+      }
+      if (consecutive !== 3) return null; // 只在第 3 次連續同 URL 時提，去重
+
+      return (
+        `[Repetition Detector] 🔁 連續 navigate 同一 URL ${consecutive} 次：${currentUrl.slice(0, 100)}\n` +
+        `  → 頁面通常不會因為再 navigate 一次就好。建議：\n` +
+        `    1. 先 browser_close 重設 session，再 navigate（解 stale state）\n` +
+        `    2. 或檢查 selector 是否真的存在（用 browser_snapshot 看實際 DOM）\n` +
+        `    3. 或檢查 callback 是否真的有跑（用 send_http_request 打 endpoint 看 raw 200 body）\n` +
+        `  （第 ${consecutive} 次同 URL 提示；達 9 次會被 exact_same_call 硬擋。）\n`
+      );
     },
   },
   {

@@ -48,6 +48,7 @@ const TOOL_MODULE_FILES = [
   "tools/browser/print_layout.js",
   "tools/data/database.js",
   "tools/data/gsheet.js",
+  "tools/deploy/docker_ops.js",
   "tools/deploy/flyway.js",
   "tools/deploy/git.js",
   "tools/deploy/php.js",

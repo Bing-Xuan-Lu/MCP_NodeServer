@@ -44,5 +44,8 @@ config.local.js
 # Improvements backlog（含專案名稱，不進版控）
 improvements_backlog.md
 
+# 對話 / session 暫存（retro/audit 中間檔，不進版控）
+tmp/
+
 # Windows reserved device names (accidentally created by > nul instead of > /dev/null)
 nul

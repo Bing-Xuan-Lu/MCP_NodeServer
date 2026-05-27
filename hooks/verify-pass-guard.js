@@ -26,8 +26,17 @@ import { HOME, CLAUDE_HOOK_DEBUG as DEBUG_MODE } from '../env.js';
 const STATE_DIR = path.join(HOME, '.claude', 'verify-pass-guard-state');
 const MAX_BLOCKS_PER_SESSION = 3;
 
+// Windows Node 對 stdout/stderr 預設使用系統 ANSI codepage（zh-TW = cp950），
+// 中文 BLOCK reason 寫出去會變 `??`。強制以 UTF-8 Buffer 寫，避免被 harness 重新解碼壞掉。
+function writeStdoutUtf8(s) {
+  process.stdout.write(Buffer.from(s, 'utf8'));
+}
+function writeStderrUtf8(s) {
+  process.stderr.write(Buffer.from(s, 'utf8'));
+}
+
 function debug(msg) {
-  if (DEBUG_MODE) process.stderr.write(`[verify-pass-guard] ${msg}\n`);
+  if (DEBUG_MODE) writeStderrUtf8(`[verify-pass-guard] ${msg}\n`);
 }
 
 // ── 多筆/多項 PASS 宣告 pattern（語意上是「一批東西全過」的結論）──────
@@ -169,7 +178,7 @@ process.stdin.on('end', () => {
       `  （本 session 第 ${state.blocks}/${MAX_BLOCKS_PER_SESSION} 次提醒；達上限後不再擋）`;
 
     // Stop hook：以 JSON decision=block 餵回 reason，要求 Claude 繼續處理
-    process.stdout.write(JSON.stringify({ decision: 'block', reason }));
+    writeStdoutUtf8(JSON.stringify({ decision: 'block', reason }));
     debug(`BLOCK stop (#${state.blocks})`);
     process.exit(0);
   } catch (e) {
