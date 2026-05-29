@@ -36,12 +36,12 @@ MCP_NodeServer/
 │   │   └── video.js     ← read_video（影片 → faster-whisper 字幕 + ffmpeg 關鍵幀，支援 MP4/MOV/MKV/WebM/AVI/M4V，走 python_runner）
 │   ├── data/            ← 資料庫（DB）+ Google Sheet
 │   │   ├── database.js  ← set_database, load_db_connection, get_current_db, get_db_schema, execute_sql, get_db_schema_batch, execute_sql_batch, schema_diff, mysql_log_tail
-│   │   └── gsheet.js    ← gsheet_fetch_with_state（含 auto_recalc_check polling + preserve_validation 旗標：跳過空字串寫入以保留 data validation/dropdown）, gsheet_xlookup_trace, trace_gsheet_formula, gsheet_get_metadata, gsheet_fetch_formatted（gspread 一條龍 + 查表鏈遞迴展開 + markdown 公式追蹤報告 + worksheet metadata 列舉 + FORMATTED_VALUE 顯示字串抓取，python_runner 容器）
+│   │   └── gsheet.js    ← gsheet_fetch_with_state（含 auto_recalc_check polling + preserve_validation 旗標：跳過空字串寫入以保留 data validation/dropdown）, gsheet_xlookup_trace, trace_gsheet_formula, gsheet_get_metadata, gsheet_fetch_formatted, gsheet_get_values（輕量 batch get，value_render 可選 UNFORMATTED/FORMATTED/FORMULA）, gsheet_set_values（輕量 batch update 純寫入）（gspread 一條龍 + 查表鏈遞迴展開 + markdown 公式追蹤報告 + worksheet metadata 列舉 + FORMATTED_VALUE 顯示字串抓取 + 輕量讀寫取代 PHP 手刻 JWT+curl 打 Sheets API，python_runner 容器）
 │   ├── deploy/          ← 部署與版控工具（遠端操作、DB migration、本機 docker 操作）
 │   │   ├── docker_ops.js ← docker_cp（本機 docker container ↔ 主機檔案拷貝；basePath 白名單 + container 名 + path regex 防注入；遠端機器仍走 ssh_exec）
 │   │   ├── sftp.js      ← sftp_connect, sftp_upload, sftp_download, sftp_list, sftp_delete, sftp_*_batch, sftp_preset, sftp_diff_hash（MD5 比對本機 vs 遠端不下載全文；分類 identical/content_diff/eol_only/missing）。sftp_upload 在「無 session 快照」時改用 hash 即時比對：內容相同免上傳、僅換行差異放行、真內容不同才擋（解重開 session 被盲擋問題）
-│   │   ├── php.js       ← run_php_script, run_php_code, run_php_test, send_http_request（支援 body_filter regex 在 tool 端 grep 過濾，避免大 response 落檔 fallback）, tail_log, send_http_requests_batch, run_php_script_batch
-│   │   ├── git.js       ← git_status, git_diff, git_log, git_stash_ops
+│   │   ├── php.js       ← run_php_script, run_php_code, run_php_test, send_http_request（支援 body_filter regex 在 tool 端 grep 過濾，避免大 response 落檔 fallback）, tail_log, send_http_requests_batch, run_php_script_batch（stderr 自動過濾 Xdebug Step Debug 連線失敗雜訊）
+│   │   ├── git.js       ← git_status, git_diff, git_log, git_stash_ops（container 模式用 -w workdir 指定容器內 repo 路徑，預設 /var/www/html；本機模式可加 cwd 指定專案目錄，修正容器內非 repo cwd 導致 "not a git repository"）
 │   │   ├── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
 │   │   └── flyway.js    ← flyway_info, flyway_migrate, flyway_validate, flyway_repair, flyway_baseline（需 dev-flyway Docker，選用）
 │   ├── browser/         ← 瀏覽器自動化與網頁檢查（UI testing、CSS 分析）

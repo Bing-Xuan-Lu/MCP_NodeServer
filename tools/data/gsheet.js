@@ -152,6 +152,65 @@ export const definitions = [
       required: ["spreadsheet_id", "start_cell"],
     },
   },
+  {
+    name: "gsheet_get_values",
+    description:
+      "輕量讀：batch get 多個 range 的值，純讀、免寫入、免 recalc polling。" +
+      "value_render 可選 UNFORMATTED_VALUE（原始數值，預設）/ FORMATTED_VALUE（顯示字串）/ FORMULA（公式）。" +
+      "對應痛點：估價對齊 harness 過去得在 PHP 內手刻 JWT 簽章 + curl 打 Sheets API 才能讀 live Sheet，本工具一行取代。" +
+      "需 python_runner 容器與 service account JSON。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        spreadsheet_id: { type: "string", description: "Google Sheet ID（網址中的 /d/{this}/edit）" },
+        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH（未設則必填）" },
+        read_range: {
+          type: ["string", "array"],
+          description: "要讀的 range（單一字串或陣列），格式 '<worksheet>!<A1notation>'，例 'web!A1:Z200' 或 ['web!A1', 'data!B5']。worksheet 名稱不可省略，不知道先用 gsheet_get_metadata 查。",
+        },
+        value_render: {
+          type: "string",
+          enum: ["UNFORMATTED_VALUE", "FORMATTED_VALUE", "FORMULA"],
+          description: "回傳值型態（預設 UNFORMATTED_VALUE 原始數值）",
+          default: "UNFORMATTED_VALUE",
+        },
+      },
+      required: ["spreadsheet_id", "read_range"],
+    },
+  },
+  {
+    name: "gsheet_set_values",
+    description:
+      "輕量寫：batch update 多個 range，純寫入、不等公式重算、不回讀（要寫入後 polling 等重算再回讀請用 gsheet_fetch_with_state）。" +
+      "對應痛點：取代估價對齊 harness 在 PHP 內手刻 JWT + curl 打 Sheets API 寫 live Sheet。\n" +
+      "⚠️ 寫入線上 Sheet 屬破壞性操作，動手前先確認 range 與值；空字串 '' 在 USER_ENTERED 模式下會清空 cell 並可能清掉該 cell 的 data validation rule（dropdown）。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        spreadsheet_id: { type: "string", description: "Google Sheet ID（網址中的 /d/{this}/edit）" },
+        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH（未設則必填）" },
+        write_data: {
+          type: "array",
+          description: "寫入清單（必填）。每項：{ range: 'web!A3', values: 'X' 或 [['X','Y'],['Z','W']] }。單值會自動包成 1x1。",
+          items: {
+            type: "object",
+            properties: {
+              range: { type: "string" },
+              values: {},
+            },
+            required: ["range", "values"],
+          },
+        },
+        value_input_option: {
+          type: "string",
+          enum: ["USER_ENTERED", "RAW"],
+          description: "寫入模式（預設 USER_ENTERED 會解析公式 / 日期 / 數字格式；RAW 原樣寫入）",
+          default: "USER_ENTERED",
+        },
+      },
+      required: ["spreadsheet_id", "write_data"],
+    },
+  },
 ];
 
 // ============================================
@@ -570,6 +629,75 @@ print(json.dumps({'ok': True, 'markdown': md, 'unique_cells': len(cache)}, ensur
 `;
 
 // ============================================
+// Python 腳本：gsheet_get_values（輕量 batch get）
+// ============================================
+const GET_VALUES_SCRIPT = `
+import sys, json
+import gspread
+
+env = json.loads(sys.stdin.read())
+creds = env['creds']
+params = env['params']
+
+gc = gspread.service_account_from_dict(creds)
+sh = gc.open_by_key(params['spreadsheet_id'])
+
+read_range = params['read_range']
+if isinstance(read_range, str):
+    read_range = [read_range]
+render = params.get('value_render', 'UNFORMATTED_VALUE')
+
+result = {}
+try:
+    resp = sh.values_batch_get(read_range, params={'valueRenderOption': render})
+    for vr in resp.get('valueRanges', []):
+        result[vr.get('range')] = vr.get('values', [])
+except AttributeError:
+    # gspread 舊版 fallback：逐 range fetch
+    for rng in read_range:
+        result[rng] = sh.values_get(rng, params={'valueRenderOption': render}).get('values', [])
+
+print(json.dumps({'ok': True, 'value_render': render, 'data': result}, ensure_ascii=False, default=str))
+`;
+
+// ============================================
+// Python 腳本：gsheet_set_values（輕量 batch update）
+// ============================================
+const SET_VALUES_SCRIPT = `
+import sys, json
+import gspread
+
+env = json.loads(sys.stdin.read())
+creds = env['creds']
+params = env['params']
+
+gc = gspread.service_account_from_dict(creds)
+sh = gc.open_by_key(params['spreadsheet_id'])
+
+write_data = params['write_data']
+payload = []
+for w in write_data:
+    vals = w['values']
+    if not isinstance(vals, list):
+        vals = [[vals]]
+    elif vals and not isinstance(vals[0], list):
+        vals = [vals]
+    payload.append({'range': w['range'], 'values': vals})
+
+resp = sh.values_batch_update({
+    'valueInputOption': params.get('value_input_option', 'USER_ENTERED'),
+    'data': payload,
+})
+
+total_updated = resp.get('totalUpdatedCells') if isinstance(resp, dict) else None
+print(json.dumps({
+    'ok': True,
+    'ranges_written': len(payload),
+    'total_updated_cells': total_updated,
+}, ensure_ascii=False, default=str))
+`;
+
+// ============================================
 // 工具邏輯
 // ============================================
 export async function handle(name, args) {
@@ -581,7 +709,9 @@ export async function handle(name, args) {
     name !== "gsheet_xlookup_trace" &&
     name !== "trace_gsheet_formula" &&
     name !== "gsheet_get_metadata" &&
-    name !== "gsheet_fetch_formatted"
+    name !== "gsheet_fetch_formatted" &&
+    name !== "gsheet_get_values" &&
+    name !== "gsheet_set_values"
   )
     return null;
 
@@ -661,5 +791,26 @@ export async function handle(name, args) {
       expand_ranges: !!args.expand_ranges,
     };
     return runGsheetPython(TRACE_MD_SCRIPT, { creds, params });
+  }
+
+  if (name === "gsheet_get_values") {
+    const params = {
+      spreadsheet_id: args.spreadsheet_id,
+      read_range: args.read_range,
+      value_render: args.value_render || "UNFORMATTED_VALUE",
+    };
+    return runGsheetPython(GET_VALUES_SCRIPT, { creds, params });
+  }
+
+  if (name === "gsheet_set_values") {
+    if (!Array.isArray(args.write_data) || args.write_data.length === 0) {
+      return { isError: true, content: [{ type: "text", text: "write_data 不可為空陣列。" }] };
+    }
+    const params = {
+      spreadsheet_id: args.spreadsheet_id,
+      write_data: args.write_data,
+      value_input_option: args.value_input_option || "USER_ENTERED",
+    };
+    return runGsheetPython(SET_VALUES_SCRIPT, { creds, params });
   }
 }

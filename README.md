@@ -113,9 +113,9 @@ MCP_NodeServer/
 ├── config.js            ← resolveSecurePath (預設 basePath 為 D:\Project\)
 ├── tools/               ← MCP 工具模組
 │   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, apply_diff_batch, *_batch (read_files/list_files/create_file)（PROTECTED_PATTERNS 防寫入測試檔 + audit log）
-│   ├── php.js           ← run_php_script, run_php_code, run_php_test, send_http_request（含 body_filter regex tool 端 grep）, tail_log, *_batch (http_requests/php_script)（PHP 執行 + tail_log 支援 container 參數走 Docker）
+│   ├── php.js           ← run_php_script, run_php_code, run_php_test, send_http_request（含 body_filter regex tool 端 grep）, tail_log, *_batch (http_requests/php_script)（PHP 執行 + tail_log 支援 container 參數走 Docker；stderr 自動濾 Xdebug Step Debug 雜訊）
 │   ├── database.js      ← set_database, load_db_connection, get_db_schema, execute_sql（危險語句攔截 + confirm + audit log + ER_* 錯誤摘要）, *_batch, schema_diff, mysql_log_tail
-│   ├── gsheet.js        ← gsheet_fetch_with_state（含 auto_recalc_check polling + preserve_validation 跳過空字串寫入保留 dropdown）, gsheet_xlookup_trace, trace_gsheet_formula, gsheet_get_metadata, gsheet_fetch_formatted（gspread 一條龍 + 查表鏈遞迴展開 + markdown 公式追蹤報告 + worksheet metadata 列舉 + FORMATTED_VALUE 顯示字串抓取，python_runner 容器）
+│   ├── gsheet.js        ← gsheet_fetch_with_state（含 auto_recalc_check polling + preserve_validation 跳過空字串寫入保留 dropdown）, gsheet_xlookup_trace, trace_gsheet_formula, gsheet_get_metadata, gsheet_fetch_formatted, gsheet_get_values（輕量 batch get）, gsheet_set_values（輕量 batch update）（gspread 一條龍 + 查表鏈遞迴展開 + markdown 公式追蹤報告 + worksheet metadata 列舉 + FORMATTED_VALUE 顯示字串抓取 + 輕量讀寫取代 PHP 手刻 JWT+curl，python_runner 容器）
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   ├── bookmarks.js     ← Chrome 書籤管理 (12 工具)
 │   ├── sftp.js          ← sftp_connect/upload/download/list/delete, sftp_*_batch (list/upload/download/delete), sftp_preset, sftp_diff_hash (MD5 比對不下載全文)
@@ -126,7 +126,7 @@ MCP_NodeServer/
 │   ├── pdf.js           ← read_pdf_file, read_pdf_files_batch (.pdf → Markdown/Text)
 │   ├── images.js        ← read_image, read_images_batch（圖片讀取 + 縮放，支援 PNG/JPG/WebP/GIF/SVG）
 │   ├── video.js         ← read_video（影片 → faster-whisper 字幕 + ffmpeg 關鍵幀，支援 MP4/MOV/MKV/WebM/AVI/M4V，python_runner 容器）
-│   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops（支援 container 參數走 Docker）
+│   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops（container 模式以 -w workdir 指定容器內 repo 路徑，預設 /var/www/html；本機模式可加 cwd 指定專案目錄）
 │   ├── dom_compare.js   ← dom_compare（批次比對兩個 URL 的 CSS/HTML/JS 差異，需 Playwright）
 │   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage（含 detectOverridden 死宣告偵測）, browser_save_session, browser_restore_session（自帶 headless 瀏覽器，需 Playwright）
 │   ├── print_layout.js  ← print_layout_test（列印版面測試：產真實分頁 PDF → poppler render 每頁 PNG → 頁圖 + 頁數 + 字體嵌入 + selector 落點，需 Playwright + python_runner）

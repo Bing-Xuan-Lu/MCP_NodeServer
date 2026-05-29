@@ -10,6 +10,21 @@ const execPromise = util.promisify(exec);
 // Docker 容器內的掛載路徑（D:\Project → /var/www/html）
 const DOCKER_MOUNT = "/var/www/html";
 
+/**
+ * 過濾 PHP CLI stderr 的 Xdebug Step Debug 雜訊。
+ * 容器 CLI 啟用 xdebug.mode=debug 但無 IDE 連線時，每次執行都會印：
+ *   "Xdebug: [Step Debug] Could not connect to debugging client. Tried: ..."
+ * 這行對 MCP 判讀無意義，過濾掉讓真正的錯誤輸出更乾淨。
+ */
+function cleanStderr(stderr) {
+  if (!stderr) return stderr;
+  const filtered = stderr
+    .split(/\r?\n/)
+    .filter((line) => !/Xdebug:\s*\[Step Debug\]/i.test(line))
+    .join("\n");
+  return filtered.trim() === "" ? "" : filtered;
+}
+
 /** 將本機 Windows 路徑轉為 Docker 容器內路徑 */
 function toContainerPath(windowsPath) {
   const basePath = CONFIG.basePath.replace(/[\\/]+$/, "");
@@ -244,11 +259,12 @@ export async function handle(name, args) {
         cmd = `php "${fullPath}" ${args.args || ""}`;
       }
       const { stdout, stderr } = await execPromise(cmd, { timeout: 30000 });
+      const cleanErr = cleanStderr(stderr);
       return {
         content: [
           {
             type: "text",
-            text: `📝 PHP 執行結果${label}：\n${stdout}\n${stderr ? `⚠️ 錯誤輸出：\n${stderr}` : ""}`,
+            text: `📝 PHP 執行結果${label}：\n${stdout}\n${cleanErr ? `⚠️ 錯誤輸出：\n${cleanErr}` : ""}`,
           },
         ],
       };
@@ -285,16 +301,18 @@ export async function handle(name, args) {
         proc.stdin.end(code);
       });
 
+      const cleanErr = cleanStderr(stderr);
       return {
         content: [{
           type: "text",
-          text: `📝 PHP 執行結果${label}：\n${stdout}${stderr ? `\n⚠️ 錯誤輸出：\n${stderr}` : ""}`,
+          text: `📝 PHP 執行結果${label}：\n${stdout}${cleanErr ? `\n⚠️ 錯誤輸出：\n${cleanErr}` : ""}`,
         }],
       };
     } catch (error) {
+      const errStderr = cleanStderr(error.stderr);
       return {
         isError: true,
-        content: [{ type: "text", text: `執行失敗: ${error.message}${error.stdout ? `\nstdout: ${error.stdout}` : ""}${error.stderr ? `\nstderr: ${error.stderr}` : ""}` }],
+        content: [{ type: "text", text: `執行失敗: ${error.message}${error.stdout ? `\nstdout: ${error.stdout}` : ""}${errStderr ? `\nstderr: ${errStderr}` : ""}` }],
       };
     }
   }
@@ -500,10 +518,11 @@ export async function handle(name, args) {
           `docker exec ${args.container} php "${runnerPath}"`,
           { timeout: 30000 }
         );
+        const cleanErr = cleanStderr(stderr);
         return {
           content: [{
             type: "text",
-            text: `📝 測試結果 [${args.container}]：\n${stdout}\n${stderr ? `⚠️ 錯誤：\n${stderr}` : ""}`,
+            text: `📝 測試結果 [${args.container}]：\n${stdout}\n${cleanErr ? `⚠️ 錯誤：\n${cleanErr}` : ""}`,
           }],
         };
       } finally {
@@ -536,10 +555,11 @@ export async function handle(name, args) {
 
     try {
       const { stdout, stderr } = await execPromise(`php "${tempFile}"`, { timeout: 30000 });
+      const cleanErr = cleanStderr(stderr);
       return {
         content: [{
           type: "text",
-          text: `📝 測試結果：\n${stdout}\n${stderr ? `⚠️ 錯誤：\n${stderr}` : ""}`,
+          text: `📝 測試結果：\n${stdout}\n${cleanErr ? `⚠️ 錯誤：\n${cleanErr}` : ""}`,
         }],
       };
     } finally {
@@ -576,7 +596,8 @@ export async function handle(name, args) {
           cmd = `php "${fullPath}" ${s.args || ""}`;
         }
         const { stdout, stderr } = await execPromise(cmd, { timeout: 30000 });
-        const output = stdout + (stderr ? `\n⚠️ stderr: ${stderr}` : "");
+        const cleanErr = cleanStderr(stderr);
+        const output = stdout + (cleanErr ? `\n⚠️ stderr: ${cleanErr}` : "");
         results.push(`[${i + 1}] ${label} ✅ ${s.path}\n${output.substring(0, 1500)}${output.length > 1500 ? "\n... (截斷)" : ""}`);
         okCount++;
       } catch (err) {
