@@ -1646,6 +1646,84 @@ const PATTERNS = [
     },
   },
   {
+    // Layer 2.11: Playwright emulateMedia 殘留污染（screen media 漏進 page.pdf）
+    //   page.emulateMedia({media:'screen'}) 在 Playwright MCP 同一個 page 上會「持久化」，
+    //   之後每一次 page.pdf() 都改用螢幕 CSS 渲染 → 列印按鈕跑進 PDF、版面臨界值全是假數據。
+    //   page.pdf() 預期跑在 print media；要量列印版面前必須先 emulateMedia({media:'print'})。
+    //   前車之鑑（列印版面測試）：screen 殘留讓 page.pdf 量到假臨界值，反覆調 PAGE_MM
+    //     空轉約 40 輪，重設 print media 後真實臨界值一次就對。
+    //   ① 單次呼叫內：同段 code 先設 screen、後 page.pdf、中間沒 reset 回 print。
+    //   ② 跨呼叫殘留：先前某次 browser_run_code/evaluate 設了 screen 從未 reset，本次又 page.pdf。
+    //   警告不擋（exit 0）。
+    id: 'playwright_media_leak',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      const BROWSER_CODE = new Set(['browser_run_code', 'browser_evaluate']);
+      const SCRIPT_TOOLS = new Set(['run_python_script', 'run_php_code', 'run_php_script']);
+      const isBrowserCode = BROWSER_CODE.has(tool);
+      if (!isBrowserCode && !SCRIPT_TOOLS.has(tool)) return null;
+
+      const codeOf = (e) => {
+        const a = e.args || {};
+        return [a.code, a.function, a.script, a.command]
+          .filter(s => typeof s === 'string').join('\n');
+      };
+      const code = codeOf(entry);
+      if (!code) return null;
+
+      const SRC_SCREEN = /emulate_?media\s*\([^)]*\bmedia\b\s*[:=]\s*['"]screen['"]/i;
+      const SRC_PRINT  = /emulate_?media\s*\([^)]*\bmedia\b\s*[:=]\s*['"]print['"]/i;
+      // reset → 視為等同 print（pdf 預設 media 就是 print，所以是安全的）
+      const SRC_RESET  = /emulate_?media\s*\(\s*(\)|\{\s*\}|\{\s*media\s*[:=]\s*(null|None)\s*\})/i;
+      const RE_PDF     = /\.pdf\s*\(/i;
+
+      // 本次 code 沒有 page.pdf → 不在本層管轄（截圖污染另論，聚焦最致命的 pdf）
+      if (!RE_PDF.test(code)) return null;
+      const pdfIdx = code.search(RE_PDF);
+
+      // 在 text 的 [0, limit) 區間內，找「最後」一次 media 設定，回傳 'screen'|'print'|null
+      const lastMediaBefore = (text, limit) => {
+        let state = null, pos = -1;
+        const scan = (src, label) => {
+          const r = new RegExp(src.source, 'gi'); let m;
+          while ((m = r.exec(text)) !== null) {
+            if (m.index < limit && m.index > pos) { pos = m.index; state = label; }
+          }
+        };
+        scan(SRC_SCREEN, 'screen');
+        scan(SRC_PRINT, 'print');
+        scan(SRC_RESET, 'print');
+        return state;
+      };
+
+      const buildMsg = (kind) => (
+        `[Playwright Media Leak] ⚠️ 偵測到 page.pdf() 但 emulateMedia 目前狀態是 'screen'（${kind}）。\n` +
+        `  → page.pdf() 預期跑在 print media；screen 殘留會讓 PDF 用螢幕樣式渲染（列印鈕跑進 PDF、版面臨界值全是假數據）。\n` +
+        `  → 修法：產 PDF 前先 await page.emulateMedia({ media: 'print' })；截圖才切回 'screen'。量列印版面務必確認當下是 print media。\n` +
+        `  → 前車之鑑：列印版面測試曾因 screen 殘留量到假臨界值，反覆調參數空轉數十輪，重設 print 後一次就對。\n`
+      );
+
+      // ① 單次呼叫內：pdf 之前最後設定的是 screen
+      const inCall = lastMediaBefore(code, pdfIdx);
+      if (inCall === 'screen') return buildMsg('同段 code 先設了 screen、未 reset 就 page.pdf');
+      if (inCall === 'print') return null; // 同段已明確 reset / 設 print，安全
+
+      // ② 跨呼叫殘留：僅 MCP 同一 browser page 適用（run_python_script 每次新 process 不殘留）
+      if (isBrowserCode) {
+        for (let i = history.length - 1; i >= 0; i--) {
+          const h = history[i];
+          if (!BROWSER_CODE.has(shortName(h.tool))) continue;
+          const hCode = codeOf(h);
+          if (!hCode) continue;
+          const hState = lastMediaBefore(hCode, hCode.length);
+          if (hState === 'screen') return buildMsg('先前某次 browser code 設了 screen 從未 reset 回 print');
+          if (hState === 'print') break; // 已 reset，安全
+        }
+      }
+      return null;
+    },
+  },
+  {
     // Layer 2.10b: CSS Legacy Skill Gate
     //   寫入 css/v3/**/*.css、page/**/*.css，或 screen.prefixer / legacy global CSS 鄰近檔時，
     //   第一次 BLOCK 提示「先跑 /css_legacy_override」（避免桌機改完破手機）；同 session 已提示過則放行。

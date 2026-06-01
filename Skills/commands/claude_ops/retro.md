@@ -29,6 +29,7 @@ $ARGUMENTS
 | `/retro skill 研究 {repo}` | 參考庫研究模式 |
 | `/retro tool` | 只掃 Tool 改善 |
 | `/retro backlog` | 讀取 MCP backlog，逐條決定處理（在 MCP 專案中使用） |
+| `/retro lesson` | 消化 `/lesson` 暫存的對話品質教訓，逐條轉成帶 triggers 的 memory 或 hook（在 MCP 專案中使用） |
 
 ---
 
@@ -161,6 +162,8 @@ Glob pattern="~/.claude/projects/*/memory/MEMORY.md"
 
 **為什麼需要這個面向：** AI 繞遠路或幻覺時，自己的自省準確率極低——因為錯誤假設下的每一步看起來都「合理」。出報告沒用，因為下次又是新 context。**唯一有效的路徑是問使用者，然後把答案直接轉化成 memory 或 hook，而不是寫進報告就算了。**
 
+> **即時捕捉優先：** 對話品質問題最好在「發生當下、使用者糾正時」就用 `/lesson` 捕捉進 sink（`~/.claude/quality-lessons.jsonl`），不要拖到 session 尾端才回想（那時 context 已壓縮、細節已模糊）。本面向回收的是「當下沒 /lesson 到」的漏網之魚；已 `/lesson` 過的累積教訓由 `/retro lesson` 模式統一轉化。
+
 逐一問使用者以下三個問題（有任何「有」就繼續，「沒有」直接跳下一個）：
 
 **Q1 — 幻覺偵測**
@@ -221,6 +224,18 @@ Glob pattern="~/.claude/projects/*/memory/MEMORY.md"
 3. 逐條詢問：實作 / 延後 / 捨棄
 4. 選擇實作 → 進入對應的 Tool 或 Skill 處理流程
 5. 選擇完成後 → 用 `apply_diff` 將 `- [ ]` 改為 `- [x]`
+
+**`/retro lesson` 模式（在 MCP 專案使用）**：
+
+消化 `/lesson` 即時捕捉、累積在 sink 的對話品質教訓，逐條轉成長期持久層。
+
+1. 用 `Bash` 跑 `node ~/.claude/hooks/record-lesson.cjs --list` 列出所有 pending 教訓（含各筆 `ts`）。
+2. 逐條判斷該轉成哪種持久物（這一步是關鍵——光列在報告等於沒做）：
+   - **行為認知規則**（這類情境別先假設 X、該先確認 Y）→ 轉成 `feedback` memory，**務必附 `triggers`**（工具名 / 路徑 / 關鍵字），否則 `memory-auto-recall` hook 永遠不會在對的時機注入。可用 `memory_add_triggers` 補 triggers。
+   - **可被 pattern 偵測的壞行為**（如 emulateMedia 殘留、特定誤用）→ 轉成 `repetition-detector.js` 的新偵測層（hook），並同步 CLAUDE.md hook 表。
+   - **太瑣碎 / 一次性** → 與使用者確認後直接捨棄。
+3. 每轉化或捨棄一筆 → 用 `Bash` 跑 `node ~/.claude/hooks/record-lesson.cjs --done <該筆 ts>` 標記 done（pending 清單即縮短，session-start 不再浮現）。
+4. 收尾回報：轉成 memory N 筆 / 轉成 hook N 筆 / 捨棄 N 筆，並列出產出物路徑（memory 檔名 / hook id）。
 
 ---
 

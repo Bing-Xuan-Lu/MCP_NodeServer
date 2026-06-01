@@ -394,6 +394,28 @@ async function main() {
       }
     } catch (e) {}
 
+    // 6. 對話品質教訓（/lesson 暫存區）— 即時捕捉的繞遠路/幻覺/測試形式化，待 /retro lesson 轉成 memory
+    //    跨專案共用：在 A 專案踩的坑（如 emulateMedia 污染）也該在 B 專案開場提醒，因為這是 AI 行為層教訓
+    try {
+      const lessonsPath = path.join(HOME, '.claude', 'quality-lessons.jsonl');
+      if (fs.existsSync(lessonsPath)) {
+        const pending = fs.readFileSync(lessonsPath, 'utf-8').trim().split('\n').filter(Boolean)
+          .map(l => { try { return JSON.parse(l); } catch { return null; } })
+          .filter(e => e && e.status === 'pending');
+        if (pending.length > 0) {
+          const CAT_LABEL = { detour: '繞遠路', hallucination: '幻覺', 'test-theater': '測試形式化', 'memory-miss': '記憶失效', general: '其他' };
+          const recent = pending.slice(-6).map(e =>
+            `  • [${CAT_LABEL[e.category] || e.category}] ${(e.text || '').slice(0, 90)}（${(e.ts || '').slice(0, 10)} ${e.project}）`
+          ).join('\n');
+          output.push(
+            `\n[Quality Lessons] 🧭 有 ${pending.length} 筆待轉化的對話品質教訓（/lesson 即時捕捉的繞遠路/幻覺）：\n` +
+            recent +
+            `\n  → 這些是「上次踩過的坑」，這個 session 請主動避開；有空到 MCP_Server 執行 /retro lesson 轉成長期 memory（轉完自動消去）。`
+          );
+        }
+      }
+    } catch (e) {}
+
     // 7. 文件老化偵測 — CLAUDE.md > 30 天未更新
     try {
       const claudeMdPath = path.join(cwd, 'CLAUDE.md');
