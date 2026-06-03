@@ -1,4 +1,5 @@
 import path from "path";
+import os from "os";
 import { createRequire } from "module";
 import { MCP_BASE_PATHS } from "./env.js";
 
@@ -44,6 +45,13 @@ export function resolveSecurePath(userPath) {
     if (normalizedTarget.startsWith(normalizedExtra)) {
       return targetPath;
     }
+  }
+
+  // 3. Claude 記憶目錄預設允許（~/.claude/memory/ 與 ~/.claude/projects/<slug>/memory/）
+  //    範圍鎖在 home 的 .claude 下、且路徑含 memory 區段；讓含中文記憶檔可走 create_file 避免 Write chunk 邊界截斷
+  const claudeHome = path.join(os.homedir(), ".claude").toLowerCase();
+  if (normalizedTarget.startsWith(claudeHome) && /[\\/]memory([\\/]|$)/i.test(normalizedTarget)) {
+    return targetPath;
   }
 
   throw new Error(

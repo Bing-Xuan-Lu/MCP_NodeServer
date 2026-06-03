@@ -25,7 +25,7 @@ export const definitions = [
   {
     name: "js_symbol_index",
     description:
-      "掃描 JS/TS/Vue 專案建立符號索引（function、class、object methods、`obj.method = fn` 賦值、export），結果快取 4 小時。後續 js_symbol_lookup / js_find_usages / js_trace_logic 都讀此索引。",
+      "掃描 JS/TS/Vue 專案建立符號索引（function、class、object methods、`obj.method = fn` 賦值、export），結果快取 4 小時。亦會掃 .php/.html/.htm 內嵌 <script> 區塊的 JS（legacy 專案常把 Vue methods:{} 內嵌在 .php），行號對應原始檔。後續 js_symbol_lookup / js_find_usages / js_trace_logic 都讀此索引。",
     inputSchema: {
       type: "object",
       properties: {
@@ -48,7 +48,7 @@ export const definitions = [
   {
     name: "js_symbol_lookup",
     description:
-      "找指定 JS 符號的定義位置 + 原始碼。支援 function 名稱、class 名稱、`obj.method` 點記號（例：`_login_popup.Show`）。省略 method 名只回傳該物件/類別的概覽。",
+      "找指定 JS 符號的定義位置 + 原始碼。支援 function 名稱、class 名稱、`obj.method` 點記號（例：`_login_popup.Show`），含 .php/.html 內嵌 <script> 的 JS（如 Vue methods 內的 `getPage`）。省略 method 名只回傳該物件/類別的概覽。",
     inputSchema: {
       type: "object",
       properties: {
@@ -433,6 +433,38 @@ function extractSymbols(ast, relPath) {
 // ============================================
 // 檔案解析
 // ============================================
+// legacy PHP/HTML 常把 Vue/JS（含 methods:{}）內嵌在 <script> 區塊
+const MARKUP_EXTS = new Set([".php", ".html", ".htm", ".phtml"]);
+
+/**
+ * 把 HTML/PHP 內「非 <script> 區塊」與 script 內的 `<?php ?>` / `<?= ?>`
+ * 全部換成等量空白（保留 \r\n 與字元位置），讓 babel 在「原始檔行號」上
+ * 解析所有內嵌 JS。支援多個 <script> 區塊；外部腳本(src=)與非 JS type 略過。
+ */
+function markupToJs(code) {
+  const out = code.split("").map(ch => (ch === "\n" || ch === "\r") ? ch : " ");
+  const scriptRe = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+  let hasScript = false;
+  let m;
+  while ((m = scriptRe.exec(code)) !== null) {
+    const attrs = m[1] || "";
+    if (/\bsrc\s*=/i.test(attrs)) continue; // 外部腳本無內嵌內容
+    const typeM = attrs.match(/\btype\s*=\s*["']?([^"'\s>]+)/i);
+    if (typeM && !/^(text\/javascript|application\/javascript|module|text\/babel)$/i.test(typeM[1])) continue; // 非 JS（x-template/json 等）
+    hasScript = true;
+    const bodyStart = m.index + m[0].indexOf(">") + 1;
+    // <?php ?> 換等量空白保留行號；首字元放 '0' 當佔位，避免處於「值位置」時產生 `n: ,` 語法錯誤
+    const body = m[2].replace(/<\?(?:php|=)?[\s\S]*?\?>/g, s => {
+      let rep = s.replace(/[^\r\n]/g, " ");
+      const i = rep.search(/[^\r\n]/);
+      if (i >= 0) rep = rep.slice(0, i) + "0" + rep.slice(i + 1);
+      return rep;
+    });
+    for (let k = 0; k < body.length; k++) out[bodyStart + k] = body[k];
+  }
+  return { js: out.join(""), hasScript };
+}
+
 async function parseFile(filePath) {
   const parser = await getParser();
   let code;
@@ -451,6 +483,12 @@ async function parseFile(filePath) {
     if (!m) return { ast: null, error: "no <script> in .vue" };
     scriptOffset = code.slice(0, m.index).split("\n").length - 1;
     code = m[1];
+  } else if (MARKUP_EXTS.has(ext)) {
+    // .php/.html/.htm：抓所有 <script> 內嵌 JS，無 script 則靜默跳過（不算解析失敗）
+    if (!/<script\b/i.test(code)) return { ast: null, skip: true };
+    const { js, hasScript } = markupToJs(code);
+    if (!hasScript) return { ast: null, skip: true };
+    code = js;
   }
 
   const isTS = ext === ".ts" || ext === ".tsx";
@@ -490,7 +528,8 @@ const DEFAULT_EXCLUDE = [
 
 async function buildIndex(projectPath, scanPaths, excludePatterns) {
   const ignore = [...DEFAULT_EXCLUDE, ...(excludePatterns || [])];
-  const exts = "{js,jsx,mjs,cjs,ts,tsx,vue}";
+  // 含 php/html/htm：抓 legacy 專案內嵌在 <script> 區塊的 JS（無 script 的檔會被靜默跳過）
+  const exts = "{js,jsx,mjs,cjs,ts,tsx,vue,php,html,htm,phtml}";
 
   let patterns;
   if (scanPaths && scanPaths.length > 0) {
@@ -517,9 +556,9 @@ async function buildIndex(projectPath, scanPaths, excludePatterns) {
 
   for (const file of files) {
     const relPath = path.relative(projectPath, file).replace(/\\/g, "/");
-    const { ast, error } = await parseFile(file);
+    const { ast, error, skip } = await parseFile(file);
     if (!ast) {
-      index.errors.push({ file: relPath, error: error || "parse failed" });
+      if (!skip) index.errors.push({ file: relPath, error: error || "parse failed" }); // skip：markup 檔無 <script>，不算失敗
       continue;
     }
     try {

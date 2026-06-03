@@ -13,6 +13,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import { HOME, MCP_ROOT as MCP_ROOT_FROM_ENV } from '../env.js';
 const SESSIONS_DIR = path.join(HOME, '.claude', 'sessions');
 const PROJECTS_DIR = path.join(HOME, '.claude', 'projects');
@@ -66,6 +67,31 @@ function findProjectMemoryDir() {
   } catch (e) {}
 
   return null;
+}
+
+// === 最近場次輕量索引（取代「倒一份 5 天前舊 compact」）===
+// 走 session-recall-scan.js index 模式，回最近 N 場各一行：日期 + 主題 + 未完成 + 失敗數 + 熱檔。
+// 給 Claude 一張「地圖」，真正相關那場的細節由 UserPromptSubmit 的 session-recall-on-prompt 在送指令時注入。
+function loadRecentIndex(slug, n = 6) {
+  const scan = path.join(HOME, '.claude', 'hooks', 'session-recall-scan.js');
+  if (!slug || !fs.existsSync(scan)) return null;
+  try {
+    const out = execFileSync(process.execPath, [scan, 'index', slug, String(n)],
+      { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, windowsHide: true });
+    const j = JSON.parse(out);
+    if (!j.sessions || j.sessions.length === 0) return null;
+    const lines = j.sessions.map((s) => {
+      const date = (s.date || '').slice(0, 16).replace('T', ' ');
+      const topic = (s.topic || '(無使用者輸入)').slice(0, 60);
+      const tags = [];
+      if (s.pendingTodos > 0) tags.push(`未完成 ${s.pendingTodos}`);
+      if (s.failedCalls > 0) tags.push(`失敗 ${s.failedCalls}`);
+      const hot = (s.topFiles && s.topFiles[0]) ? ` · ${s.topFiles[0].file}` : '';
+      const tagStr = tags.length ? ` [${tags.join(' / ')}]` : '';
+      return `  • ${date} \`${s.sessionId.slice(0, 8)}\`${tagStr}${hot}\n      ${topic}`;
+    });
+    return lines.join('\n');
+  } catch { return null; }
 }
 
 // === 找最近的 session 摘要 ===
@@ -279,16 +305,26 @@ async function main() {
   try {
     const memDir = findProjectMemoryDir();
 
-    // 1. 上次 session 摘要
-    const latest = findLatestSession();
-    if (latest) {
-      const content = fs.readFileSync(latest.path, 'utf-8').trim();
-      if (content && content.length >= 20) {
-        const label = latest.name.replace(/-(session|compact|checkpoint)\.md$/, '');
-        output.push(`[Session] 上次摘要（${label}）：\n${content}`);
-      }
+    // 1. 最近場次索引（輕量地圖，取代倒一份 5 天前的舊 compact）
+    //    真正「跟這次任務相關」那場的細節，由 session-recall-on-prompt（UserPromptSubmit）在你送出指令時按關鍵字注入。
+    const slug = memDir ? path.basename(path.dirname(memDir)) : null;
+    const recentIndex = slug ? loadRecentIndex(slug, 6) : null;
+    if (recentIndex) {
+      output.push(
+        `[Recent Sessions] 本專案最近場次（地圖；相關那場的細節會在你下指令時自動帶出，或用 session_recall 查）：\n${recentIndex}`
+      );
     } else {
-      output.push('[Session] 沒有近期工作紀錄，全新開始！');
+      // 後援：索引拿不到時退回舊的單場摘要
+      const latest = findLatestSession();
+      if (latest) {
+        const content = fs.readFileSync(latest.path, 'utf-8').trim();
+        if (content && content.length >= 20) {
+          const label = latest.name.replace(/-(session|compact|checkpoint)\.md$/, '');
+          output.push(`[Session] 上次摘要（${label}）：\n${content}`);
+        }
+      } else {
+        output.push('[Session] 沒有近期工作紀錄，全新開始！');
+      }
     }
 
     // 2. MEMORY.md 摘要

@@ -907,9 +907,18 @@ export async function handle(name, args) {
       };
     }
     if (needConfirm.length > 0 && !args.confirm) {
+      const total = args.queries.length;
+      const others = total - needConfirm.length;
+      const othersNote = others > 0
+        ? `（包含不需 confirm 的 ${others} 條，如 ALTER/CREATE/SELECT 也一併沒執行——別誤以為它們已跑）`
+        : "";
       return {
         isError: true,
-        content: [{ type: "text", text: `⚠️ 批次中有 ${needConfirm.length} 條語句需加 confirm: true：\n${needConfirm.map((d) => `  • ${d.reason}：${d.label}`).join("\n")}` }],
+        content: [{ type: "text", text:
+          `⚠️ 整批未執行：${total} 條語句全部沒跑${othersNote}。\n` +
+          `原因：批次中有 ${needConfirm.length} 條需加 confirm: true：\n` +
+          `${needConfirm.map((d) => `  • ${d.reason}：${d.label}`).join("\n")}\n` +
+          `👉 補 confirm: true 後重送整批；若不想跑需確認的語句，請先從 queries 移除它們再單獨送其餘語句。` }],
       };
     }
 

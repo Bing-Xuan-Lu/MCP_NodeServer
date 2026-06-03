@@ -91,6 +91,19 @@ function findSnapshot(sessionId) {
   return hit ? path.join(SESSIONS_DIR, hit) : null;
 }
 
+// 取 tool_result 的純文字（content 可能是 string 或 [{type:'text',text}]）
+function resultText(c) {
+  if (typeof c === 'string') return c;
+  if (Array.isArray(c)) {
+    return c.map((x) => {
+      if (typeof x === 'string') return x;
+      if (x && x.type === 'text') return x.text || '';
+      return '';
+    }).join(' ');
+  }
+  return '';
+}
+
 // 解析單場 jsonl → recap 物件
 function recallSession(slug, sess) {
   const raw = fs.readFileSync(sess.file, 'utf-8');
@@ -101,6 +114,8 @@ function recallSession(slug, sess) {
   const toolsUsed = new Map();
   const sqlPhpRun = [];
   const assistantTexts = [];
+  const idToTool = {};             // tool_use_id -> "tool target" 摘要，給失敗歸因用
+  const failedCalls = [];          // 失敗 / 被 BLOCK 的工具呼叫
   let lastTodos = null;
   let firstTs = null;
   let lastTs = null;
@@ -133,6 +148,12 @@ function recallSession(slug, sess) {
           const short = name.split('__').pop();
           toolsUsed.set(short, (toolsUsed.get(short) || 0) + 1);
           const inp = block.input || {};
+          // 記 id -> "tool target" 摘要，讓後面的 tool_result 錯誤能歸因到哪個工具/哪個檔
+          if (block.id) {
+            const tgt = inp.file_path || inp.path || (inp.target && inp.target.path) ||
+              inp.sql || inp.query || inp.command || inp.url || '';
+            idToTool[block.id] = short + (tgt ? ` ${clip(String(tgt), 60)}` : '');
+          }
           if (FILE_TOOLS.test(name)) {
             const fp = inp.file_path || inp.path || (inp.target && inp.target.path) || '';
             if (fp) filesModified.set(fp, (filesModified.get(fp) || 0) + 1);
@@ -147,6 +168,17 @@ function recallSession(slug, sess) {
               status: t.status || '',
             }));
           }
+        }
+      }
+    }
+
+    // 失敗 / 被 hook BLOCK 的工具呼叫：tool_result 帶 is_error 出現在 user message
+    if (obj.type === 'user' && obj.message && Array.isArray(obj.message.content)) {
+      for (const block of obj.message.content) {
+        if (block && block.type === 'tool_result' && block.is_error) {
+          const who = idToTool[block.tool_use_id] || '(未知工具)';
+          const err = clip(resultText(block.content), 240);
+          if (err) failedCalls.push({ tool: who, error: err });
         }
       }
     }
@@ -165,6 +197,8 @@ function recallSession(slug, sess) {
       .slice(0, MAX_FILES)
       .map(([f, n]) => ({ file: f, edits: n })),
     sqlPhpRun: sqlPhpRun.slice(0, 15),
+    failedCalls: failedCalls.slice(-25),   // 失敗/被擋的工具呼叫（取最後 25 筆，最近的最有用）
+    failedCallTotal: failedCalls.length,
     topTools: [...toolsUsed.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t, n]) => ({ tool: t, count: n })),
     lastTodos,
     // 取最後幾則 assistant 文字當「收尾結論」（最能代表這場做完什麼）
@@ -200,14 +234,16 @@ function pickSession(slug, selector) {
   return sessions.find((s) => s.id === selector || s.id.startsWith(selector)) || null;
 }
 
-// 跨專案關鍵字搜尋
-function search(keyword, days) {
+// 關鍵字搜尋（slugFilter 給定時只搜該專案；給 excludeId 排除當前對話檔）
+function search(keyword, days, slugFilter, excludeId) {
   const kw = String(keyword || '').toLowerCase();
   if (!kw) return { error: 'empty keyword' };
   const cutoff = Date.now() - days * 86400000;
   const results = [];
   if (!fs.existsSync(PROJECTS_DIR)) return { matches: [] };
-  for (const slug of fs.readdirSync(PROJECTS_DIR)) {
+  let slugs = fs.readdirSync(PROJECTS_DIR);
+  if (slugFilter) slugs = slugs.filter((s) => s === slugFilter || s.toLowerCase().includes(String(slugFilter).toLowerCase()));
+  for (const slug of slugs) {
     const dir = path.join(PROJECTS_DIR, slug);
     let files;
     try {
@@ -224,6 +260,8 @@ function search(keyword, days) {
         continue;
       }
       if (st.mtimeMs < cutoff) continue;
+      const sessId = f.replace(/\.jsonl$/, '');
+      if (excludeId && (sessId === excludeId || sessId.startsWith(excludeId))) continue; // 排除當前對話
       let raw;
       try {
         raw = fs.readFileSync(fp, 'utf-8');
@@ -267,11 +305,56 @@ function search(keyword, days) {
   return { keyword, days, matchCount: results.length, matches: results.slice(0, 30) };
 }
 
+// 輕量摘要：一場 → { topic, pendingTodos, failedCalls, topFiles }（給 index 用，比 recall 便宜）
+function quickDigest(slug, sess) {
+  let raw;
+  try { raw = fs.readFileSync(sess.file, 'utf-8'); } catch { return null; }
+  let topic = '', pendingTodos = 0, failed = 0;
+  const fileCount = new Map();
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line) continue;
+    let o; try { o = JSON.parse(line); } catch { continue; }
+    if (!topic && isRealUserText(o)) {
+      const t = cleanUserText(textOf(o.message));
+      if (t) topic = clip(t, 90);
+    }
+    if (o.type === 'assistant' && o.message && Array.isArray(o.message.content)) {
+      for (const b of o.message.content) {
+        if (b.type !== 'tool_use') continue;
+        if (FILE_TOOLS.test(b.name || '')) {
+          const fp = (b.input && (b.input.file_path || b.input.path)) || '';
+          if (fp) fileCount.set(fp, (fileCount.get(fp) || 0) + 1);
+        }
+        if ((b.name || '').split('__').pop() === 'TodoWrite' && Array.isArray(b.input && b.input.todos)) {
+          pendingTodos = b.input.todos.filter((t) => t.status && t.status !== 'completed').length;
+        }
+      }
+    }
+    if (o.type === 'user' && o.message && Array.isArray(o.message.content)) {
+      for (const b of o.message.content) if (b && b.type === 'tool_result' && b.is_error) failed++;
+    }
+  }
+  const topFiles = [...fileCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2)
+    .map(([f, n]) => ({ file: f.split(/[\\/]/).pop(), edits: n }));
+  return { sessionId: sess.id, date: new Date(sess.mtime).toISOString(), topic, pendingTodos, failedCalls: failed, topFiles };
+}
+
+// 最近 N 場輕量索引（給 SessionStart 當「地圖」，不倒整包）
+function buildIndex(slug, n, excludeId) {
+  let sessions = listSessions(slug);
+  if (excludeId) sessions = sessions.filter((s) => !(s.id === excludeId || s.id.startsWith(excludeId)));
+  sessions = sessions.slice(0, n || 8);
+  return { slug, count: sessions.length, sessions: sessions.map((s) => quickDigest(slug, s)).filter(Boolean) };
+}
+
 // ── main ───────────────────────────────────────────
 function main() {
-  const [, , mode, a, b] = process.argv;
+  const [, , mode, a, b, c] = process.argv;
+  const curId = process.env.CLAUDE_CODE_SESSION_ID || '';
   try {
-    if (mode === 'list') {
+    if (mode === 'index') {
+      process.stdout.write(JSON.stringify(buildIndex(a, parseInt(b, 10) || 8, curId), null, 2));
+    } else if (mode === 'list') {
       const sessions = listSessions(a);
       const out = sessions.map((s) => ({
         sessionId: s.id,
@@ -289,9 +372,10 @@ function main() {
       process.stdout.write(JSON.stringify(recallSession(a, sess), null, 2));
     } else if (mode === 'search') {
       const days = b ? Math.min(parseInt(b, 10) || 30, 180) : 30;
-      process.stdout.write(JSON.stringify(search(a, days), null, 2));
+      // search <keyword> [days] [slug]；給 slug 時只搜該專案，並自動排除當前對話
+      process.stdout.write(JSON.stringify(search(a, days, c || null, curId), null, 2));
     } else {
-      process.stdout.write(JSON.stringify({ error: 'usage: list <slug> | recall <slug> <selector> | search <keyword> [days]' }));
+      process.stdout.write(JSON.stringify({ error: 'usage: index <slug> [n] | list <slug> | recall <slug> <selector> | search <keyword> [days] [slug]' }));
     }
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: String((e && e.message) || e) }));

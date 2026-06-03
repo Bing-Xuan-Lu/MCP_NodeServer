@@ -149,6 +149,14 @@ export const definitions = [
         body_filter_flags: { type: "string", description: "選填：regex flags，預設 'i'（不分大小寫）", default: "i" },
         body_filter_context: { type: "integer", description: "選填：每個匹配行前後保留幾行上下文，預設 0", default: 0 },
         body_filter_max_matches: { type: "integer", description: "選填：最多保留多少匹配（命中過多時截斷），預設 200", default: 200 },
+        follow_redirects: {
+          type: "boolean",
+          description:
+            "選填：是否跟隨 3xx 轉址，預設 true。設 false 時不跟隨並直接回傳原始 3xx 狀態碼與 Location header" +
+            "（測後台權限把關常用：判斷 302→nopri.php 被擋 vs 200 放行，免再 fallback 手刻 curl）。",
+          default: true,
+        },
+        return_headers: { type: "boolean", description: "選填：是否在輸出附上回應的關鍵 headers（Location/Content-Type/Set-Cookie 等），預設 false", default: false },
       },
       required: ["url"],
     },
@@ -228,11 +236,54 @@ export const definitions = [
           description: "HTTP 請求陣列",
         },
         max_response_size: { type: "integer", description: "每筆回應 body 字元上限（預設 8000；設 0 或負數 = 不截斷）" },
+        body_filter: {
+          type: "string",
+          description:
+            "選填：regex pattern；指定時每筆回應只回傳 body 中匹配的行（套用到所有 requests）。" +
+            "用途：批次測多頁面時只看關鍵區塊（如 box-title），省去大 response 截斷後改讀檔。",
+        },
+        body_filter_flags: { type: "string", description: "選填：regex flags，預設 'i'（不分大小寫）", default: "i" },
+        body_filter_context: { type: "integer", description: "選填：每個匹配行前後保留幾行上下文，預設 0", default: 0 },
+        body_filter_max_matches: { type: "integer", description: "選填：每筆最多保留多少匹配，預設 200", default: 200 },
       },
       required: ["requests"],
     },
   },
 ];
+
+// 共用：body regex 行過濾（send_http_request 與 batch 共用）
+// 回傳 { text, note }；regex 無效時回傳原文 + 警告
+function filterBodyLines(text, { pattern, flags = "i", context = 0, maxMatches = 200 } = {}) {
+  if (!pattern) return { text, note: "" };
+  try {
+    const re = new RegExp(pattern, flags);
+    const ctx = Math.max(0, context | 0);
+    const cap = maxMatches > 0 ? maxMatches : 200;
+    const lines = text.split(/\r?\n/);
+    const keep = new Set();
+    let matched = 0;
+    for (let i = 0; i < lines.length; i++) {
+      if (re.test(lines[i])) {
+        matched++;
+        if (matched > cap) break;
+        for (let j = Math.max(0, i - ctx); j <= Math.min(lines.length - 1, i + ctx); j++) keep.add(j);
+      }
+    }
+    const out = [];
+    let prev = -2;
+    for (const i of [...keep].sort((a, b) => a - b)) {
+      if (i !== prev + 1 && out.length > 0) out.push("...");
+      out.push(`${i + 1}: ${lines[i]}`);
+      prev = i;
+    }
+    return {
+      text: out.join("\n"),
+      note: `\n🔍 body_filter "${pattern}" — ${matched} 行匹配（${lines.length} 行掃完）${matched > cap ? `, 已截到前 ${cap}` : ""}`,
+    };
+  } catch (e) {
+    return { text, note: `\n⚠️ body_filter regex 無效：${e.message}（回傳完整 body）` };
+  }
+}
 
 // ============================================
 // 工具邏輯
@@ -371,9 +422,26 @@ export async function handle(name, args) {
 
       const options = { method: args.method || "GET", headers };
       if (args.method !== "GET" && args.method !== "HEAD" && body) options.body = body;
+      if (args.follow_redirects === false) options.redirect = "manual";
 
       const response = await fetch(args.url, options);
       const text = await response.text();
+
+      // 轉址 / headers 資訊（測權限把關用：302→nopri vs 200）
+      let headerNote = "";
+      const isRedirect = response.status >= 300 && response.status < 400;
+      if (args.follow_redirects === false && isRedirect) {
+        headerNote += `\n↪️ 未跟隨轉址：HTTP ${response.status} → Location: ${response.headers.get("location") || "(無)"}`;
+      }
+      if (args.return_headers) {
+        const picked = ["location", "content-type", "set-cookie", "cache-control", "www-authenticate"];
+        const hlines = [];
+        for (const h of picked) {
+          const v = response.headers.get(h);
+          if (v) hlines.push(`  ${h}: ${v}`);
+        }
+        if (hlines.length) headerNote += `\n📋 Response headers:\n${hlines.join("\n")}`;
+      }
 
       // Cookie Jar：存入回應 Set-Cookie
       let cookieNote = "";
@@ -389,38 +457,12 @@ export async function handle(name, args) {
       }
 
       // body_filter：tool 端先 grep 過濾，省去大 response 截斷後改讀檔的流程
-      let filterNote = "";
-      let workingText = text;
-      if (args.body_filter) {
-        try {
-          const flags = args.body_filter_flags || "i";
-          const re = new RegExp(args.body_filter, flags);
-          const ctx = Math.max(0, args.body_filter_context | 0);
-          const maxMatches = args.body_filter_max_matches > 0 ? args.body_filter_max_matches : 200;
-          const lines = text.split(/\r?\n/);
-          const keep = new Set();
-          let matched = 0;
-          for (let i = 0; i < lines.length; i++) {
-            if (re.test(lines[i])) {
-              matched++;
-              if (matched > maxMatches) break;
-              for (let j = Math.max(0, i - ctx); j <= Math.min(lines.length - 1, i + ctx); j++) keep.add(j);
-            }
-          }
-          const sortedIdx = [...keep].sort((a, b) => a - b);
-          const out = [];
-          let prev = -2;
-          for (const i of sortedIdx) {
-            if (i !== prev + 1 && out.length > 0) out.push("...");
-            out.push(`${i + 1}: ${lines[i]}`);
-            prev = i;
-          }
-          workingText = out.join("\n");
-          filterNote = `\n🔍 body_filter "${args.body_filter}" — ${matched} 行匹配（${lines.length} 行掃完）${matched > maxMatches ? `, 已截到前 ${maxMatches}` : ""}`;
-        } catch (e) {
-          filterNote = `\n⚠️ body_filter regex 無效：${e.message}（回傳完整 body）`;
-        }
-      }
+      const { text: workingText, note: filterNote } = filterBodyLines(text, {
+        pattern: args.body_filter,
+        flags: args.body_filter_flags,
+        context: args.body_filter_context,
+        maxMatches: args.body_filter_max_matches,
+      });
 
       const maxSize = args.max_response_size === undefined ? 20000 : args.max_response_size;
       const unlimited = !Number.isFinite(maxSize) || maxSize <= 0;
@@ -430,7 +472,7 @@ export async function handle(name, args) {
         ? `\n... ⚠️ 已截斷（${responseBody.length}/${totalLen} 字元，傳 max_response_size:0 取完整內容；或加 body_filter 縮小範圍）`
         : "";
       return {
-        content: [{ type: "text", text: `🌐 HTTP ${response.status}${cookieNote}${filterNote}\n${responseBody}${truncNote}` }],
+        content: [{ type: "text", text: `🌐 HTTP ${response.status}${headerNote}${cookieNote}${filterNote}\n${responseBody}${truncNote}` }],
       };
     } catch (error) {
       return { isError: true, content: [{ type: "text", text: `請求失敗: ${error.message}` }] };
@@ -638,10 +680,16 @@ export async function handle(name, args) {
         if (req.method !== "GET" && req.method !== "HEAD" && body) options.body = body;
 
         const response = await fetch(req.url, options);
-        const text = await response.text();
+        const rawText = await response.text();
+        const { text, note: filterNote } = filterBodyLines(rawText, {
+          pattern: args.body_filter,
+          flags: args.body_filter_flags,
+          context: args.body_filter_context,
+          maxMatches: args.body_filter_max_matches,
+        });
         const slice = batchUnlimited ? text : text.substring(0, batchMaxSize);
         const trunc = (!batchUnlimited && text.length > batchMaxSize) ? `\n... ⚠️ 已截斷（${slice.length}/${text.length}）` : "";
-        return `[${i + 1}] ${label} ✅ HTTP ${response.status} ${req.method || "GET"} ${req.url}\n${slice}${trunc}`;
+        return `[${i + 1}] ${label} ✅ HTTP ${response.status} ${req.method || "GET"} ${req.url}${filterNote}\n${slice}${trunc}`;
       } catch (err) {
         return `[${i + 1}] ${label} ❌ ${req.method || "GET"} ${req.url}\n${err.message}`;
       }

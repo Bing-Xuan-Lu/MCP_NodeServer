@@ -142,6 +142,7 @@ MCP_NodeServer/
 │   ├── php_symbol.js    ← symbol_index, find_usages, find_hierarchy, find_dependencies, trace_logic（PHP AST 符號索引、交叉引用、邏輯追蹤）
 │   ├── js_symbol.js     ← js_symbol_index, js_symbol_lookup, js_find_usages, js_trace_logic（JS/TS/Vue AST 符號索引：function/class/object methods/`obj.method=fn` 賦值/`return {fn}` 工廠）
 │   ├── css_class.js     ← css_class_lookup, css_find_usages（CSS class 定義位置 + 跨檔引用：HTML/PHP/JS/Vue 內 class attribute / addClass / classList / 選擇器）
+│   ├── session_search.js ← session_search, session_recall（跨 session 搜尋/回顧歷史對話，解換場重踩同個坑）
 │   └── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
 ├── skills/index.js      ← MCP Prompts 路由
 ├── Skills/commands/     ← Skill MD 檔（12 個部門子資料夾）

@@ -782,7 +782,7 @@ const BASH_PATTERNS = [
   {
     regex: /rm\s+-rf\s+/i,
     signature: 'bash:rm-recursive',
-    hint: '禁用 rm -rf：易誤刪。改用 git clean -fd（只刪 untracked），或手動驗證後再刪。',
+    hint: '禁用 rm -rf：易誤刪。\n  → 刪 git「已追蹤」檔：用 git rm <path>（保留刪除紀錄、可還原）。\n  → 刪「未追蹤」檔（build 產物、暫存）：用 git clean -fd。\n  → 非 git 目錄或暫存路徑：手動驗證後再刪，或用 cleanup_path 工具（白名單 tmp 路徑）。',
     warnOnFirst: true,
     block: true,
   },
@@ -2975,6 +2975,59 @@ const PATTERNS = [
              `    (C) data — 顯示資料錯誤（追資料來源）\n` +
              `    (D) interaction — 操作沒反應或反應錯（追事件 + AJAX gate）\n` +
              `  → 建議：先用一句話問使用者在意哪一層，再開動手工具。/bug_trace 步驟 0「分層確認」即為此設計。\n`;
+    },
+  },
+  {
+    // Layer 2.88b: Causal Bug Layer Gate — 因果型 bug 抱怨（「為什麼…還是壞」），動手「改」前強制先分層 + 查資料來源
+    //   根因（跨 某專案 10 場 retro）：因果抱怨直接進「改 CSS/前端」治標模式，跳過「這是哪一層 + 資料來源查證」
+    //   → 同類 bug 反覆犯、修了又犯。把 bug_trace 步驟 0 升級為 hook 級硬擋（只擋「寫入」，不擋調查）。
+    //   行為：causal 抱怨後、尚未做任何根因調查就要寫入 → BLOCK；做過調查工具 / 問過使用者 / 已擋過一次 → 放行。
+    id: 'causal_bug_layer_gate',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      const WRITE_TOOLS = new Set([
+        'Edit', 'Write', 'apply_diff', 'apply_diff_batch',
+        'create_file', 'create_file_batch', 'multi_file_inject',
+      ]);
+      if (!WRITE_TOOLS.has(tool)) return null;
+
+      const msgs = readRecentUserMessages(1);
+      if (msgs.length === 0) return null;
+      const latest = msgs[0];
+      const text = latest.text || '';
+      const lastUserTs = latest.ts || 0;
+
+      // 因果型 bug 抱怨：「為什麼…還是/沒/又」「明明…怎麼被」「後台設定…還能報價」「還是沒對齊/沒展開」
+      const CAUSAL_BUG_RE = /((為什麼|為何|怎麼會?|明明)[\s\S]{0,40}(還是|還在|還能|沒|不對|不該|被轉|被改|又|卻))|((還是|依然|仍然)[\s\S]{0,16}(沒|不對|錯|壞|空白|出不來|沒出現|沒展開|對不上|一樣))|((後台|設定)[\s\S]{0,30}(可以|還能|竟然|居然)[\s\S]{0,12}(報價|顯示|出貨|完成|送出))/;
+      if (!CAUSAL_BUG_RE.test(text)) return null;
+
+      // 自使用者抱怨後，是否已做「根因調查」或「反問使用者」→ 放行
+      const INVESTIGATION = new Set([
+        'find_usages', 'find_dependencies', 'class_method_lookup', 'trace_logic',
+        'php_text_search', 'symbol_index', 'execute_sql', 'execute_sql_batch',
+        'get_db_schema', 'send_http_request', 'css_computed_winner',
+        'css_specificity_check', 'css_inspect', 'js_find_usages', 'js_trace_logic',
+        'AskUserQuestion',
+      ]);
+      const investigatedSince = history.some(h =>
+        (h.ts || 0) >= lastUserTs && INVESTIGATION.has(shortName(h.tool))
+      );
+      if (investigatedSince) return null;
+
+      // 已擋過一次仍要寫 → 放行（避免硬卡死），保留審計
+      const blockedBefore = history.some(h => h._causalGateBlocked && (h.ts || 0) >= lastUserTs);
+      if (blockedBefore) return null;
+
+      entry._causalGateBlocked = true;
+      return {
+        block: true,
+        message: `[L2.88b Causal Bug Gate] ❌ 偵測到因果型 bug 抱怨（「為什麼…還是/沒/又…」），你準備直接用 ${tool} 改 code，但還沒做根因調查。\n` +
+                 `  → 這類「修了又犯／治標不治本」是這個專案 bug 修不乾淨的主因。動手改前先做兩件事：\n` +
+                 `    ① 講清楚這是哪一層：layout(版面) / trigger(觸發) / data(資料顯示) / backend(後端根因)。\n` +
+                 `    ② 查「資料來源」佐證：execute_sql 看 DB 實際值 / find_usages / class_method_lookup / trace_logic 找輸出與寫入處。\n` +
+                 `  → 直接改 CSS 或前端顯示，常只蓋掉現象、根因還在，下次同類再犯。\n` +
+                 `  → 做完任一根因調查工具（或先用 AskUserQuestion 問使用者層級）後，同一動作即放行。`,
+      };
     },
   },
   {

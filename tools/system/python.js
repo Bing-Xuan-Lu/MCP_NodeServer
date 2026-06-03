@@ -38,6 +38,11 @@ export const definitions = [
           type: "string",
           description: "傳給腳本的命令列參數（選填，僅 file_path 模式適用）",
         },
+        timeout: {
+          type: "number",
+          description: "執行逾時毫秒數（預設 30000；長任務如影片字幕/大量資料比對可加大，上限 600000）",
+          default: 30000,
+        },
       },
     },
   },
@@ -55,7 +60,9 @@ export async function handle(name, args) {
   }
 }
 
-async function runPython({ code, file_path, args: scriptArgs }) {
+async function runPython({ code, file_path, args: scriptArgs, timeout }) {
+  // 逾時：預設 30s，可由呼叫端加大（上限 600s），避免長任務被 30s 砍卻看不出原因
+  const timeoutMs = Math.min(Math.max(parseInt(timeout, 10) || 30000, 1000), 600000);
   // 確認容器在線
   try {
     await execPromise(`docker inspect --format="{{.State.Running}}" ${CONTAINER}`);
@@ -93,7 +100,7 @@ async function runPython({ code, file_path, args: scriptArgs }) {
   }
 
   try {
-    const { stdout, stderr } = await execPromise(cmd, { timeout: 30000 });
+    const { stdout, stderr } = await execPromise(cmd, { timeout: timeoutMs });
     const output = [];
     if (stdout) output.push(`stdout:\n${stdout.trimEnd()}`);
     if (stderr) output.push(`stderr:\n${stderr.trimEnd()}`);
@@ -101,6 +108,23 @@ async function runPython({ code, file_path, args: scriptArgs }) {
       content: [{ type: "text", text: output.join("\n\n") || "(無輸出)" }],
     };
   } catch (err) {
+    // 區分「逾時被砍」與「程式真的出錯」——逾時時 exec 砍 process，stdout/stderr 多半為空，
+    // 過去只回「Command failed」害人盲猜。這裡明講是逾時 + 怎麼處理。
+    const timedOut = err.killed === true || err.signal === "SIGTERM" || err.code === "ETIMEDOUT";
+    if (timedOut) {
+      const partial = [err.stdout, err.stderr].filter(Boolean).map((s) => String(s).trimEnd()).join("\n");
+      return {
+        isError: true,
+        content: [{
+          type: "text",
+          text:
+            `⏱ 執行逾時：超過 ${timeoutMs} ms 被中止（非程式錯誤）。\n` +
+            `建議：① 若是長任務（影片字幕 / 大量資料 / 跑數據），加大 timeout 參數（如 timeout: 120000，上限 600000）；` +
+            `② 或把工作拆小、先跑一小段確認邏輯對再放大。\n` +
+            (partial ? `\n逾時前的部分輸出：\n${partial}` : `（逾時前無任何輸出）`),
+        }],
+      };
+    }
     const msg = err.stdout || err.stderr || err.message;
     return {
       isError: true,

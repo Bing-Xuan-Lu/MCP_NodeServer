@@ -199,7 +199,18 @@ Glob pattern="~/.claude/projects/*/memory/MEMORY.md"
   - 是 Skill 的驗證步驟設計不夠嚴謹 → **改 Skill**（列為 B 面向改進候選）
   - 是使用者沒指定驗證範圍 → **寫進 memory**（feedback 類型：「這類任務完成後應驗證 X，不能只看有無報錯」）
 
-**四個問題都問完後**，將確定要處理的項目併入 A / B / C 面向的候選清單，一起在步驟 3 讓使用者選擇處理。
+**Q5 — Token 燃燒把關（每次必問）**
+> 「這次對話有沒有哪段特別燒 token？例如：反覆跑同一支 PHP/SQL 試錯沒收斂、分段讀同一個大檔、Grep 散搜多輪才找到、同一頁面截圖/打 HTTP 重複十幾次、把整頁 HTML/大 response 灌進 context？大概燒在哪個工具、哪個環節？」
+
+- 當前 session 太短無從分析時 → 主動提議用 `/session_audit` 或 `/session_recall` 掃指定專案的 `*.jsonl` transcript（讀檔分析交給 background agent，避免分析本身又燒 context）。
+- 有 → 追問「燒在哪個工具、重複幾次」後判斷根因：
+  - **該用 batch 卻連發單發**（execute_sql / send_http_request / run_php_script 連續 N 次）→ **補/強化 hook**（repetition-detector L3b consecutive_batch_eligible 門檻或升級提醒）。
+  - **散搜 / 分段讀大檔 / 重複截圖** → **補 hook**（L5 token_waste_detection 加 pattern）或寫 memory（該情境先 X 再動手）。
+  - **反覆試錯沒收斂**（同一驗證跑十幾次）→ 寫 memory（feedback：這類任務先 audit / 先列證據再動手，別邊改邊試）。
+  - **工具選錯導致繞遠路** → 併入 C 面向的「使用率自省」Hook 強化候選。
+- 大原則：**分析 transcript 一律丟 background agent**，main thread 只收結論，別把 jsonl 原文灌進主對話 context（那本身就是燒 token）。
+
+**五個問題都問完後**，將確定要處理的項目併入 A / B / C 面向的候選清單，一起在步驟 3 讓使用者選擇處理。
 
 ---
 
@@ -262,10 +273,12 @@ Glob pattern="~/.claude/projects/*/memory/MEMORY.md"
      影響範圍：哪些專案/流程受益
   （無發現時顯示「✅ 無工具改善需求」）
 
-🪞 對話品質（幻覺 / 繞遠路 / Memory 失效）：
+🪞 對話品質（幻覺 / 繞遠路 / Memory 失效 / 測試流於形式 / Token 燃燒）：
   Q1 幻覺：{使用者回答後填入，或「✅ 無」}
   Q2 繞遠路：{使用者回答後填入，或「✅ 無」}
   Q3 Memory 失效：{使用者回答後填入，或「✅ 無」}
+  Q4 測試流於形式：{使用者回答後填入，或「✅ 無」}
+  Q5 Token 燃燒熱點：{使用者回答後填入，或「✅ 無」}
   → 有發現的項目已併入上方 Memory / Hook / Skill 候選
 
 📥 MCP Backlog（跨專案改進，非 MCP 專案才顯示）：
