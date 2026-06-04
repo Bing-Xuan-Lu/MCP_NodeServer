@@ -45,6 +45,22 @@ function debug(msg) { if (DEBUG) process.stderr.write(`[token-budget] ${msg}\n`)
 function allow() { process.exit(0); }
 
 /**
+ * 對完整輸入字串算 FNV-1a 32-bit hash。
+ * 取代舊版 `JSON.stringify(inp).slice(0, 160)` 前綴截斷判重複：
+ * 長腳本（run_python_script / run_php_script 分批對帳）真正會變的 start/end 參數常埋在
+ * 腳本後段，前綴截斷會讓每批 hash 撞在一起 → 合法分批被誤判成「無腦重複同一呼叫」而硬擋。
+ * 改成對整段輸入算 hash：每批內容不同 → hash 不同 → 不誤計；真正完全相同的重試仍會撞 → churn 照常偵測。
+ */
+function fnv1a(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h.toString(16);
+}
+
+/**
  * 分析 transcript：
  *  - calls：整場 tool_use 次數（字串掃描，快）
  *  - outTokens：累計 output token（色彩用）
@@ -74,7 +90,7 @@ function analyze(transcriptPath) {
           const tool = (b.name || '').replace(/^mcp__.*?__/, '');
           const inp = b.input || {};
           const file = inp.file_path || inp.path || (inp.target && inp.target.path) || '';
-          const hash = tool + ':' + JSON.stringify(inp).slice(0, 160);
+          const hash = tool + ':' + fnv1a(JSON.stringify(inp));
           seq.push({ tool, file, hash });
         }
       }

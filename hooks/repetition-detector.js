@@ -2991,6 +2991,23 @@ const PATTERNS = [
       ]);
       if (!WRITE_TOOLS.has(tool)) return null;
 
+      // 排除「非 code 寫入」：寫 memory / 文件(.md/.txt) 不可能「治標蓋現象」，gate 不該擋。
+      //   收集本次寫入的目標路徑；若全部是 memory 目錄或純文件檔 → 放行。
+      const a = entry.args || {};
+      const targetPaths = [];
+      for (const k of ["file_path", "path"]) if (typeof a[k] === "string") targetPaths.push(a[k]);
+      if (a.target && typeof a.target.path === "string") targetPaths.push(a.target.path);
+      for (const arrKey of ["files", "diffs", "items", "inserts"]) {
+        if (Array.isArray(a[arrKey])) for (const it of a[arrKey]) {
+          if (typeof it === "string") targetPaths.push(it);
+          else if (it && typeof it.path === "string") targetPaths.push(it.path);
+          else if (it && typeof it.file_path === "string") targetPaths.push(it.file_path);
+        }
+      }
+      const isDocOrMemory = (p) =>
+        /[\\/]memory[\\/]/i.test(p) || /\.claude[\\/]projects[\\/]/i.test(p) || /\.(md|markdown|txt)$/i.test(p);
+      if (targetPaths.length > 0 && targetPaths.every(isDocOrMemory)) return null;
+
       const msgs = readRecentUserMessages(1);
       if (msgs.length === 0) return null;
       const latest = msgs[0];
@@ -3007,6 +3024,7 @@ const PATTERNS = [
         'php_text_search', 'symbol_index', 'execute_sql', 'execute_sql_batch',
         'get_db_schema', 'send_http_request', 'css_computed_winner',
         'css_specificity_check', 'css_inspect', 'js_find_usages', 'js_trace_logic',
+        'js_symbol_lookup', 'js_symbol_index', 'css_class_lookup', 'css_find_usages',
         'AskUserQuestion',
       ]);
       const investigatedSince = history.some(h =>
