@@ -102,12 +102,13 @@ export const definitions = [
   },
   {
     name: "run_php_code",
-    description: "直接執行 PHP code string（免建暫存檔）。程式碼透過 stdin 傳入 PHP CLI，省掉 Write → run → rm 三步驟。自動補 <?php 標籤。",
+    description: "直接執行 PHP code string（免建暫存檔）。程式碼透過 stdin 傳入 PHP CLI，省掉 Write → run → rm 三步驟。自動補 <?php 標籤。lint:true 時改做語法檢查（php -l /dev/stdin）：先用 read_file 把主機檔案內容讀出再當 code 傳入，容器全程不需碰到 Windows 路徑即可 lint 主機檔。",
     inputSchema: {
       type: "object",
       properties: {
         code: { type: "string", description: "PHP 程式碼（可含或不含 <?php 開頭，會自動補上）" },
         container: { type: "string", description: "選填：Docker 容器名稱（如 dev-php84），有值時在容器內執行" },
+        lint: { type: "boolean", description: "選填：只做語法檢查不執行（php -l）。程式碼經 stdin 灌進 php -l /dev/stdin，可在容器內 lint 主機讀回的檔案內容，繞過容器看不到 Windows 路徑的限制", default: false },
         timeout: { type: "number", description: "執行逾時毫秒數（預設 30000）", default: 30000 },
       },
       required: ["code"],
@@ -115,7 +116,12 @@ export const definitions = [
   },
   {
     name: "send_http_request",
-    description: "發送 HTTP 請求。支援 Multipart 實體檔案上傳、Cookie Jar session 持久化（save_cookies_as / cookie_jar）。",
+    description:
+      "對一個網址發出 HTTP 請求（不開瀏覽器、不跑 JavaScript，純打網址取回應），結果以 Postman 風格呈現：" +
+      "①方法+網址 ②狀態碼+耗時(ms)+大小+content-type ③重要 Response Headers(轉址/Cookie/驗證/下載) ④Body(JSON 自動美化縮排)。" +
+      "用途：測頁面正不正常(200/500)、模擬表單送出(method:POST + data)做新增/修改、帶 cookie 測登入後才看得到的頁面、" +
+      "follow_redirects:false 測權限把關(被擋會 302 轉走 vs 放行 200)、files 測檔案上傳。" +
+      "做不到：驗不到 Vue/DOM/按鈕點擊等前端互動，那些要改用 browser_interact(Playwright)。",
     inputSchema: {
       type: "object",
       properties: {
@@ -156,7 +162,7 @@ export const definitions = [
             "（測後台權限把關常用：判斷 302→nopri.php 被擋 vs 200 放行，免再 fallback 手刻 curl）。",
           default: true,
         },
-        return_headers: { type: "boolean", description: "選填：是否在輸出附上回應的關鍵 headers（Location/Content-Type/Set-Cookie 等），預設 false", default: false },
+        return_headers: { type: "boolean", description: "選填：是否列出「全部」Response Headers（等同 Postman 的 Headers 分頁）。預設 false 時已自動顯示有意義的 location/set-cookie/www-authenticate/content-disposition；設 true 才連 content-type/server/x-* 等所有標頭一併列出", default: false },
       },
       required: ["url"],
     },
@@ -285,6 +291,42 @@ function filterBodyLines(text, { pattern, flags = "i", context = 0, maxMatches =
   }
 }
 
+// 共用：HTTP 回應 Postman 風格格式化（send_http_request 與 send_http_requests_batch 共用）
+function fmtHttpBytes(n) {
+  return n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(2)} MB`;
+}
+// 狀態列：第一列「方法 + 網址」、第二列「圖示 + 狀態碼 + 耗時 + 大小 + content-type」
+function httpStatusLines(method, url, response, byteLen, elapsedMs) {
+  const sc = response.status;
+  const icon = sc < 200 ? "🌐" : sc < 300 ? "✅" : sc < 400 ? "↪️" : sc < 500 ? "⚠️" : "❌";
+  const reason = response.statusText || "";
+  const ctype = response.headers.get("content-type") || "";
+  let s = `📡 ${(method || "GET").toUpperCase()} ${url}\n`;
+  s += `${icon} ${sc}${reason ? " " + reason : ""}  ·  ⏱ ${elapsedMs}ms  ·  📦 ${fmtHttpBytes(byteLen)}`;
+  if (ctype) s += `  ·  ${ctype.split(";")[0].trim()}`;
+  return s;
+}
+// Body 處理：body_filter 優先（tool 端 grep），否則 JSON 自動美化縮排；再套 maxSize 截斷
+function formatHttpBody(rawText, ctype, filterOpts, maxSize) {
+  let bodyText = rawText, filterNote = "", bodyTag = "";
+  if (filterOpts && filterOpts.pattern) {
+    const r = filterBodyLines(rawText, filterOpts);
+    bodyText = r.text; filterNote = r.note; bodyTag = "（已過濾）";
+  } else {
+    const trimmed = rawText.trim();
+    if (/json/i.test(ctype) || /^[[{]/.test(trimmed)) {
+      try { bodyText = JSON.stringify(JSON.parse(trimmed), null, 2); bodyTag = "（JSON 美化）"; } catch (_) {}
+    }
+  }
+  const unlimited = !Number.isFinite(maxSize) || maxSize <= 0;
+  const totalLen = bodyText.length;
+  const body = unlimited ? bodyText : bodyText.substring(0, maxSize);
+  const truncNote = (!unlimited && totalLen > maxSize)
+    ? `\n... ⚠️ 已截斷（${body.length}/${totalLen} 字元，傳 max_response_size:0 取完整內容；或加 body_filter 縮小範圍）`
+    : "";
+  return { body, filterNote, bodyTag, truncNote };
+}
+
 // ============================================
 // 工具邏輯
 // ============================================
@@ -329,41 +371,53 @@ export async function handle(name, args) {
     let code = args.code;
     if (!/^\s*<\?php/.test(code)) code = "<?php\n" + code;
 
+    const lintMode = args.lint === true;
+    // lint 模式：透過 /dev/stdin 把 stdin 內容當檔案做語法檢查，
+    // 容器內讀得到 /dev/stdin，因此不需把 Windows 主機路徑掛進容器即可 lint 主機讀回的檔案內容
+    const phpArgs = lintMode ? " -l /dev/stdin" : "";
+
+    const t0 = Date.now();
     try {
       let cmd, label = "";
       if (args.container) {
         const err = await checkContainer(args.container);
         if (err) return err;
-        cmd = `docker exec -i ${args.container} php`;
-        label = ` [${args.container}]`;
+        cmd = `docker exec -i ${args.container} php${phpArgs}`;
+        label = ` [${args.container}]${lintMode ? " lint" : ""}`;
       } else {
-        cmd = `php`;
+        cmd = `php${phpArgs}`;
+        label = lintMode ? " lint" : "";
       }
 
-      const { stdout, stderr } = await new Promise((resolve, reject) => {
+      const { stdout, stderr, exitCode } = await new Promise((resolve, reject) => {
         const proc = exec(cmd, { timeout }, (err, stdout, stderr) => {
           if (err && err.code !== 1 && err.killed !== true) {
             err.stdout = stdout;
             err.stderr = stderr;
             return reject(err);
           }
-          resolve({ stdout, stderr });
+          resolve({ stdout, stderr, exitCode: err ? (err.code ?? 0) : 0 });
         });
         proc.stdin.end(code);
       });
 
+      const elapsedMs = Date.now() - t0;
       const cleanErr = cleanStderr(stderr);
+      // 狀態列：耗時 + 離開碼（exit !== 0 加 ❌，一眼分辨「正常無輸出」vs「fatal 掛了」）
+      const meta = `  ·  ⏱ ${elapsedMs}ms  ·  ${exitCode === 0 ? "" : "❌ "}exit ${exitCode}`;
       return {
         content: [{
           type: "text",
-          text: `📝 PHP 執行結果${label}：\n${stdout}${cleanErr ? `\n⚠️ 錯誤輸出：\n${cleanErr}` : ""}`,
+          text: `📝 PHP 執行結果${label}${meta}：\n${stdout}${cleanErr ? `\n⚠️ 錯誤輸出：\n${cleanErr}` : ""}`,
         }],
       };
     } catch (error) {
+      const elapsedMs = Date.now() - t0;
       const errStderr = cleanStderr(error.stderr);
+      const exitCode = error.code ?? "?";
       return {
         isError: true,
-        content: [{ type: "text", text: `執行失敗: ${error.message}${error.stdout ? `\nstdout: ${error.stdout}` : ""}${errStderr ? `\nstderr: ${errStderr}` : ""}` }],
+        content: [{ type: "text", text: `❌ PHP 執行失敗${args.container ? ` [${args.container}]` : ""}  ·  ⏱ ${elapsedMs}ms  ·  exit ${exitCode}：${error.message}${error.stdout ? `\nstdout: ${error.stdout}` : ""}${errStderr ? `\nstderr: ${errStderr}` : ""}` }],
       };
     }
   }
@@ -424,56 +478,55 @@ export async function handle(name, args) {
       if (args.method !== "GET" && args.method !== "HEAD" && body) options.body = body;
       if (args.follow_redirects === false) options.redirect = "manual";
 
+      const _t0 = Date.now();
       const response = await fetch(args.url, options);
       const text = await response.text();
+      const elapsedMs = Date.now() - _t0;
 
-      // 轉址 / headers 資訊（測權限把關用：302→nopri vs 200）
-      let headerNote = "";
-      const isRedirect = response.status >= 300 && response.status < 400;
-      if (args.follow_redirects === false && isRedirect) {
-        headerNote += `\n↪️ 未跟隨轉址：HTTP ${response.status} → Location: ${response.headers.get("location") || "(無)"}`;
-      }
+      // ── Postman 風格輸出：狀態列 + headers + body（共用 helper）──
+      const ctype = response.headers.get("content-type") || "";
+      const byteLen = Buffer.byteLength(text, "utf8");
+      let out = httpStatusLines(args.method, args.url, response, byteLen, elapsedMs) + "\n";
+
+      // Response Headers：預設只列「有意義」的（轉址/Cookie/驗證/下載）；return_headers:true 列全部
+      const headerLines = [];
       if (args.return_headers) {
-        const picked = ["location", "content-type", "set-cookie", "cache-control", "www-authenticate"];
-        const hlines = [];
-        for (const h of picked) {
+        for (const [k, v] of response.headers.entries()) headerLines.push(`  ${k}: ${v}`);
+      } else {
+        for (const h of ["location", "set-cookie", "www-authenticate", "content-disposition"]) {
           const v = response.headers.get(h);
-          if (v) hlines.push(`  ${h}: ${v}`);
+          if (v) headerLines.push(`  ${h}: ${v}`);
         }
-        if (hlines.length) headerNote += `\n📋 Response headers:\n${hlines.join("\n")}`;
+      }
+      if (headerLines.length) out += `\n📋 Response Headers:\n${headerLines.join("\n")}\n`;
+
+      // 未跟隨轉址提示（測權限把關：302→nopri vs 200）
+      if (args.follow_redirects === false && response.status >= 300 && response.status < 400) {
+        out += `↪️ 未跟隨轉址 → Location: ${response.headers.get("location") || "(無)"}\n`;
       }
 
       // Cookie Jar：存入回應 Set-Cookie
-      let cookieNote = "";
       if (args.save_cookies_as) {
         const newCookies = parseCookiesFromResponse(response);
         if (Object.keys(newCookies).length > 0) {
           const existing = cookieJars.get(args.save_cookies_as) || {};
           cookieJars.set(args.save_cookies_as, { ...existing, ...newCookies });
-          cookieNote = `\n🍪 Cookie Jar "${args.save_cookies_as}" 已儲存：${Object.keys(newCookies).join(", ")}`;
+          out += `🍪 Cookie Jar "${args.save_cookies_as}" 已儲存：${Object.keys(newCookies).join(", ")}\n`;
         } else {
-          cookieNote = `\n🍪 Cookie Jar "${args.save_cookies_as}"：回應無 Set-Cookie`;
+          out += `🍪 Cookie Jar "${args.save_cookies_as}"：回應無 Set-Cookie\n`;
         }
       }
 
-      // body_filter：tool 端先 grep 過濾，省去大 response 截斷後改讀檔的流程
-      const { text: workingText, note: filterNote } = filterBodyLines(text, {
-        pattern: args.body_filter,
-        flags: args.body_filter_flags,
-        context: args.body_filter_context,
-        maxMatches: args.body_filter_max_matches,
-      });
-
+      // Body：body_filter 優先；否則 JSON 自動美化（共用 helper）
       const maxSize = args.max_response_size === undefined ? 20000 : args.max_response_size;
-      const unlimited = !Number.isFinite(maxSize) || maxSize <= 0;
-      const totalLen = workingText.length;
-      const responseBody = unlimited ? workingText : workingText.substring(0, maxSize);
-      const truncNote = (!unlimited && totalLen > maxSize)
-        ? `\n... ⚠️ 已截斷（${responseBody.length}/${totalLen} 字元，傳 max_response_size:0 取完整內容；或加 body_filter 縮小範圍）`
-        : "";
-      return {
-        content: [{ type: "text", text: `🌐 HTTP ${response.status}${headerNote}${cookieNote}${filterNote}\n${responseBody}${truncNote}` }],
-      };
+      const filterOpts = args.body_filter
+        ? { pattern: args.body_filter, flags: args.body_filter_flags, context: args.body_filter_context, maxMatches: args.body_filter_max_matches }
+        : null;
+      const { body: respBody, filterNote, bodyTag, truncNote } = formatHttpBody(text, ctype, filterOpts, maxSize);
+      if (filterNote) out += filterNote;
+      out += `\n📄 Body${bodyTag}:\n${respBody}${truncNote}`;
+
+      return { content: [{ type: "text", text: out }] };
     } catch (error) {
       return { isError: true, content: [{ type: "text", text: `請求失敗: ${error.message}` }] };
     }
@@ -656,7 +709,6 @@ export async function handle(name, args) {
 
   if (name === "send_http_requests_batch") {
     const batchMaxSize = args.max_response_size === undefined ? 8000 : args.max_response_size;
-    const batchUnlimited = !Number.isFinite(batchMaxSize) || batchMaxSize <= 0;
     const tasks = args.requests.map(async (req, i) => {
       const label = req.label || `Request ${i + 1}`;
       try {
@@ -679,30 +731,45 @@ export async function handle(name, args) {
         const options = { method: req.method || "GET", headers };
         if (req.method !== "GET" && req.method !== "HEAD" && body) options.body = body;
 
+        const t0 = Date.now();
         const response = await fetch(req.url, options);
         const rawText = await response.text();
-        const { text, note: filterNote } = filterBodyLines(rawText, {
-          pattern: args.body_filter,
-          flags: args.body_filter_flags,
-          context: args.body_filter_context,
-          maxMatches: args.body_filter_max_matches,
-        });
-        const slice = batchUnlimited ? text : text.substring(0, batchMaxSize);
-        const trunc = (!batchUnlimited && text.length > batchMaxSize) ? `\n... ⚠️ 已截斷（${slice.length}/${text.length}）` : "";
-        return `[${i + 1}] ${label} ✅ HTTP ${response.status} ${req.method || "GET"} ${req.url}${filterNote}\n${slice}${trunc}`;
+        const elapsedMs = Date.now() - t0;
+        const ctype = response.headers.get("content-type") || "";
+        const byteLen = Buffer.byteLength(rawText, "utf8");
+
+        // 共用 Postman 風格：狀態列 + 重要 headers + body（JSON 美化）
+        const filterOpts = args.body_filter
+          ? { pattern: args.body_filter, flags: args.body_filter_flags, context: args.body_filter_context, maxMatches: args.body_filter_max_matches }
+          : null;
+        const { body: bodyOut, filterNote, bodyTag, truncNote } = formatHttpBody(rawText, ctype, filterOpts, batchMaxSize);
+
+        const hl = [];
+        for (const h of ["location", "set-cookie"]) {
+          const v = response.headers.get(h);
+          if (v) hl.push(`  ${h}: ${v}`);
+        }
+        const headerBlock = hl.length ? `\n📋 Headers:\n${hl.join("\n")}` : "";
+
+        let block = `[${i + 1}] ${label}\n`;
+        block += httpStatusLines(req.method, req.url, response, byteLen, elapsedMs);
+        block += headerBlock;
+        if (filterNote) block += filterNote;
+        block += `\n📄 Body${bodyTag}:\n${bodyOut}${truncNote}`;
+        return { ok: response.status >= 200 && response.status < 400, text: block };
       } catch (err) {
-        return `[${i + 1}] ${label} ❌ ${req.method || "GET"} ${req.url}\n${err.message}`;
+        return { ok: false, text: `[${i + 1}] ${label}\n❌ ${(req.method || "GET").toUpperCase()} ${req.url}\n請求失敗: ${err.message}` };
       }
     });
 
     const results = await Promise.all(tasks);
-    const successCount = results.filter((r) => r.includes("✅")).length;
+    const successCount = results.filter((r) => r.ok).length;
     const failCount = results.length - successCount;
 
     return {
       content: [{
         type: "text",
-        text: `批次 HTTP（${results.length} 個，✅${successCount} ❌${failCount}）：\n\n${results.join("\n\n---\n\n")}`,
+        text: `📚 批次 HTTP（${results.length} 個，✅${successCount} ❌${failCount}）：\n\n${results.map((r) => r.text).join("\n\n────────\n\n")}`,
       }],
     };
   }

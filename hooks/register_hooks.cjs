@@ -32,6 +32,7 @@ const REQUIRED_HOOKS = {
   ],
   UserPromptSubmit: [
     { command: `node "${hooksDir}/session-recall-on-prompt.js"` },
+    { command: `node "${hooksDir}/official-docs-guard.js"` },
   ],
   PostToolUse: [
     { matcher: 'Write|Edit',  command: `node "${hooksDir}/llm-judge.js"` },

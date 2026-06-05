@@ -40,7 +40,7 @@ MCP_NodeServer/
 │   ├── deploy/          ← 部署與版控工具（遠端操作、DB migration、本機 docker 操作）
 │   │   ├── docker_ops.js ← docker_cp（本機 docker container ↔ 主機檔案拷貝；basePath 白名單 + container 名 + path regex 防注入；遠端機器仍走 ssh_exec）
 │   │   ├── sftp.js      ← sftp_connect, sftp_upload, sftp_download, sftp_list, sftp_delete, sftp_*_batch, sftp_preset, sftp_diff_hash（MD5 比對本機 vs 遠端不下載全文；分類 identical/content_diff/eol_only/missing）。sftp_upload 在「無 session 快照」時改用 hash 即時比對：內容相同免上傳、僅換行差異放行、真內容不同才擋（解重開 session 被盲擋問題）
-│   │   ├── php.js       ← run_php_script, run_php_code, run_php_test, send_http_request（body_filter regex tool 端過濾 + follow_redirects:false 不跟轉址並回傳 Location/status header 用於測權限把關 + return_headers）, tail_log, send_http_requests_batch（亦支援 body_filter 套用到每筆）, run_php_script_batch（stderr 自動過濾 Xdebug Step Debug 連線失敗雜訊）
+│   │   ├── php.js       ← run_php_script, run_php_code（lint:true 走 php -l /dev/stdin 做語法檢查，先 read_file 讀主機檔內容再傳 code，繞過容器看不到 Windows 路徑）, run_php_test, send_http_request（Postman 風格輸出：方法+網址/狀態碼+耗時+大小+content-type/重要 Response Headers/Body 自動 JSON 美化 + body_filter regex tool 端過濾 + follow_redirects:false 不跟轉址並回傳 Location/status header 用於測權限把關 + return_headers:true 列全部標頭）, tail_log, send_http_requests_batch（每筆同 Postman 風格輸出：狀態列+耗時+大小+content-type / 重要 headers / Body JSON 美化；summary 依 HTTP <400 計 ✅、亦支援 body_filter 套用到每筆）, run_php_script_batch（stderr 自動過濾 Xdebug Step Debug 連線失敗雜訊）
 │   │   ├── git.js       ← git_status, git_diff, git_log, git_stash_ops（container 模式用 -w workdir 指定容器內 repo 路徑，預設 /var/www/html；本機模式可加 cwd 指定專案目錄，修正容器內非 repo cwd 導致 "not a git repository"）
 │   │   ├── skill_factory.js ← save/list/delete_claude_skill, grant/list/revoke_path_access
 │   │   └── flyway.js    ← flyway_info, flyway_migrate, flyway_validate, flyway_repair, flyway_baseline（需 dev-flyway Docker，選用）
@@ -81,6 +81,7 @@ MCP_NodeServer/
 │   ├── write-guard.js   ← PreToolUse(Write|Edit)：敏感檔案寫入警告 + JS/CSS 修改時提醒 bump version
 │   ├── llm-judge.js     ← PostToolUse(Write|Edit)：高/中風險檔案自我審查清單 + PHP docker lint + JS/CSS bump version 提醒
 │   ├── user-prompt-guard.js ← UserPromptSubmit：模糊指令偵測（全域強制）+ 場景缺上下文提醒（前端/後端/QC/Playwright）
+│   ├── official-docs-guard.js ← UserPromptSubmit：偵測第三方技術行為問題（瀏覽器產品名 chrome/firefox… / Web 標準 CORS/CSP/SameSite/W3C/MDN / 框架版本用法 / 規範 / 為什麼…行為），注入提醒「回答前先 WebFetch 查官方文件，禁憑訓練記憶直接答」。純瀏覽器自動化測試（截圖/導航/click 無查文件意圖）與本系統 meta 維護（hook/memory/skill）自動跳過。非阻擋，只注入提醒
 │   ├── skill-router.js  ← UserPromptSubmit：Skill 關鍵字偵測，依分數自動建議相關 Skill
 │   ├── verify-pass-guard.js ← Stop：回合結束掃 assistant 最後訊息，攔「N/N PASS / 全部通過」但無逐行/逐格明細證據的驗證偷懶（合計對 ≠ 明細對；防迴圈：stop_hook_active 放行 + 同宣告去重 + 每 session 上限 3 次）
 │   └── record-lesson.cjs ← 非 hook 輔助腳本：由 /lesson skill 呼叫，append 對話品質教訓到 ~/.claude/quality-lessons.jsonl（跨專案 sink）；支援 --list / --done <ts>，給 /retro lesson 消化用
