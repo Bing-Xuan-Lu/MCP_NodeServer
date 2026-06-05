@@ -47,5 +47,8 @@ improvements_backlog.md
 # 對話 / session 暫存（retro/audit 中間檔，不進版控）
 tmp/
 
+# GSheet 對帳暫存（含憑證 .gsheet_creds.json + 一次性腳本/資料，不進版控）
+_gsheet_audit/
+
 # Windows reserved device names (accidentally created by > nul instead of > /dev/null)
 nul
