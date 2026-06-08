@@ -94,6 +94,17 @@ function loadRecentIndex(slug, n = 6) {
   } catch { return null; }
 }
 
+// === Triggers 健檢：抓「有 triggers 但格式壞、memory-auto-recall 讀不到」的記憶檔 ===
+function loadBrokenTriggers(slug) {
+  const lint = path.join(HOME, '.claude', 'hooks', 'memory-trigger-lint.js');
+  if (!slug || !fs.existsSync(lint)) return null;
+  try {
+    const out = execFileSync(process.execPath, [lint, slug, '--json'], { encoding: 'utf8', windowsHide: true });
+    const j = JSON.parse(out);
+    return (j && Array.isArray(j.broken)) ? j.broken : null;
+  } catch { return null; }
+}
+
 // === 找最近的 session 摘要 ===
 function findLatestSession() {
   if (!fs.existsSync(SESSIONS_DIR)) return null;
@@ -114,15 +125,17 @@ function findLatestSession() {
   return files.length > 0 ? files[0] : null;
 }
 
-// === 讀 MEMORY.md 摘要（前 40 行）===
+// === 讀 MEMORY.md 索引（完整載入，異常龐大才截斷）===
 function loadMemorySummary(memDir) {
   if (!memDir) return null;
   const memFile = path.join(memDir, 'MEMORY.md');
   if (!fs.existsSync(memFile)) return null;
 
   const content = fs.readFileSync(memFile, 'utf-8').trim();
-  const lines = content.split('\n').slice(0, 40);
-  return lines.join('\n');
+  const MAX_CHARS = 24000;
+  if (content.length <= MAX_CHARS) return content;
+  const rel = path.relative(process.cwd(), memFile).replace(/\\/g, '/');
+  return content.slice(0, MAX_CHARS) + `\n\n…（MEMORY.md 過長已截斷，完整見 ${rel}）`;
 }
 
 // === 找 24h 內更新的記憶檔 ===
@@ -339,6 +352,18 @@ async function main() {
       output.push(`\n[Memory] 24h 內更新：${recentChanges.join(', ')}`);
     }
 
+    // 3b. Triggers 健檢（消除沉默失敗：有 triggers 卻解析不出來的檔，hook 會靜靜略過）
+    const broken = loadBrokenTriggers(slug);
+    if (broken && broken.length > 0) {
+      const list = broken.slice(0, 8).map(f => `  - ${f}`).join('\n');
+      const more = broken.length > 8 ? `\n  ...還有 ${broken.length - 8} 個` : '';
+      output.push(
+        `\n[Memory ⚠️] ${broken.length} 個記憶檔有 triggers 但格式壞、自動召回讀不到（沉默失敗）：\n` +
+        list + more +
+        `\n  → node ~/.claude/hooks/memory-trigger-lint.js 看全部；triggers 要 top-level + 用 prompt_keywords/path_patterns 包成 array。`
+      );
+    }
+
     // 4. 近期踩坑
     const pitfall = findRecentPitfalls();
     if (pitfall) {
@@ -504,15 +529,9 @@ async function main() {
       }
     } catch (e) {}
 
-    // 9b. MCP 工具優先順序速查（每次 session 都注入）
+    // 9b. MCP 工具優先順序（單行；完整表見 CLAUDE.md）
     output.push(
-      `\n[MCP Tools] 工具優先順序（違反 L1/L2.4c 會 BLOCK）：\n` +
-      `  DB 操作    → execute_sql / get_db_schema（禁 Bash docker exec mysql）\n` +
-      `  PHP 執行   → run_php_script / run_php_code（禁 Bash docker exec php）\n` +
-      `  PHP 符號   → class_method_lookup / symbol_index / find_usages（禁 Grep PHP 結構語法）\n` +
-      `  檔案讀寫   → Read / Edit / Glob / Grep（禁 cat/head/tail/find via Bash）\n` +
-      `  HTTP 請求  → send_http_request（禁 curl via Bash）\n` +
-      `  SFTP/SSH   → sftp_upload / ssh_exec MCP 工具`
+      `\n[MCP Tools] 優先 MCP 不用 Bash：DB→execute_sql｜PHP→run_php_script｜PHP符號→class_method_lookup/find_usages｜HTTP→send_http_request｜SFTP/SSH→mcp 工具（完整表見 CLAUDE.md，違反 L1/L2.4c 會 BLOCK）`
     );
 
     // 10. PHP AST 工具速查（只在偵測到 PHP 專案時注入）
