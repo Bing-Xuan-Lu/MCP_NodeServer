@@ -2,7 +2,7 @@
 
 > 這份是從 `CLAUDE.md` 抽出的詳細 hook 規則參考（避免大表每次都被夾帶進 context）。被 hook 擋到時，來這裡查對應 ID、行為與放行條件。CLAUDE.md 只留摘要與指標。
 
-**Hook 偵測規則**（repetition-detector 24 層 + refactor-advisor 14 項；另有獨立 `agent-coord-stale-contract`、`token-budget-circuit-breaker`（單場 tool call 達 150 警告 / 250 硬擋）兩個 PreToolUse hook）：
+**Hook 偵測規則**（repetition-detector 25 層 + refactor-advisor 14 項；另有獨立 `agent-coord-stale-contract`、`token-budget-circuit-breaker`（單場 tool call 達 150 警告 / 250 硬擋）兩個 PreToolUse hook）：
 
 | 層級 | ID | 觸發條件 | 行為 |
 | --- | --- | --- | --- |
@@ -35,7 +35,8 @@
 | L2.87 | git_first_for_dependencies | 使用者問「誰用 / 誰依賴 / 哪裡會掛到 X / 砍/刪除 X 要改哪些」類找當前依賴問題，Claude 卻用 `git log` / `git blame` / `git show` / `git grep` 翻歷史。原因：依賴是當前 code 狀態問題，不是歷史問題。建議改用 `find_usages` / `find_dependencies` / `Grep`（純文字 SQL 表名/字串） | ⚠️ 警告（同 user-turn 一次） |
 | L2.88 | ambiguous_ui_complaint | 使用者貼模糊 UI 抱怨（「跑版/壞了/不對/有問題/怪/錯了」）+ 圖片附件 + 訊息未指明具體層級線索，Claude 卻直接用動手工具（Playwright/Grep/Edit/SQL 等）。原因：截圖只證明「現象出現」，不證明使用者在意的 4 個層級（layout/trigger/data/interaction）。建議：先反問 1 句確認層級，可呼叫 `/bug_trace` 步驟 0 自動分層 | ⚠️ 警告（同 user-turn 一次） |
 | L2.88b | causal_bug_layer_gate | 因果型 bug 抱怨（「為什麼…還是/沒/又」「明明…怎麼被」「後台設定…還能報價」）後，Claude 尚未做任何根因調查就要用「寫入類」工具（Edit/Write/apply_diff/create_file/multi_file_inject）改 code → BLOCK，要求先分層（layout/trigger/data/backend）+ 查資料來源。放行條件：① 寫入目標**全部是 memory 目錄或文件檔（.md/.txt）**→ 直接放行（寫筆記/記憶不可能治標蓋現象）；② 自抱怨後做過調查工具（find_usages/execute_sql/class_method_lookup/trace_logic/css_inspect/send_http_request/js_symbol_lookup/js_symbol_index/css_class_lookup/css_find_usages 等）或 AskUserQuestion；③ 已擋過一次。原因：因果 bug 直接治標（改 CSS/前端）是「修了又犯」主因，把 bug_trace 步驟 0 升級為硬擋 | ❌ 第 1 次 BLOCK（只擋寫入，不擋調查） |
-| L2.89 | assumption_in_write | Write/Edit/apply_diff/create_file 前，AI input 含假設語句（「我假設」「應該是」「猜測」「probably」等）。原因：AI 在不確定情境下應先問再動手，而非自行假設繼續執行 | ⚠️ 警告（不擋） |
+| L2.89 | assumption_in_write | Write/Edit/apply_diff/create_file 前，AI input 含假設語句（「我假設」「應該是」「猜測」「probably」等）。原因：不確定時應先問或查證，不可假設後直接寫。放行：目標為 memory/文件、或含「已確認/已驗證/confirmed/verified」標記 | ❌ BLOCK |
+| L2.90 | write_needs_investigation | 寫 code 檔（.php/.js/.css/.py/.sql/.vue/.html 等）前，自使用者上一則訊息後完全沒做過任何查證/調查動作（讀檔 / Grep / 查 DB / 查符號·依賴 / trace Sheet·Excel / 打 API 等）。原因：憑記憶冷寫＝用猜的，是 bug 清不完的根源。放行：做過任一查證、目標為文件/設定/memory、或內容註明「source-verified」 | ❌ BLOCK |
 | L3 | same_category_repeat | 同類操作 3+ 次 | ⚠️ 警告（10+ 次 block） |
 | L3b | consecutive_batch_eligible | batch-eligible 工具（execute_sql / send_http_request / sftp_upload / run_php_script / Read images-PDF-Word-pptx 等）**連續** ≥4 次（不分子類別）→ 主動建議改用對應 batch 版。同 session 同工具僅在第 4 次提一次去重 | 📦 提示 batch（不擋） |
 | L2.84b | consecutive_same_url_navigate | `browser_navigate` 連續導航**同一 URL** 第 3 次提示（早於 L2.85 exact_same_call 的 9 次門檻）。常見因：page 沒清 stale state、selector 不存在、callback 沒跑 | ⚠️ 警告（不擋） |
@@ -44,7 +45,7 @@
 | L6 | auto_fix_suggestion | sed/awk 可自動化操作 | ✨ 生成修復建議 |
 | L7 | workload_reminder | 30+ tool calls + 4+ 工具種類 + 20%+ 修改比例 | 📋 提醒分發任務（僅一次） |
 
-**Refactor Advisor**（refactor-advisor.js，觸發：Edit/Write/apply_diff 修改 PHP 檔案時）：
+**Refactor Advisor**（refactor-advisor.js，觸發：Edit/Write/apply_diff/create_file 操作 PHP 檔案時）。既有檔修改僅輸出警告（不擋）；**新生成檔**（create_file/Write 且檔案原本不存在）若帶 🔴 嚴重結構問題（god class / SQL混HTML / 函式過多 / 檔過大）則 **BLOCK**，內容加 `// refactor-ack` 可放行：
 
 | # | 偵測項 | 嚴重度 | 說明 |
 | --- | --- | --- | --- |

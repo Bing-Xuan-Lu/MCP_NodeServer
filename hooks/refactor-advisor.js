@@ -93,14 +93,17 @@ function resolveToAbsolute(filePath) {
 
 function analyzePhpFile(filePath) {
   const absolutePath = resolveToAbsolute(filePath);
-
   let content;
   try {
     content = fs.readFileSync(absolutePath, 'utf-8');
   } catch {
     return null;
   }
+  return analyzePhpContent(content, filePath);
+}
 
+// 分析「內容字串」（新建檔尚未落磁碟時，直接驗提議內容）
+function analyzePhpContent(content, filePath) {
   const lines = content.split(/\r?\n/);
   const totalLines = lines.length;
   const smells = [];
@@ -492,6 +495,19 @@ function formatSmells(analysis) {
   return output;
 }
 
+// 新生成檔的嚴重結構問題 → 硬擋訊息
+function formatBlock(analysis) {
+  const { filePath, totalLines, functions, classes, smells } = analysis;
+  const fileName = path.basename(filePath);
+  const high = smells.filter(s => s.severity === 'high');
+
+  let out = '[Refactor Advisor] ❌ 新建 PHP 檔 ' + fileName + '（' + totalLines + '行, ' + functions + '函式, ' + classes + '類別）一生成就有嚴重結構問題：\n';
+  for (const s of high) out += '  🔴 ' + s.message + '\n';
+  out += '  → 這是「新生成」的 code，不該帶著 god class / SQL 混 HTML / 過大檔 出生。請先把結構拆好再建。\n';
+  out += '  → 確有理由必須這樣建（一次性腳本/樣板），在檔案內容加註 // refactor-ack 即放行（留審計）。\n';
+  return out;
+}
+
 // ── 主程式 ──────────────────────────────────────
 
 let input = '';
@@ -506,23 +522,45 @@ process.stdin.on('end', () => {
     if (!paths) { process.exit(0); return; }
 
     const fileList = Array.isArray(paths) ? paths : [paths];
+    const proposedContent = typeof toolInput.content === 'string' ? toolInput.content : null;
 
-    const outputs = [];
+    const warnings = [];
+    const blocks = [];
 
     for (const filePath of fileList) {
       if (!filePath) continue;
       if (!isPHP(filePath)) continue;
       if (isExcluded(filePath)) continue;
 
-      const analysis = analyzePhpFile(filePath);
-      const output = formatSmells(analysis);
-      if (output) outputs.push(output);
+      const fileExists = fs.existsSync(resolveToAbsolute(filePath));
+
+      // 新生成檔（帶完整內容、且原本不存在）→ 驗提議內容，有嚴重結構問題就擋
+      if (proposedContent !== null && !fileExists) {
+        if (/refactor-ack|mcp-fallback/i.test(proposedContent)) continue; // 明示放行
+        const analysis = analyzePhpContent(proposedContent, filePath);
+        if (analysis && analysis.smells.some(s => s.severity === 'high')) {
+          blocks.push(formatBlock(analysis));
+        } else {
+          const w = formatSmells(analysis);
+          if (w) warnings.push(w);
+        }
+      } else {
+        // 既有檔修改 → 維持警告，不擋（避免凍結 legacy 大檔維護）
+        const analysis = analyzePhpFile(filePath);
+        const w = formatSmells(analysis);
+        if (w) warnings.push(w);
+      }
     }
 
-    if (outputs.length > 0) {
-      process.stdout.write(outputs.join('\n'));
+    if (blocks.length > 0) {
+      process.stdout.write(blocks.join('\n'));
+      if (warnings.length > 0) process.stdout.write('\n' + warnings.join('\n'));
+      process.exit(2);
     }
 
+    if (warnings.length > 0) {
+      process.stdout.write(warnings.join('\n'));
+    }
     process.exit(0);
   } catch (e) {
     process.stderr.write('[refactor-advisor] error: ' + e.message + '\n');

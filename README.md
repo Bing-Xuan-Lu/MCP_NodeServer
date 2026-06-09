@@ -117,6 +117,7 @@ MCP_NodeServer/
 │   ├── database.js      ← set_database, load_db_connection, get_db_schema, execute_sql（危險語句攔截 + confirm + audit log + ER_* 錯誤摘要）, *_batch, schema_diff, mysql_log_tail
 │   ├── gsheet.js        ← gsheet_fetch_with_state（含 auto_recalc_check polling + preserve_validation 跳過空字串寫入保留 dropdown）, gsheet_xlookup_trace, trace_gsheet_formula, gsheet_get_metadata, gsheet_fetch_formatted, gsheet_get_values（輕量 batch get）, gsheet_set_values（輕量 batch update）（gspread 一條龍 + 查表鏈遞迴展開 + markdown 公式追蹤報告 + worksheet metadata 列舉 + FORMATTED_VALUE 顯示字串抓取 + 輕量讀寫取代 PHP 手刻 JWT+curl，python_runner 容器）
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
+│   ├── export_fetch.js  ← fetch_export_file（帶 cookie / 先登入下載受保護的 .xlsx/.xls/.csv 匯出檔 → SheetJS 解析回傳儲存格；偵測登入頁 + csv UTF-8 防亂碼）
 │   ├── bookmarks.js     ← Chrome 書籤管理 (12 工具)
 │   ├── sftp.js          ← sftp_connect/upload/download/list/delete, sftp_*_batch (list/upload/download/delete), sftp_preset, sftp_diff_hash (MD5 比對不下載全文)
 │   ├── docker_ops.js    ← docker_cp（本機 container ↔ 主機檔案拷貝；basePath 白名單 + container 名 + path regex 防注入；遠端機器仍走 ssh_exec）

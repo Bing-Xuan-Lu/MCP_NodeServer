@@ -642,7 +642,7 @@ function isBashAllowed(command) {
 
 const BASH_PATTERNS = [
   {
-    // docker cp：已有對應 MCP 工具 docker_cp（tools/deploy/docker_ops.js，2026-05-27 新增）
+    // docker cp：已有對應 MCP 工具 docker_cp（tools/deploy/docker_ops.js），
     //   有安全防護 basePath 白名單 + container 名 + container_path regex 檢查，比裸 Bash 安全。
     regex: /^\s*docker\s+cp\b/i,
     signature: 'bash:docker-cp',

@@ -7,9 +7,6 @@
  *       依然可用。Claude 會自動退回去用 Grep 散搜 PHP/JS、用 Bash docker mysql 等等，
  *       這正是 CLAUDE.md 明令禁止的「繞道」模式。
  *
- * 由來：2026-05-25 使用者貼出一張 MCP timeout 30000ms 失敗截圖，發現 Claude 沒停下來
- *       回報、反而繼續用 Grep+TodoWrite 推進任務。
- *
  * 機制：
  *   1. 掃 transcript 末段 ~30 步，找最近一次 mcp__* 工具呼叫的 tool_result
  *   2. 若該結果含 MCP 斷線特徵字串（timeout / connection / server disconnected 等）

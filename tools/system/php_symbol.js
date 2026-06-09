@@ -28,13 +28,17 @@ export const definitions = [
   {
     name: "symbol_index",
     description:
-      "掃描 PHP 專案建立符號索引（class、method、function、常數），結果快取 4 小時。後續 find_usages / find_hierarchy / find_dependencies 都讀此索引。",
+      "掃描 PHP 專案建立符號索引（class、method、function、常數），結果快取 4 小時。後續 find_usages / find_hierarchy / find_dependencies 都讀此索引。若指定 file（或 project 直接傳 .php 檔路徑），改列出「該檔」的 class/method/function/常數清單含行號，而非整個專案統計。",
     inputSchema: {
       type: "object",
       properties: {
         project: {
           type: "string",
-          description: "專案資料夾名稱（相對 basePath）",
+          description: "專案資料夾名稱（相對 basePath）；也可直接傳單一 .php 檔路徑以列該檔符號",
+        },
+        file: {
+          type: "string",
+          description: "單一檔案路徑（相對 project）。提供時列出該檔的 class/method/function/常數清單，而非專案統計",
         },
         paths: {
           type: "array",
@@ -787,6 +791,62 @@ async function enrichCalls(flowNodes, index, projectPath, parser, depth, maxDept
   }
 }
 
+/** 列出單一檔案的符號清單（class/method/function/常數），供 symbol_index 單檔模式用 */
+async function listFileSymbols(filePath, label) {
+  let code;
+  try {
+    code = await fs.readFile(filePath, "utf-8");
+  } catch (err) {
+    return { content: [{ type: "text", text: `❌ 無法讀取檔案：${label}（${err.message}）` }] };
+  }
+  const parser = await createParser();
+  let ast;
+  try {
+    ast = parser.parseCode(code, label);
+  } catch (err) {
+    return { content: [{ type: "text", text: `❌ PHP 解析失敗：${label}（${err.message}）` }] };
+  }
+
+  const sym = extractSymbols(ast, label);
+  const lines = [`📄 Symbol List: ${label}`, ``];
+
+  if (sym.classes.length === 0 && sym.functions.length === 0 && sym.constants.length === 0) {
+    lines.push(`（此檔無 class / function / 常數定義）`);
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  }
+
+  for (const cls of sym.classes) {
+    const ext = cls.extends ? ` extends ${cls.extends}` : "";
+    const impl = cls.implements.length ? ` implements ${cls.implements.join(", ")}` : "";
+    lines.push(`### ${cls.kind} ${cls.name}${ext}${impl}  (L${cls.line})`);
+    if (cls.methods.length) {
+      lines.push(`| method | 行 | 可見性 | 參數 |`, `|--------|----|--------|------|`);
+      for (const m of cls.methods) {
+        const vis = `${m.visibility}${m.isStatic ? " static" : ""}${m.isAbstract ? " abstract" : ""}`;
+        lines.push(`| ${m.name} | ${m.line} | ${vis} | ${m.params.join(", ")} |`);
+      }
+    } else {
+      lines.push(`（無 method）`);
+    }
+    if (cls.properties.length) {
+      lines.push(``, `屬性：` + cls.properties.map(p => `${p.name}(L${p.line})`).join(", "));
+    }
+    lines.push(``);
+  }
+
+  if (sym.functions.length) {
+    lines.push(`### 全域函式`, `| function | 行 |`, `|----------|----|`);
+    for (const f of sym.functions) lines.push(`| ${f.name} | ${f.line} |`);
+    lines.push(``);
+  }
+
+  if (sym.constants.length) {
+    lines.push(`### 常數`, sym.constants.map(c => `${c.name}(L${c.line})`).join(", "), ``);
+  }
+
+  return { content: [{ type: "text", text: lines.join("\n") }] };
+}
+
 // ============================================
 // Handle
 // ============================================
@@ -797,6 +857,21 @@ export async function handle(name, args) {
 
   // ── symbol_index ──
   if (name === "symbol_index") {
+    // 單檔模式：指定 file，或 project 直接傳 .php 檔路徑 → 列該檔符號清單（非專案統計）
+    let singleFilePath = null;
+    let singleFileLabel = null;
+    if (args.file) {
+      const base = (await resolveNestedProject(resolveSecurePath(args.project))).path;
+      singleFilePath = path.join(base, args.file);
+      singleFileLabel = args.file.replace(/\\/g, "/");
+    } else if (/\.php$/i.test(args.project)) {
+      singleFilePath = resolveSecurePath(args.project);
+      singleFileLabel = path.basename(args.project);
+    }
+    if (singleFilePath) {
+      return await listFileSymbols(singleFilePath, singleFileLabel);
+    }
+
     const index = await getIndex(args.project, {
       paths: args.paths,
       exclude: args.exclude,

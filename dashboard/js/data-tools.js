@@ -39,6 +39,7 @@ const TOOLS = {
   'sftp_delete_batch':      { dept:'PHP & SFTP 部署', title:'批次刪除遠端檔案', desc:'共用一條連線，一次刪除多個遠端檔案或目錄。', usage:'sftp_delete_batch {items:[{remote_path:"..."}]}', tools:[] },
 
   'get_excel_values_batch': { dept:'系統、Excel 與 Python', title:'批次讀取 Excel 儲存格', desc:'批次讀取 Excel 儲存格 (省 Token 版)，支援範圍或列表。', usage:'get_excel_values_batch {path:"...", sheet:"..."}', tools:[] },
+  'fetch_export_file':      { dept:'檔案系統 & 資料庫', title:'下載並解析受保護匯出檔', desc:'帶 cookie 或先 POST 登入，下載需登入的 .xlsx/.xls/.csv 匯出檔並用 SheetJS 解析回傳可讀儲存格。偵測被導去登入頁、csv 走 UTF-8 解碼防亂碼。解 send_http_request 拿到 binary 亂碼的痛點，適合 QC 後台匯出功能。', usage:'fetch_export_file {url:"...", cookie:"PHPSESSID=..."}', tools:[] },
   'trace_excel_logic':      { dept:'系統、Excel 與 Python', title:'追蹤 Excel 邏輯鏈', desc:'追蹤公式「引用來源」與「從屬影響」。', usage:'trace_excel_logic {path:"...", cell:"..."}', tools:[] },
   'simulate_excel_change':  { dept:'系統、Excel 與 Python', title:'模擬修改 Excel 重算', desc:'模擬修改 Excel 數值並重算結果 (不修改原檔)。', usage:'simulate_excel_change {path:"...", changeCell:"..."}', tools:[] },
 

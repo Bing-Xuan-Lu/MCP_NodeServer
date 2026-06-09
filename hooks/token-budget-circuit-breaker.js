@@ -2,27 +2,17 @@
 /**
  * PreToolUse Hook — 單場 Token 預算斷路器（Token Budget Circuit Breaker）
  *
- * 緣由（實測 某專案 30 天 121 場、17,372 回合得到的結論）：
- *   - 燒 token 的主因不是「單筆工具回傳太肥」（實測單筆最大才 75KB，全部回傳加起來才十幾 MB）。
- *   - 真正的大頭是「回合數 × 每回合重讀固定 context」：每次 tool call 都把 ~50 萬 token 的
- *     固定開銷（CLAUDE.md + memory + 工具 schema + session-start 注入）重讀一遍。
- *     17,372 回合 × ~50 萬 ≈ 87 億 cacheRead，跟實際相符；cacheRead 量是 output 的百倍，主導總成本。
- *   - 所以「回合數」是 token 燃燒的單位；但「回合多」不等於「亂燒」。
+ * 設計：以「tool call 次數」為 token 燃燒的量度（每次呼叫都重讀固定 context，cacheRead 主導成本），
+ *       但「次數多」≠「亂燒」（大任務也會很多次）。所以 BLOCK 需「量大」+「原地打轉」雙條件成立，
+ *       避免誤殺正當大任務。
  *
- * 關鍵教訓（為什麼不能純看次數）：
- *   實測最兇的一場 451 回合，其實是「有完成」的大任務（還原 DB + 建測資 + 改退款 + 逐筆驗 + 部署）。
- *   純用「次數 ≥ 250 就 BLOCK」會誤殺這種正當大任務。
- *   真正該擋的是「量大 **又在原地打轉**」——同一檔反覆改 8~11 次、重複同樣呼叫，動了卻沒進展。
- *
- * 對策：兩段式，且 BLOCK 需「量大」+「打轉」雙條件成立：
+ * 對策：兩段式斷路器
  *   - calls ≥ WARN（預設 150）→ 軟提醒「該收斂」，每 50 次提一次（放行）。
- *   - calls ≥ BLOCK（預設 250）：
- *       · 偵測到「打轉」（近窗同檔狂改 / 重複同呼叫 / 高量低檔案多樣性）→ 硬擋一次，點名是哪個檔在打轉。
- *       · 沒打轉（量大但在動不同檔、有進展）→ 只軟提醒「考慮分發 subagent / 回報進度」，放行，不誤殺。
- *   - 斷路器語意：硬擋跳脫一次後放行，飆到下個門檻（+150）再評估，不永久鎖死。
+ *   - calls ≥ BLOCK（預設 250）：偵測到打轉（近窗同檔狂改 / 重複同呼叫 / 高量低檔案多樣性）才硬擋並點名打轉的檔；
+ *     沒打轉（動不同檔、有進展）只軟提醒「考慮分發 subagent / 回報進度」，放行。
+ *   - 斷路器語意：硬擋跳脫一次後放行，到下個門檻（+150）再評估，不永久鎖死。
  *
- * 放行例外：TodoWrite 永遠放行（讓 Claude 能立刻收斂 / 重新規劃）。
- * 門檻覆寫：CLAUDE_TOKEN_BUDGET_WARN / CLAUDE_TOKEN_BUDGET_BLOCK（以 tool call 次數計）。
+ * 放行例外：TodoWrite 永遠放行。門檻覆寫：CLAUDE_TOKEN_BUDGET_WARN / CLAUDE_TOKEN_BUDGET_BLOCK（以 tool call 次數計）。
  * 任何錯誤一律靜默放行（exit 0）。
  */
 
@@ -45,11 +35,9 @@ function debug(msg) { if (DEBUG) process.stderr.write(`[token-budget] ${msg}\n`)
 function allow() { process.exit(0); }
 
 /**
- * 對完整輸入字串算 FNV-1a 32-bit hash。
- * 取代舊版 `JSON.stringify(inp).slice(0, 160)` 前綴截斷判重複：
- * 長腳本（run_python_script / run_php_script 分批對帳）真正會變的 start/end 參數常埋在
- * 腳本後段，前綴截斷會讓每批 hash 撞在一起 → 合法分批被誤判成「無腦重複同一呼叫」而硬擋。
- * 改成對整段輸入算 hash：每批內容不同 → hash 不同 → 不誤計；真正完全相同的重試仍會撞 → churn 照常偵測。
+ * 對「完整輸入字串」算 FNV-1a 32-bit hash，作為重複呼叫的判定鍵。
+ * 對整段算（非前綴截斷）：長腳本分批對帳時，真正變動的 start/end 參數常埋在後段，
+ * 前綴截斷會讓不同批次撞同一 hash，把合法分批誤判成重複而硬擋。
  */
 function fnv1a(str) {
   let h = 0x811c9dc5;

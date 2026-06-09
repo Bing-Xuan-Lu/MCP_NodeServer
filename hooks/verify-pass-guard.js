@@ -3,9 +3,7 @@
  * Stop Hook — Verify Pass Guard（防「合計對就宣告全 PASS」的驗證偷懶）
  *
  * 問題：宣告「N/N PASS」「全部通過」這類多筆驗證結論時，只驗了 headline 合計
- *       （aggregate）就放行，沒逐行/逐格攤明細（breakdown）。
- *       由來：2026-05-21 某專案 部分退貨單，只驗 refund_amount=245 合計就宣告 7/7 PASS，
- *       漏掉「運費」那行顯示 $0 的破綻。
+ *       （aggregate）就放行，沒逐行/逐格攤明細（breakdown）——合計對不代表每一格都對。
  *
  * 為何掛 Stop 而非 PreToolUse：PASS 宣告通常是回合結尾的純文字、後面沒接 tool call，
  *       PreToolUse 結構上抓不到。Stop hook 在回合結束時掃 assistant 最後一則訊息才攔得到。

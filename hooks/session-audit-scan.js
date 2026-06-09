@@ -82,7 +82,7 @@ for (const { f, p, m } of files) {
 
 // ── Hook 投訴：直接讀權威來源 ~/.claude/hook-complaints.jsonl ──
 // （比解析 transcript 文字準確：transcript 內的投訴摘要會跨 session 重複計數，
-//   且舊版 regex 只抓 *_detect/*_guard 等後綴，漏掉 exact_same_call / bash_wrong_tool 等）
+//   且文字 regex 易漏抓非 *_detect/*_guard 命名的規則，如 exact_same_call / bash_wrong_tool）
 // slug → project 對應：complaint.project 為 cwd 最後一段（如 my_project），
 // 與 slug 尾段（如 ...-my-project）相同但分隔符不同，故兩邊正規化為純 [a-z0-9] 後比對。
 const complaintsPath = path.join(os.homedir(), '.claude', 'hook-complaints.jsonl');

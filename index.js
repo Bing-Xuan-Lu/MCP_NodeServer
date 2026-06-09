@@ -56,6 +56,7 @@ const TOOL_MODULE_FILES = [
   "tools/deploy/skill_factory.js",
   "tools/file_io/cleanup.js",
   "tools/file_io/excel.js",
+  "tools/file_io/export_fetch.js",
   "tools/file_io/filesystem.js",
   "tools/file_io/images.js",
   "tools/file_io/multi_inject.js",
