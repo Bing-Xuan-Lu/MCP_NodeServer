@@ -4,8 +4,7 @@
  *
  * 場景：多 backend Claude（agent_coord）並行時，backend-X 在 api-contract channel post
  *       新訊息（DB schema / Model 介面 / status 值表變動），backend-Y 沒 poll 就動工，
- *       會撞到契約衝突。2026-05-21 PG_*** 5cb23b72 場踩過：backend-b 寫「無 callback 預設付款失敗」+
- *       backend-a 邏輯「付款失敗扣紅利」，是 user 自己抓出來才知道兩 agent 沒對齊。
+ *       會撞到契約衝突（一個 agent 的假設與另一個 agent 的實作不一致，往往要使用者才抓得出）。
  *
  * 觸發時機：寫入類工具呼叫前（Edit / Write / apply_diff / create_file / execute_sql / run_php_script / ssh_exec）
  *

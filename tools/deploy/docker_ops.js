@@ -1,7 +1,6 @@
 // tools/deploy/docker_ops.js — 本機 Docker 容器操作（docker cp）
 // 用途：把本機檔案放進 / 拉出 docker container，不走 SSH（ssh_exec 是 remote 用）
-// 由來：2026-05-26 PG_*** session 撞到「Downloads/***.sql 要進 dev-php84 容器」
-//       但 Downloads 不在容器掛載點，只能 docker cp。沒有 MCP 工具支援。
+// 為什麼需要：本機檔案在容器掛載點外時（如 Downloads/ 的 SQL dump 要進 DB 容器），只能用 docker cp。
 //
 // 安全限制：
 //   - 來源/目的本機路徑必須在 basePath 白名單下（沿用 config.resolveSecurePath）
@@ -46,7 +45,7 @@ export const definitions = [
         },
         container_path: {
           type: "string",
-          description: "容器內路徑（如 /tmp/***_downloads.sql），限英數 + _-./",
+          description: "容器內路徑（如 /tmp/dump.sql），限英數 + _-./",
         },
         timeout_ms: {
           type: "number",

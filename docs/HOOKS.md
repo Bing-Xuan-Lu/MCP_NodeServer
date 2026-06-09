@@ -12,7 +12,7 @@
 | L1.6 | mcp_fallback_counter | 同 session `# mcp-fallback:` 註解使用次數：第 1 次靜默 / 第 2 次警告 / 第 3 次 BLOCK，要求向使用者報告 tool gap | ⚠️→❌ |
 | L1.7 | ssh_exec_docker_exec | ssh_exec 命令含 `docker exec ... mysql/php/python` → ⚠️ 警告（不擋）。原因：ssh_exec 本質連遠端，本機 MCP（`set_database` docker_exec / `run_php_script` container）搆不到遠端容器，硬擋會跟 remote_db_exec 遠端跑 SQL 工作流衝突。提醒「容器在本機才改用 MCP」；mysql 的 `-e "SHOW/.../ALTER/DROP"` DDL 與尾端 `# mcp-fallback:` 仍放行（不出警告）。（2026-06-02 由 BLOCK 降級） | ⚠️ |
 | L2 | bash_pattern_repeat | Bash 模式重複 2+ 次 | ⚠️ 警告 |
-| L2.4 | grep_php_symbol | Grep 搜 PHP class/method；明確 PHP scope (`*.php` glob / type=php / 路徑為 .php 檔) 第 1 次 BLOCK；鬆散 PHP context (路徑含 dbox/admin/model 等) 需 pattern 含 PHP 結構符號 (`::` / `->` / `function` / `class` / `extends`) 才 BLOCK，避免誤殺純 JS 變數 | ❌ 建議 AST 工具 |
+| L2.4 | grep_php_symbol | Grep 搜 PHP class/method；明確 PHP scope (`*.php` glob / type=php / 路徑為 .php 檔) 第 1 次 BLOCK；鬆散 PHP context (路徑含 admin/model/controller 等) 需 pattern 含 PHP 結構符號 (`::` / `->` / `function` / `class` / `extends`) 才 BLOCK，避免誤殺純 JS 變數 | ❌ 建議 AST 工具 |
 | L2.4b | grep_read_same_php_file | 同一 PHP 檔 Grep+Read 拼湊 ≥ 3 次（最近 8 步） | ⚠️ 強制改用 class_method_lookup |
 | L2.4c | grep_php_structural_block | Grep PHP 結構語法（function xxx / ->method( / ::method( / class xxx / extends 等）+ PHP context | ❌ 第 1 次就 BLOCK |
 | L2.4d | php_text_search_no_scope | `php_text_search` 無 `scope` 且未 `force_full_scan: true`：首次由工具內 `FULL_SCAN_THRESHOLD=1500` 擋下、第 2 次本 hook BLOCK，避免重複全專案散搜燒 token | ❌ 第 2 次 BLOCK |

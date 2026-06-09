@@ -25,9 +25,12 @@ Skills/references/
 .mcp_db_config.json
 .mcp_sftp_presets.json
 
-# Memory 機敏資料（只留本機，不進版控）
-memory/_private/
-memory/_audits/
+# Memory（客戶/個人知識：業務流程、PHP 檔名、專案名稱，只留本機，不進版控）
+memory/
+
+# 客戶專案專屬 Skill（含業務流程/架構/PHP 檔名，只留本機，不進版控）
+Skills/commands/_cold/
+Skills/commands/testing/_project_qc/
 
 # Playwright 截圖（本機測試用，不進版控）
 /screenshot/

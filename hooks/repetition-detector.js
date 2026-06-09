@@ -1213,9 +1213,9 @@ const PATTERNS = [
       const glob = entry.args?.glob || '';
 
       // 偵測搜尋 PHP class/method 的 pattern
-      // 放寬 PHP context：路徑含 .php、常見 PHP 目錄名、或專案目錄（dbox/project/src/app）
+      // 放寬 PHP context：路徑含 .php、常見 PHP 目錄名、或專案目錄（project/src/app）
       const isPhpContext = /\.php/i.test(glob) || /\.php/i.test(filePath) ||
-        /admin|model|controller|cls\b|service|repository|src\b|app\b|project|dbox/i.test(filePath);
+        /admin|model|controller|cls\b|service|repository|src\b|app\b|project/i.test(filePath);
       if (!isPhpContext) return null;
 
       // ── 高信心 PHP symbol 偵測（嚴格）──
@@ -1278,7 +1278,7 @@ const PATTERNS = [
         return `[PHP Symbol] ⚠️ Grep PHP scope+symbol「${pattern.substring(0, 50)}」→ 建議改 class_method_lookup / find_usages / symbol_index（更省 token）。Grep 適合搜純文字。\n`;
       }
 
-      // 鬆散 path-based PHP context (如 dbox/, admin/, project/) 但 pattern 無 PHP 結構符號
+      // 鬆散 path-based PHP context (如 admin/, model/, project/) 但 pattern 無 PHP 結構符號
       // → 無法區分是 PHP method 還是同名 JS 變數（如 showBonusUI / getMemberBonus），
       //   一律放行避免誤殺純 JS 開發。要 BLOCK 必須 pattern 內有 `::` / `->` / `function ` / `class ` 等明確證據。
       if (!hasSymbolOperator(pattern)) return null;
@@ -1290,7 +1290,7 @@ const PATTERNS = [
         const hPath = h.args?.path || '';
         const hGlob = h.args?.glob || '';
         const hPhp = /\.php/i.test(hGlob) || /\.php/i.test(hPath) ||
-          /admin|model|controller|cls\b|service|repository|src\b|app\b|project|dbox/i.test(hPath);
+          /admin|model|controller|cls\b|service|repository|src\b|app\b|project/i.test(hPath);
         return hPhp && detectSymbolSearch(hp);
       });
       const uniquePaths = new Set(prevSymbolGreps.map(h => h.args?.path || 'cwd'));
@@ -1326,7 +1326,7 @@ const PATTERNS = [
       // 必須是 PHP 後端程式 context
       const isPhpContext =
         /\.php/i.test(glob) || /\.php/i.test(filePath) || type === 'php' ||
-        /admin|model|controller|cls\b|service|repository|src\b|app\b|project|dbox|trait/i.test(filePath);
+        /admin|model|controller|cls\b|service|repository|src\b|app\b|project|trait/i.test(filePath);
       if (!isPhpContext) return null;
 
       // 高信心 PHP 結構 pattern — 只保留 PHP 獨有語法，避免誤擋 .php 內的 inline JS
@@ -2261,7 +2261,7 @@ const PATTERNS = [
   {
     // Layer 2.82c: gspread 讀公式結果前若無近期寫入動作，警示可能用過期 state 下結論
     // 觸發：run_python_script 跑 gspread fetch 公式結果，且近 30 分鐘無 batch_update / update_values
-    // 用途：autocalc 對齊類任務避免「fetch 了但 fetch 時 source 狀態對應的是別的 case」
+    // 用途：計算對齊類任務避免「fetch 了但 fetch 時 source 狀態對應的是別的 case」
     id: 'gspread_stale_state',
     detect: (entry, history) => {
       const tool = shortName(entry.tool);
@@ -3049,8 +3049,79 @@ const PATTERNS = [
     },
   },
   {
-    // Layer 2.89: assumption_in_write — Write/Edit 前 AI input 含假設語句，警告但不阻擋
-    // 規則 1（思考優先）：AI 不確定時應停下問，不應自行假設後繼續動手
+    // Layer 2.90: write_needs_investigation — 寫 code 前本回合須先有查證動作（讀檔/查DB/查符號/trace/打API），否則視為憑猜冷寫 → BLOCK
+    id: 'write_needs_investigation',
+    detect: (entry, history) => {
+      const tool = shortName(entry.tool);
+      const WRITE_TOOLS = new Set([
+        'Edit', 'Write', 'apply_diff', 'apply_diff_batch',
+        'create_file', 'create_file_batch', 'multi_file_inject',
+      ]);
+      if (!WRITE_TOOLS.has(tool)) return null;
+
+      // 收集目標路徑
+      const a = entry.args || {};
+      const targetPaths = [];
+      for (const k of ['file_path', 'path']) if (typeof a[k] === 'string') targetPaths.push(a[k]);
+      if (a.target && typeof a.target.path === 'string') targetPaths.push(a.target.path);
+      for (const arrKey of ['files', 'diffs', 'items', 'inserts']) {
+        if (Array.isArray(a[arrKey])) for (const it of a[arrKey]) {
+          if (typeof it === 'string') targetPaths.push(it);
+          else if (it && typeof it.path === 'string') targetPaths.push(it.path);
+          else if (it && typeof it.file_path === 'string') targetPaths.push(it.file_path);
+        }
+      }
+      if (targetPaths.length === 0) return null;
+
+      // 只管 code 檔；文件/記憶/設定資料/暫存放行
+      const isNonCode = (p) =>
+        /[\\/]memory[\\/]/i.test(p) || /\.claude[\\/]projects[\\/]/i.test(p) ||
+        /\.(md|markdown|txt|json|yml|yaml|env|lock|csv|ini|conf|xml)$/i.test(p);
+      const codeTargets = targetPaths.filter(p => !isNonCode(p) &&
+        /\.(php|js|jsx|ts|tsx|mjs|cjs|vue|css|scss|sass|less|py|sql|html?|phtml)$/i.test(p));
+      if (codeTargets.length === 0) return null;
+
+      // 已明示「來源已核實」旁路 → 放行（留審計）
+      const writtenText = [
+        a.new_string || '', a.content || '', a.description || '', a.comment || '',
+        ...(Array.isArray(a.diffs) ? a.diffs.map(d => (d && (d.replace || d.content)) || '') : []),
+      ].join('\n');
+      if (/source[-\s]?(verified|traced)|已(?:查證|核實|對照|對齊)\s*(?:來源|sheet|excel|db|code|資料)|mcp-fallback/i.test(writtenText)) return null;
+
+      // 自使用者上一則訊息後，是否做過任一「查證/調查」動作 → 放行
+      const INVESTIGATION = new Set([
+        'Read', 'read_file', 'read_files_batch', 'read_pdf_file', 'read_word_file', 'read_excel',
+        'class_method_lookup', 'symbol_index', 'find_usages', 'find_dependencies', 'find_hierarchy',
+        'trace_logic', 'php_text_search',
+        'js_symbol_lookup', 'js_symbol_index', 'js_find_usages', 'js_trace_logic',
+        'css_class_lookup', 'css_find_usages', 'css_inspect', 'css_computed_winner', 'css_specificity_check',
+        'Grep', 'Glob',
+        'execute_sql', 'execute_sql_batch', 'get_db_schema', 'get_db_schema_batch', 'schema_diff',
+        'trace_gsheet_formula', 'gsheet_xlookup_trace', 'gsheet_fetch_with_state',
+        'gsheet_get_values', 'gsheet_fetch_formatted', 'gsheet_get_metadata',
+        'trace_excel_logic', 'get_excel_values_batch', 'simulate_excel_change', 'csv_recompute_audit',
+        'send_http_request', 'send_http_requests_batch', 'run_php_script', 'run_php_code',
+        'browser_interact', 'page_audit', 'AskUserQuestion',
+      ]);
+      const msgs = readRecentUserMessages(1);
+      const lastUserTs = msgs.length ? (msgs[0].ts || 0) : 0;
+      const investigated = history.some(h =>
+        (h.ts || 0) >= lastUserTs && INVESTIGATION.has(shortName(h.tool))
+      );
+      if (investigated) return null;
+
+      const hit = path.basename(codeTargets[0]);
+      return {
+        block: true,
+        message: `[L2.90 Write-Needs-Investigation] ❌ 你要寫 code（${hit}），但自使用者上一則訊息後完全沒做過任何查證/調查動作，等於憑記憶冷寫（用猜的）。\n` +
+                 `  → 規則：寫任何 code 前先查證它依據的真相源——讀既有檔 / 查 DB / 查符號·依賴 / 查試算表公式 / 打 API 看真實行為。\n` +
+                 `  → 「用猜的」蓋出來的 code 是 bug 永遠清不完的根源。做過任一查證動作後同一寫入即放行。\n` +
+                 `  → 若此寫入確實無需查證（純樣板/全新獨立檔），在內容或 description 註明「source-verified: <原因>」放行（留審計）。`,
+      };
+    },
+  },
+  {
+    // Layer 2.89: assumption_in_write — Write/Edit 前 AI input 含假設語句 → BLOCK（不確定先問/查證，不可假設後直接寫）
     id: 'assumption_in_write',
     detect: (entry, history) => {
       const tool = shortName(entry.tool);
@@ -3082,10 +3153,20 @@ const PATTERNS = [
 
       const preview = desc.replace(/\s+/g, ' ').slice(0, 80);
 
-      return `[Assumption Guard] ⚠️ 偵測到 AI 在 ${tool} 前含假設語句。\n` +
-             `  → 片段：「${preview}…」\n` +
-             `  → 規則 1：不確定時應先問使用者，而非自行假設後動手。\n` +
-             `  → 若假設正確可繼續；若不確定，請先說明假設並等使用者確認。\n`;
+      // 旁路：目標為文件/記憶、或已明示核實 → 不擋
+      const a = entry.args || {};
+      const tp = [a.file_path, a.path].filter(s => typeof s === 'string');
+      const isDocOrMem = (p) => /[\\/]memory[\\/]/i.test(p) || /\.claude[\\/]projects[\\/]/i.test(p) || /\.(md|markdown|txt)$/i.test(p);
+      if (tp.length > 0 && tp.every(isDocOrMem)) return null;
+      if (/已(?:確認|驗證|核實)|confirmed|verified|mcp-fallback/i.test(desc)) return null;
+
+      return {
+        block: true,
+        message: `[Assumption Guard] ❌ 偵測到 AI 在 ${tool} 前帶著假設語句就要動手寫 code。\n` +
+                 `  → 片段：「${preview}…」\n` +
+                 `  → 規則 1（思考優先）：不確定時先問或查證，不要假設後直接寫。「用猜的」蓋出來的 code 就是 bug 清不完的根源。\n` +
+                 `  → 先做其一再寫：① AskUserQuestion 問清楚；② 查證來源（execute_sql / class_method_lookup / trace_* / 讀 Sheet/Excel）；③ 確定無誤後把假設語句拿掉再寫。`,
+      };
     },
   },
   {

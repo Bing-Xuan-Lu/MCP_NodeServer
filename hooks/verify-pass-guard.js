@@ -14,7 +14,7 @@
  *   1. 讀 transcript 末端的「最後一則 assistant 文字」
  *   2. 命中「多筆/多項 PASS 宣告」pattern，且訊息內沒有逐行/逐格證據關鍵字 → 擋下回合
  *   3. 透過 {"decision":"block","reason":...} 把提醒餵回給 Claude，要求補明細逐格證據
- *   4. 防迴圈：stop_hook_active=true 直接放行；同一宣告（hash）不重複擋；每 session 上限 3 次
+ *   4. 防迴圈：stop_hook_active=true 直接放行；同一宣告（hash）不重複擋；無每場次數上限（每個新的未附明細 PASS 宣告都擋）
  *
  * 任何錯誤一律靜默放行（exit 0），絕不因 hook 異常卡住回合。
  */
@@ -24,7 +24,6 @@ import path from 'path';
 import { HOME, CLAUDE_HOOK_DEBUG as DEBUG_MODE } from '../env.js';
 
 const STATE_DIR = path.join(HOME, '.claude', 'verify-pass-guard-state');
-const MAX_BLOCKS_PER_SESSION = 3;
 
 // Windows Node 對 stdout/stderr 預設使用系統 ANSI codepage（zh-TW = cp950），
 // 中文 BLOCK reason 寫出去會變 `??`。強制以 UTF-8 Buffer 寫，避免被 harness 重新解碼壞掉。
@@ -153,18 +152,16 @@ process.stdin.on('end', () => {
 
     const state = loadState(sessionId);
     const claimHash = quickHash(text.slice(-600)); // 取訊息尾段做指紋
+    const seen = Array.isArray(state.hashes) ? state.hashes : (state.lastHash ? [state.lastHash] : []);
 
-    if (state.lastHash === claimHash) {
+    if (seen.includes(claimHash)) {
       debug('同一宣告已擋過 → 放行');
       return allow();
     }
-    if (state.blocks >= MAX_BLOCKS_PER_SESSION) {
-      debug(`已達 session 上限 ${MAX_BLOCKS_PER_SESSION} 次 → 放行`);
-      return allow();
-    }
 
-    state.blocks += 1;
-    state.lastHash = claimHash;
+    state.blocks = (state.blocks || 0) + 1;
+    seen.push(claimHash);
+    state.hashes = seen.slice(-100);
     saveState(sessionId, state);
 
     const reason =
@@ -175,7 +172,7 @@ process.stdin.on('end', () => {
       '    1. 明細類畫面（退款/報價/訂單明細等）逐格列「實際顯示值 vs 預期值」，每一格都要有\n' +
       '    2. N 筆 case 各自的明細，不能抽驗一筆就推論全過\n' +
       '  若該畫面確實沒有明細層、只有單一數字，請明確說明「此 case 無明細需驗，僅 headline」即可結束。\n' +
-      `  （本 session 第 ${state.blocks}/${MAX_BLOCKS_PER_SESSION} 次提醒；達上限後不再擋）`;
+      `  （本 session 第 ${state.blocks} 次；每個未附明細的 PASS 宣告都會擋，直到逐格列證據或明確說明此 case 無明細可驗）`;
 
     // Stop hook：以 JSON decision=block 餵回 reason，要求 Claude 繼續處理
     writeStdoutUtf8(JSON.stringify({ decision: 'block', reason }));
