@@ -114,6 +114,7 @@ MCP_NodeServer/
 ├── tools/               ← MCP 工具模組
 │   ├── filesystem.js    ← list_files, read_file, create_file, apply_diff, apply_diff_batch, *_batch (read_files/list_files/create_file)（PROTECTED_PATTERNS 防寫入測試檔 + audit log）
 │   ├── php.js           ← run_php_script, run_php_code, run_php_test, send_http_request（含 body_filter regex tool 端 grep）, tail_log, *_batch (http_requests/php_script)（PHP 執行 + tail_log 支援 container 參數走 Docker；stderr 自動濾 Xdebug Step Debug 雜訊）
+│   ├── php_modernize.js ← php_modernize（PHP 舊語法確定性升級：token_get_all 詞法做 6 條等價轉換 — 結尾 ?>／$str{0}→[0]／PHP4 建構子→__construct／var→public／define 裸常數加引號／__autoload 改名+註冊；每檔 php -l 過才寫，預設 apply:false 預覽；mysql_*/ereg 等只列殘留交 LLM）
 │   ├── database.js      ← set_database, load_db_connection, get_db_schema, execute_sql（危險語句攔截 + confirm + audit log + ER_* 錯誤摘要）, *_batch, schema_diff, mysql_log_tail
 │   ├── gsheet.js        ← gsheet_fetch_with_state（含 auto_recalc_check polling + preserve_validation 跳過空字串寫入保留 dropdown）, gsheet_xlookup_trace, trace_gsheet_formula, gsheet_get_metadata, gsheet_fetch_formatted, gsheet_get_values（輕量 batch get）, gsheet_set_values（輕量 batch update）（gspread 一條龍 + 查表鏈遞迴展開 + markdown 公式追蹤報告 + worksheet metadata 列舉 + FORMATTED_VALUE 顯示字串抓取 + 輕量讀寫取代 PHP 手刻 JWT+curl，python_runner 容器）
 │   ├── excel.js         ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
@@ -140,7 +141,7 @@ MCP_NodeServer/
 │   ├── file_to_prompt.js ← file_to_prompt, file_to_prompt_preview
 │   ├── css_tools.js     ← css_specificity_check, css_computed_winner（CSS specificity 分析與活頁面規則勝出查詢）
 │   ├── php_class.js     ← class_method_lookup（PHP class/method 原始碼直接定位，自動解析 use Trait）
-│   ├── php_symbol.js    ← symbol_index, find_usages, find_hierarchy, find_dependencies, trace_logic（PHP AST 符號索引、交叉引用、邏輯追蹤）
+│   ├── php_symbol.js    ← symbol_index, find_usages, find_hierarchy, find_dependencies, trace_logic, find_dead_symbols（PHP AST 符號索引、交叉引用、邏輯追蹤、零引用死碼掃描）
 │   ├── js_symbol.js     ← js_symbol_index, js_symbol_lookup, js_find_usages, js_trace_logic（JS/TS/Vue AST 符號索引：function/class/object methods/`obj.method=fn` 賦值/`return {fn}` 工廠）
 │   ├── css_class.js     ← css_class_lookup, css_find_usages（CSS class 定義位置 + 跨檔引用：HTML/PHP/JS/Vue 內 class attribute / addClass / classList / 選擇器）
 │   ├── session_search.js ← session_search, session_recall（跨 session 搜尋/回顧歷史對話，解換場重踩同個坑）

@@ -52,6 +52,7 @@ const TOOL_MODULE_FILES = [
   "tools/deploy/flyway.js",
   "tools/deploy/git.js",
   "tools/deploy/php.js",
+  "tools/deploy/php_modernize.js",
   "tools/deploy/sftp.js",
   "tools/deploy/skill_factory.js",
   "tools/file_io/cleanup.js",

@@ -2,7 +2,7 @@
 
 > 這份是從 `CLAUDE.md` 抽出的詳細 hook 規則參考（避免大表每次都被夾帶進 context）。被 hook 擋到時，來這裡查對應 ID、行為與放行條件。CLAUDE.md 只留摘要與指標。
 
-**Hook 偵測規則**（repetition-detector 25 層 + refactor-advisor 14 項；另有獨立 `agent-coord-stale-contract`、`token-budget-circuit-breaker`（單場 tool call 達 150 警告 / 250 硬擋）兩個 PreToolUse hook）：
+**Hook 偵測規則**（repetition-detector 26 層 + refactor-advisor 14 項；另有獨立 `agent-coord-stale-contract`、`token-budget-circuit-breaker`（單場 tool call 達 150 警告 / 250 硬擋）兩個 PreToolUse hook）：
 
 | 層級 | ID | 觸發條件 | 行為 |
 | --- | --- | --- | --- |
@@ -16,6 +16,7 @@
 | L2.4b | grep_read_same_php_file | 同一 PHP 檔 Grep+Read 拼湊 ≥ 3 次（最近 8 步） | ⚠️ 強制改用 class_method_lookup |
 | L2.4c | grep_php_structural_block | Grep PHP 結構語法（function xxx / ->method( / ::method( / class xxx / extends 等）+ PHP context | ❌ 第 1 次就 BLOCK |
 | L2.4d | php_text_search_no_scope | `php_text_search` 無 `scope` 且未 `force_full_scan: true`：首次由工具內 `FULL_SCAN_THRESHOLD=1500` 擋下、第 2 次本 hook BLOCK，避免重複全專案散搜燒 token | ❌ 第 2 次 BLOCK |
+| L2.4e | grep_find_class_refs | Grep（PHP context）找 class 引用：pattern 形如 `new X` / `X::` / `extends X` / `implements X` → 建議改 `find_usages`（精確列引用）/ `find_dead_symbols`（整包零引用死碼掃描），免被字串常數/檔尾 demo 行誤導 | ⚠️ 建議 AST 工具 |
 | L2.5 | grep_scatter_search | Grep 散搜 3+ 不同路徑 | 🧠 強制注入記憶 |
 | L2.6 | grep_read_alternation | Grep↔Read 交替 3+ 次 | ⚠️ 提醒改用高效工具 |
 | L2.7 | edit_batch_replace | Edit 跨檔相同替換 3+ 次 | ⚠️ 警告（5+ 次 block） |

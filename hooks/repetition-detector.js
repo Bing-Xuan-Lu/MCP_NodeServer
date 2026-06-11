@@ -687,7 +687,7 @@ const BASH_PATTERNS = [
     // 必須放在 bash:read-file 之前，否則 `grep ... | head` 會先命中 head pattern
     regex: /\b(grep|rg|findstr)\b.*\.php\b/i,
     signature: 'bash:grep-php',
-    hint: 'PHP 符號定位請用 AST 工具：class_method_lookup / find_usages / symbol_index / trace_logic。\n  純文字搜尋請用 Grep 工具帶 glob="*.php"。\n  禁 Bash grep .php — 規避 PHP symbol hook 偵測。',
+    hint: 'PHP 符號定位請用 AST 工具：class_method_lookup / find_usages / symbol_index / trace_logic。\n  找「誰引用某 class / 有沒有死碼」用 find_usages / find_dead_symbols（別用 grep new X / X::）。\n  純文字搜尋請用 Grep 工具帶 glob="*.php"。\n  禁 Bash grep .php — 規避 PHP symbol hook 偵測。',
     warnOnFirst: true,
     block: false,
   },
@@ -695,7 +695,7 @@ const BASH_PATTERNS = [
     // Bash grep 對 PHP 專案目錄（cls / model / controller / service / repository / trait）→ BLOCK
     regex: /\b(grep|rg|findstr)\b[^|]*\b(cls|model|controller|service|repository|trait)s?\b/i,
     signature: 'bash:grep-php-dir',
-    hint: 'PHP 目錄符號查詢請用 AST 工具：class_method_lookup / find_usages / symbol_index。',
+    hint: 'PHP 目錄符號查詢請用 AST 工具：class_method_lookup / find_usages / symbol_index。\n  找 class 引用 / 死碼掃描用 find_usages / find_dead_symbols。',
     warnOnFirst: true,
     block: false,
   },
@@ -1342,6 +1342,40 @@ const PATTERNS = [
       if (!hit) return null;
 
       return `[PHP Symbol] ⚠️ Grep PHP 結構語法「${hit.hint}」→ 建議改 class_method_lookup / find_usages / symbol_index 更省 token。要搜純文字請去掉結構符號（如 \`->foo(\` → \`foo\`）。\n`;
+    },
+  },
+  {
+    // Layer 2.4e: Grep 找 class 引用 / 死碼 → 建議 find_usages / find_dead_symbols
+    //   觸發：Grep（PHP context）pattern 形如 `new ClassName` / `ClassName::` / `extends X` / `implements X`
+    //   這類「誰實例化/繼承這個 class」「這 class 還有沒有人用」是 find_usages / find_dead_symbols 的本職；
+    //   Grep 散搜易被字串常數、檔尾 demo 行（如 `new Crypter()` 範例）誤導成「有人用」。
+    id: 'grep_find_class_refs',
+    detect: (entry, _history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'Grep') return null;
+
+      const pattern = entry.args?.pattern || '';
+      const filePath = entry.args?.path || '';
+      const glob = entry.args?.glob || '';
+      const type = entry.args?.type || '';
+
+      // 明確非 PHP 副檔名 → 放行（前端/其他語言走 js_find_usages 等，不在此層處理）
+      const NON_PHP_EXTS = /\.(js|mjs|cjs|ts|tsx|jsx|vue|svelte|css|scss|sass|less|html?|htm|json|md|py|go|rs|rb|java)\b/i;
+      const NON_PHP_TYPES = new Set(['js','mjs','cjs','ts','tsx','jsx','vue','svelte','css','scss','sass','less','html','htm','json','md','py','go','rust','ruby','java']);
+      if (NON_PHP_EXTS.test(glob) || NON_PHP_TYPES.has(type)) return null;
+
+      const isPhpContext =
+        /\.php/i.test(glob) || /\.php/i.test(filePath) || type === 'php' ||
+        /admin|model|controller|cls\b|service|repository|src\b|app\b|project|trait/i.test(filePath);
+      if (!isPhpContext) return null;
+
+      // 「找 class 引用」的 pattern：new X / X:: / extends X / implements X
+      const REF_HUNT = /(\bnew\s+[A-Za-z_]\w*|\b[A-Z]\w*\s*::|\bextends\s+[A-Za-z_]\w*|\bimplements\s+[A-Za-z_]\w*)/;
+      if (!REF_HUNT.test(pattern)) return null;
+
+      return `[PHP Symbol] ⚠️ 用 Grep 找「誰引用這個 class（new / :: / extends / implements）」→ 改用 AST 工具，免被字串常數/檔尾 demo 行誤導成「有人用」：\n` +
+             `  → find_usages({ project, class_name })：精確列出所有 new / 靜態呼叫 / 繼承 / 實作位置\n` +
+             `  → find_dead_symbols({ project })：一次掃出整包「零引用」死碼候選，取代逐一 grep 反查\n`;
     },
   },
   {

@@ -150,7 +150,47 @@ export const definitions = [
       required: ["project", "function_name"],
     },
   },
+  {
+    name: "find_dead_symbols",
+    description:
+      "掃整個 PHP 專案找出『零引用』的死碼候選：用符號索引列出所有 class/method/function 定義，再用全專案呼叫記錄反查，列出沒有任何 new / static / 方法呼叫 / extends / implements 指向的符號。取代逐一 find_usages 土法煉鋼。" +
+      "分三層信心：global function 零呼叫（高）、method 名稱零呼叫且非魔術方法（中）、class 型別用途未追蹤（低）。" +
+      "偵測到專案有 call_user_func / array_map 等動態呼叫時全面降信心並提醒。" +
+      "本工具看不到字串 callback、動態類名（new $cls）、型別提示、instanceof、::class、::CONST 常數存取等引用，刪除前務必人工複查。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string", description: "專案資料夾名稱（相對 basePath）" },
+        paths: { type: "array", items: { type: "string" }, description: "限定掃描的子目錄（選填，預設整個專案）" },
+        exclude: { type: "array", items: { type: "string" }, description: "額外排除的 glob（預設已排 vendor/node_modules/.git/cache/tmp）" },
+        types: {
+          type: "array",
+          items: { type: "string", enum: ["function", "method", "class"] },
+          description: "只檢查指定符號種類（預設全查）",
+        },
+        include_magic: { type: "boolean", description: "是否一併列魔術方法（__construct 等），預設 false 排除", default: false },
+        max_list: { type: "number", description: "每類最多列幾筆，預設 200", default: 200 },
+        force: { type: "boolean", description: "強制重建索引（忽略快取）" },
+      },
+      required: ["project"],
+    },
+  },
 ];
+
+// 隱式呼叫的魔術方法（不會出現在一般呼叫記錄裡，死碼判定要排除）
+const MAGIC_METHODS = new Set([
+  "__construct", "__destruct", "__call", "__callstatic", "__get", "__set",
+  "__isset", "__unset", "__sleep", "__wakeup", "__serialize", "__unserialize",
+  "__tostring", "__invoke", "__set_state", "__clone", "__debuginfo",
+]);
+
+// 出現這些呼叫代表專案有動態 dispatch / callback，死碼判定可能漏報
+const DYNAMIC_DISPATCH = new Set([
+  "call_user_func", "call_user_func_array", "is_callable", "method_exists",
+  "function_exists", "spl_autoload_register", "register_shutdown_function",
+  "register_tick_function", "array_map", "array_filter", "array_walk",
+  "usort", "uasort", "uksort", "preg_replace_callback",
+]);
 
 // ============================================
 // AST 遍歷與符號提取
@@ -1237,6 +1277,148 @@ export async function handle(name, args) {
     } else {
       lines.push(`**被引用：** 索引中未找到（可能透過動態路徑引用）`);
     }
+
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  }
+
+  // ── find_dead_symbols ──
+  if (name === "find_dead_symbols") {
+    const index = await getIndex(args.project, {
+      paths: args.paths,
+      exclude: args.exclude,
+      force: args.force,
+    });
+
+    if (index._missing) {
+      return { content: [{ type: "text", text: `❌ 專案路徑不存在：${args.project}` }] };
+    }
+    if (index.fileCount === 0) {
+      return { content: [{ type: "text", text: `⚠️ 此路徑未找到任何 PHP 檔，無法分析。` }] };
+    }
+
+    // 反查用集合（全部小寫）
+    const calledFunc = new Set();   // 全域函式呼叫
+    const calledMethod = new Set(); // static / $obj->method / new(__construct)
+    const usedClass = new Set();    // new / static / extends / implements
+    let hasDynamic = false;
+
+    for (const c of index.calls) {
+      const mn = (c.methodName || "").toLowerCase();
+      const cn = (c.className || "").toLowerCase();
+      if (c.type === "function" && mn) {
+        calledFunc.add(mn);
+        if (DYNAMIC_DISPATCH.has(mn)) hasDynamic = true;
+      } else if (c.type === "static") {
+        if (mn) calledMethod.add(mn);
+        if (cn) usedClass.add(cn);
+      } else if (c.type === "method") {
+        if (mn) calledMethod.add(mn);
+      } else if (c.type === "new") {
+        calledMethod.add("__construct");
+        if (cn) usedClass.add(cn);
+      }
+    }
+    for (const cls of index.classes) {
+      if (cls.extends) usedClass.add(cls.extends.toLowerCase());
+      for (const i of (cls.implements || [])) usedClass.add(i.toLowerCase());
+    }
+
+    const types = (args.types && args.types.length) ? new Set(args.types) : new Set(["function", "method", "class"]);
+    const cap = args.max_list || 200;
+
+    // 候選蒐集
+    const deadFuncs = [];
+    const deadMethods = [];   // { class, name, line, file, visibility, gray, grayReason }
+    const deadClasses = [];
+
+    if (types.has("function")) {
+      for (const f of index.functions) {
+        if (!calledFunc.has(f.name.toLowerCase())) deadFuncs.push(f);
+      }
+    }
+    if (types.has("method")) {
+      for (const cls of index.classes) {
+        const subtype = !!cls.extends || (cls.implements && cls.implements.length > 0)
+          || cls.kind === "interface" || cls.kind === "trait";
+        for (const m of cls.methods) {
+          const ml = m.name.toLowerCase();
+          if (!args.include_magic && MAGIC_METHODS.has(ml)) continue;
+          if (calledMethod.has(ml)) continue;
+          let grayReason = "";
+          if (m.isAbstract) grayReason = "abstract";
+          else if (cls.kind === "interface") grayReason = "interface 契約";
+          else if (cls.kind === "trait") grayReason = "trait 方法";
+          else if (subtype) grayReason = "可能覆寫父類/實作介面";
+          deadMethods.push({ class: cls.name, name: m.name, line: m.line, file: cls.file, visibility: m.visibility, gray: !!grayReason, grayReason });
+        }
+      }
+    }
+    if (types.has("class")) {
+      for (const cls of index.classes) {
+        if (!usedClass.has(cls.name.toLowerCase())) deadClasses.push(cls);
+      }
+    }
+
+    const byLoc = (a, b) => (a.file || "").localeCompare(b.file || "") || (a.line - b.line);
+    deadFuncs.sort(byLoc);
+    deadMethods.sort(byLoc);
+    deadClasses.sort(byLoc);
+
+    // method 拆成中信心（純粹零呼叫）與灰色（可能覆寫/介面/trait/abstract）
+    const methodSolid = deadMethods.filter(m => !m.gray);
+    const methodGray = deadMethods.filter(m => m.gray);
+
+    const lines = [];
+    if (index._pathHint) lines.push(index._pathHint, ``);
+    lines.push(
+      `🧹 Dead Symbol Scan: ${index.project}`,
+      ``,
+      `掃描 ${index.fileCount} 檔 · class ${index.classes.length} · function ${index.functions.length} · 呼叫記錄 ${index.calls.length}`,
+      `候選：🔴 死函式 ${deadFuncs.length} · 🟡 零呼叫 method ${methodSolid.length} · ⚪ 灰色 method ${methodGray.length} · 🔵 未引用 class ${deadClasses.length}`,
+      ``,
+    );
+
+    if (hasDynamic) {
+      lines.push(`⚠️ 偵測到專案使用 call_user_func / array_map / usort 等動態呼叫或 callback —`,
+                 `   以名稱反查的死碼判定可能漏報（某符號其實被字串/變數動態呼叫）。刪除前務必逐一複查。`, ``);
+    }
+
+    const fmtFuncRows = (arr) => {
+      const rows = arr.slice(0, cap).map((f, i) => `| ${i + 1} | \`${f.name}()\` | ${f.file}:${f.line} |`);
+      return [`| # | 函式 | 位置 |`, `|---|------|------|`, ...rows,
+              arr.length > cap ? `… 另有 ${arr.length - cap} 筆（調高 max_list 取得）` : ""].filter(Boolean);
+    };
+    const fmtMethodRows = (arr, withReason) => {
+      const head = withReason ? `| # | 方法 | 可見性 | 位置 | 灰色原因 |` : `| # | 方法 | 可見性 | 位置 |`;
+      const sep = withReason ? `|---|------|--------|------|----------|` : `|---|------|--------|------|`;
+      const rows = arr.slice(0, cap).map((m, i) => withReason
+        ? `| ${i + 1} | \`${m.class}::${m.name}()\` | ${m.visibility} | ${m.file}:${m.line} | ${m.grayReason} |`
+        : `| ${i + 1} | \`${m.class}::${m.name}()\` | ${m.visibility} | ${m.file}:${m.line} |`);
+      return [head, sep, ...rows, arr.length > cap ? `… 另有 ${arr.length - cap} 筆` : ""].filter(Boolean);
+    };
+
+    if (types.has("function")) {
+      lines.push(`## 🔴 死函式候選（高信心 · global function 零呼叫）`, ``);
+      lines.push(...(deadFuncs.length ? fmtFuncRows(deadFuncs) : ["（無）"]), ``);
+    }
+    if (types.has("method")) {
+      lines.push(`## 🟡 零呼叫 method（中信心 · 名稱在全專案無任何呼叫，已排除魔術方法）`, ``);
+      lines.push(...(methodSolid.length ? fmtMethodRows(methodSolid, false) : ["（無）"]), ``);
+      lines.push(`## ⚪ 灰色 method（低信心 · 可能是覆寫/介面/trait/abstract，勿直接刪）`, ``);
+      lines.push(...(methodGray.length ? fmtMethodRows(methodGray, true) : ["（無）"]), ``);
+    }
+    if (types.has("class")) {
+      lines.push(`## 🔵 未引用 class（低信心 · 型別提示/instanceof/::class/::CONST 常數存取不在追蹤範圍）`, ``);
+      const rows = deadClasses.slice(0, cap).map((c, i) => `| ${i + 1} | \`${c.name}\` (${c.kind}) | ${c.file}:${c.line} |`);
+      lines.push(...(deadClasses.length
+        ? [`| # | 類別 | 位置 |`, `|---|------|------|`, ...rows, deadClasses.length > cap ? `… 另有 ${deadClasses.length - cap} 筆` : ""].filter(Boolean)
+        : ["（無）"]), ``);
+    }
+
+    lines.push(
+      `---`,
+      `刪除流程建議：對 🔴 可較放心刪；🟡 先 find_usages 該名稱二次確認（跨檔同名方法會互相遮蔽）；⚪🔵 必須人工讀檔確認無動態/型別引用再刪。`,
+    );
 
     return { content: [{ type: "text", text: lines.join("\n") }] };
   }
