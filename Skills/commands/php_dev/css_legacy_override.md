@@ -41,6 +41,8 @@ $ARGUMENTS
 
 | 工具 | 用途 |
 |------|------|
+| `css_class_lookup` | 改 CSS 蓋 legacy 前，先定位該 class 在所有 stylesheet 的規則位置（含 @media context、leaf/compound/ancestor 區分），知道要蓋哪些 |
+| `css_find_usages` | 跨檔找該 class 的引用點（HTML/PHP/JS/Vue），知道反制會影響哪些使用處 |
 | `Glob` | 找 legacy CSS 候選檔 |
 | `Grep` | 在 legacy CSS 中搜選擇器，含 `multiline` 抓 `@media` 區塊邊界 |
 | `read_file` | 讀 legacy CSS 完整內容（小檔）做精準 @media block 切分 |

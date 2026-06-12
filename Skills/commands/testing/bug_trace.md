@@ -39,11 +39,13 @@ $ARGUMENTS
 
 | 工具 | 用途 |
 |------|------|
+| `session_search` / `session_recall` | trace 前先找之前是否查過同症狀、避免重踩舊坑 |
 | `Grep` | 在規格書中搜尋功能說明段落 |
 | `Read` | 讀取規格書段落、codemap 或特定檔案片段 |
 | `class_method_lookup` | 直接取得 class+method 原始碼（**優先使用**） |
 | `find_usages` | 不確定在哪個檔案時 AST 精確搜尋引用位置 |
 | `execute_sql` | 驗證 DB 資料是否正常 |
+| `mysql_log_tail` | DB 層問題看 MySQL log（鎖等待 / 錯誤 / 慢查） |
 | `get_db_schema` | 查表結構（欄位/型別/預設值） |
 | `run_php_script` | 執行 PHP 片段驗證行為 |
 | `send_http_request` | 呼叫 API 端點驗證回傳 |

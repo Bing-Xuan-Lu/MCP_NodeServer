@@ -39,8 +39,11 @@ $ARGUMENTS
 
 | 工具 | 用途 |
 |------|------|
+| `session_search` / `session_recall` | 接續上次卡住的 bug：先回顧之前查過什麼、踩過哪些坑，不從零重推 |
 | `read_files_batch` | 讀取相關 PHP/JS 原始碼 |
 | `tail_log` | 讀取 PHP error log 確認實際錯誤 |
+| `mysql_log_tail` | DB 層除錯時看 MySQL log / 鎖等待 / 慢查（app 層 `tail_log` 之外的補強） |
+| `js_symbol_lookup` / `js_find_usages` / `js_trace_logic` | 前端 JS 事件 handler / Vue method 行為 bug，AST 精確定位，取代 `browser_evaluate` 散試 |
 | `run_php_test` | 執行測試確認修復結果 |
 | `execute_sql` | 查詢 DB 驗證資料是否正確寫入 |
 | `send_http_request` | 直接呼叫 API 端點重現問題 |

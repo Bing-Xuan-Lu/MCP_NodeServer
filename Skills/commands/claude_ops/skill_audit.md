@@ -15,6 +15,7 @@
 | `Edit` / `apply_diff` | 修正標題格式或插入工具章節 |
 | `run_python_script` | 批次修正格式異常（4 個以上時） |
 | `create_file` | 建立合併後的新 Skill 檔案 |
+| `find_dead_symbols` | 審查/淘汰 Skill 對應的工具或程式碼時，一次掃整包零引用的死碼符號當淘汰證據，免逐一 `find_usages` 土法煉鋼 |
 
 ---
 

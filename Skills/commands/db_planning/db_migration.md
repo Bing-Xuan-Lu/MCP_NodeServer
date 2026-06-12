@@ -26,6 +26,7 @@ $ARGUMENTS
 |---|---|
 | `get_db_schema` | 取得單張表格結構 |
 | `get_db_schema_batch` | 一次取得多張表格結構（優先使用） |
+| `schema_diff` | 比對兩端 schema 差異產生遷移腳本，用專責工具取代自己用 `get_db_schema` 手刻比對 |
 | `execute_sql` | 執行 SQL / 版本追蹤查詢 |
 | `execute_sql_batch` | 批次執行多組獨立查詢 |
 | `get_current_db` | 確認目前連線的資料庫 |

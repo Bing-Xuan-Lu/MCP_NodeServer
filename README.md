@@ -87,7 +87,8 @@ MCP Server 安裝一次即可，每個需要使用的專案只要掛上連線設
 | `session-start.js` | SessionStart | 對話開場載入 MEMORY.md 摘要、上次 session 快照、24h 內更新的記憶檔、近期踩坑紀錄、CLAUDE.md 老化偵測 |
 | `pre-compact.js` | PreCompact | Context 壓縮前自動存快照到 `~/.claude/sessions/`，偵測重試/失敗/大量修改模式並存踩坑紀錄，GC 清舊紀錄 |
 | `write-guard.js` | PreToolUse (Write\|Edit) | 依 `risk-tiers.json` 分級警告（🔴 高風險 / 🟡 中風險）、敏感檔案保護、Prompt Injection 偵測（非阻擋式） |
-| `llm-judge.js` | PostToolUse (Write\|Edit) | Write/Edit 後依風險層級注入自我審查清單，PHP 非測試檔自動提醒「事故→測試」習慣 |
+| `llm-judge.js` | PostToolUse (Write\|Edit) | Write/Edit 後依風險層級注入自我審查清單，PHP 非測試檔自動提醒「事故→測試」習慣；PHP 版本感知 lint：漸進式回退（動態發現本機 PHP 容器由新到舊逐版 `php -l`，任一版過即放行並標明舊版，全版皆語法錯才 BLOCK），避免 legacy 5.x 檔被最新版誤判 |
+| `php-containers.js` | （llm-judge 共用模組） | 動態發現本機在跑的 PHP 容器（`docker ps` + 逐一問 `PHP_VERSION`，不寫死容器名），結果快取 30 分鐘；env `MCP_PHP_LINT_CONTAINERS` 可覆寫 |
 | `memory-auto-recall.js` | PreToolUse | 依 memory frontmatter `triggers` 比對 tool / file_path / 最近 prompt，命中且距上次注入 ≥ N 次 tool call 即注入提醒，解 memory attention 衰減 |
 
 Hook 腳本存放於 `hooks/` 目錄，設定在全域 `~/.claude/settings.json` 的 `hooks` 欄位。

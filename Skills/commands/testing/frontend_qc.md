@@ -53,6 +53,8 @@ $ARGUMENTS
 | `browser_evaluate` | 執行 JS 驗證（AJAX 回應/Vue 狀態/CSS 值） |
 | `browser_handle_dialog` | 處理 confirm/alert 彈窗 |
 | `browser_resize` | RWD 斷點測試 |
+| `js_symbol_index` / `js_symbol_lookup` / `js_find_usages` | 定位前台 JS 事件 handler / Vue method 定義與引用，AST 精確定位取代 `browser_evaluate` 盲試 |
+| `css_class_lookup` / `css_find_usages` | 查 CSS class 在哪個 stylesheet 的規則、跨檔（HTML/PHP/JS/Vue）引用點，取代散搜 |
 | `Read` | 讀取規格書索引/設計稿圖片 |
 | `Grep` | 搜尋規格書中特定頁面的描述 |
 | `Write` | 儲存 Bug 清單報告 |

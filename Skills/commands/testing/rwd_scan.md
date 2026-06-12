@@ -65,6 +65,8 @@ $ARGUMENTS
 | `Playwright: browser_snapshot` | 取得 DOM 結構，分析溢出元素 |
 | `Playwright: browser_evaluate` | 執行 JS 偵測水平溢出、元素重疊 |
 | `Playwright: browser_fill_form` / `browser_click` | 登入操作（若需要） |
+| `css_class_lookup` / `css_find_usages` | 跑版 bug 對照 class 在哪個 stylesheet 的規則定義與跨檔引用點 |
+| `js_symbol_lookup` | 定位控制 RWD 行為的 JS（如 menu 收合、resize handler） |
 | `Read` | 讀取頁面清單或設定檔 |
 | `Write` | 儲存掃描報告 |
 

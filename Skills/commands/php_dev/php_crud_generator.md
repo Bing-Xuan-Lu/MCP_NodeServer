@@ -39,6 +39,8 @@ Step 0 會自動偵測以下路徑（因專案而異）：
 | `send_http_requests_batch` | 批次測試多個頁面（Step 7 驗證多個 CRUD 頁面） |
 | `tail_log` | 查看 PHP error log 排查錯誤 |
 
+> ⚙️ **動手前先確認狀態**：依共用參考 `dev_workflow/env_state_detect_steps.md`——`execute_sql` / `get_db_schema` 前先 `get_current_db` 確認連對資料庫；`run_php_script` 驗語法時挑對應 PHP 容器（動態 `docker ps`，不寫死）。別賭預設值。
+
 ---
 
 ## 📋 Schema 輸入格式

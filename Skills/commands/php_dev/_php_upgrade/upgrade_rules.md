@@ -1,6 +1,10 @@
 # PHP 7.x → 8.4 升級規則參考
 
 > 本檔由 `/php_upgrade` 主 Skill 引用。每條規則含 before/after 範例。
+>
+> **動手前先跑機械轉換**：套用以下規則前，先用 `php_modernize` 做確定性機械升級（移除結尾 `?>`、`$str{0}`→`$str[0]`、PHP4 建構子→`__construct`、`var`→`public`、`define` 裸常數加引號等，每檔改完容器內 `php -l` 過才寫回），再針對 `php_modernize` 列出殘留數的 `mysql_*`/`ereg`/`each`/`create_function` 等需語意判斷項目人工處理。
+>
+> **清理階段掃死碼**：升級清理時用 `find_dead_symbols` 一次掃整包零引用的 class/method/function，當淘汰候選清單，免逐一 `find_usages` 反查。
 
 ---
 

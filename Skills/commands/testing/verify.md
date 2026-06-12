@@ -24,6 +24,8 @@ $ARGUMENTS
 | `list_files_batch` | 掃描根目錄偵測專案類型（PHP/Node/混合） |
 | `read_files_batch` | 批次讀取 `package.json`、`composer.json` 確認測試設定 |
 | `tail_log` | 讀取 PHP error log 輔助診斷失敗原因 |
+| `analyze_csv` | 對驗證階段輸出的 CSV 做 pivot/group/aggregate 統計，取代手寫解析腳本 |
+| `csv_recompute_audit` | 對照 baseline CSV 跑 PHP class::method 重算比對（計算/報價類驗證對齊 baseline） |
 
 ---
 

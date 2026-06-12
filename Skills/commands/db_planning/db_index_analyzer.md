@@ -35,6 +35,7 @@ $ARGUMENTS
 | `get_db_schema_batch` | 一次取得多張表格結構（多表分析時優先使用） |
 | `execute_sql` | 執行單條 EXPLAIN / SHOW INDEX |
 | `execute_sql_batch` | 一次執行多條查詢（如同時取 SHOW INDEX + SHOW TABLE STATUS） |
+| `mysql_log_tail` | 慢查詢分析搭配 MySQL slow log，看實際慢查語句與耗時 |
 
 ---
 

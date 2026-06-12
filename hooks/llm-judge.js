@@ -20,6 +20,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { HOME } from '../env.js';
+import { getPhpContainers } from './php-containers.js';
 const GLOBAL_RISK_TIERS = path.join(HOME, '.claude', 'risk-tiers.json');
 
 function loadRiskTiers() {
@@ -49,27 +50,61 @@ function isTestFile(filePath) {
   return n.includes('test') || n.includes('spec') || n.includes('_test.') || n.includes('.test.');
 }
 
-// 將主機路徑轉為 dev-php84 容器內路徑（D:\Project → /var/www/html）
+// 將主機路徑轉為容器內路徑（D:\Project → /var/www/html）
 function toContainerPath(hostPath) {
   const normalized = hostPath.replace(/\\/g, '/');
   const m = normalized.match(/^[dD]:\/Project\/(.+)$/);
   return m ? `/var/www/html/${m[1]}` : null;
 }
 
+// 單一容器 lint：回傳 'pass' | 'syntax' | 'unavailable'（容器不存在/未啟動）
+function lintOne(container, containerPath) {
+  try {
+    const result = execSync(
+      `docker exec ${container} php -l "${containerPath}" 2>&1`,
+      { timeout: 8000, encoding: 'utf-8' }
+    );
+    return { kind: result.includes('No syntax errors') ? 'pass' : 'syntax', output: result.trim() };
+  } catch (e) {
+    const out = (e.stdout || e.message || '').trim();
+    // 容器本身不存在/未啟動 → 視為「此版本不可用」，跳過（不當成語法錯）
+    if (/No such container|is not running|Cannot connect to the Docker daemon/i.test(out)) {
+      return { kind: 'unavailable', output: out };
+    }
+    return { kind: 'syntax', output: out };
+  }
+}
+
+/**
+ * 漸進式 lint：自動判斷專案 PHP 版本，避免對 legacy 5.x 檔誤判。
+ *   - 由新到舊逐版 lint，任一版「No syntax errors」即視為語法正確（PASS）。
+ *   - 全部可用版本都報 parse error → 才是真語法錯（FAIL，會 BLOCK）。
+ *   - 只有舊版過、新版不過 → legacy:true，屬「舊版專屬語法」非錯誤，不阻擋。
+ * 回傳 { ok, container, legacy, output } 或 null（無可用容器/非掛載路徑，跳過）。
+ */
 function runPhpLint(filePath) {
   const containerPath = toContainerPath(filePath);
   if (!containerPath) return null; // 非 D:\Project 下，跳過
-  try {
-    const result = execSync(
-      `docker exec dev-php84 php -l "${containerPath}" 2>&1`,
-      { timeout: 8000, encoding: 'utf-8' }
-    );
-    return { ok: result.includes('No syntax errors'), output: result.trim() };
-  } catch (e) {
-    // exec 非零離開 → e.stdout 有 php -l 訊息
-    const out = (e.stdout || e.message || '').trim();
-    return { ok: false, output: out };
+  // 動態發現本機在跑的 PHP 容器（由新到舊），不寫死容器名 → 跨環境通用
+  const containers = getPhpContainers();
+  if (containers.length === 0) return null; // 無可用 PHP 容器，靜默跳過 lint
+  let firstSyntaxOutput = '';
+  let firstSyntaxContainer = '';
+  let anyAvailable = false;
+  for (let i = 0; i < containers.length; i++) {
+    const c = containers[i].name;
+    const r = lintOne(c, containerPath);
+    if (r.kind === 'unavailable') continue;
+    anyAvailable = true;
+    if (r.kind === 'pass') {
+      // i>0 代表最新版不過、較舊版才過 → 此檔是舊版 PHP 語法（非錯誤）
+      return { ok: true, container: c, legacy: i > 0, output: r.output };
+    }
+    if (!firstSyntaxOutput) { firstSyntaxOutput = r.output; firstSyntaxContainer = c; }
   }
+  if (!anyAvailable) return null; // 沒有任何容器可 lint，靜默跳過
+  // 所有可用版本都語法失敗 → 真錯誤
+  return { ok: false, container: firstSyntaxContainer, output: firstSyntaxOutput };
 }
 
 // 從不同工具的 tool_input 萃取所有受影響的檔案路徑
@@ -145,7 +180,7 @@ process.stdin.on('end', () => {
       if (failed.length > 0) {
         phpLintFailed = true;
         phpLintErrorMsg =
-          `[PHP Lint Gate] ❌ BLOCKED：PHP 語法錯誤（${failed.length}/${lintResults.length} 檔）：\n` +
+          `[PHP Lint Gate] ❌ BLOCKED：PHP 語法錯誤（${failed.length}/${lintResults.length} 檔，所有 PHP 版本皆無法解析）：\n` +
           failed.map(x => {
             const lines = x.r.output.split('\n').filter(l => l.trim());
             const errLine = lines.find(l => /Parse error|syntax error/i.test(l)) || lines.slice(-1)[0] || '';
@@ -156,7 +191,17 @@ process.stdin.on('end', () => {
           `→ 常見坑：逗號 regex 誤切函式參數列、孤兒 } / endif / $var、apply_diff 多 block 邊界錯誤。\n`;
         messages.push(phpLintErrorMsg);
       } else if (passed.length > 0) {
-        messages.push(`[LLM Judge] ✅ PHP 語法驗證通過（${passed.length} 檔）`);
+        const legacy = passed.filter(x => x.r.legacy);
+        if (legacy.length > 0) {
+          // 最新版不過、較舊版才過 → 偵測為舊版 PHP 專案，屬預期，不阻擋
+          messages.push(
+            `[LLM Judge] ✅ PHP 語法驗證通過（${passed.length} 檔）\n` +
+            `ℹ️ 偵測到舊版 PHP 語法：${legacy.map(x => `${path.basename(x.p)}→${x.r.container}`).join('、')}\n` +
+            `   （最新版不相容但舊版合法，判定為舊站台，未阻擋。部署目標版本請以該專案實際環境為準）`
+          );
+        } else {
+          messages.push(`[LLM Judge] ✅ PHP 語法驗證通過（${passed.length} 檔，dev-php84）`);
+        }
       }
     }
 

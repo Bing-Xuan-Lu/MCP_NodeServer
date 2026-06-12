@@ -296,3 +296,4 @@ Phase G    產出 reports/{project}_校稿單_{日期}.html（含嵌入截圖）
 - 遞棒協議：前台寫 `handoff.json`，後台讀取後驗 DB，禁止跨越職責範圍
 - 業務流程測試前確認使用**測試環境**，避免污染正式資料
 - DB 驗證只用 SELECT，QC 過程禁止修改 DB
+- **batch 測試輸出統計**：對 batch 測試產出的 CSV 做 pivot/group/aggregate 統計（如各模組 NG 數、各案例耗時分佈）用 `analyze_csv`；要對照 baseline CSV 跑 PHP class::method 重算比對（報價/計算類驗收對齊 Sheet baseline）用 `csv_recompute_audit`，取代手寫解析腳本

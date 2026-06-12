@@ -19,6 +19,8 @@ $ARGUMENTS
 - **PHP 執行**：`run_php_test`, `run_php_script`, `tail_log`
 - **程式碼讀取**：`list_files_batch`, `read_files_batch`, `read_file`
 
+> ⚙️ **動手前先確認狀態**：跑任何 `run_php_*` 前先依共用參考 `dev_workflow/env_state_detect_steps.md` 偵測 PHP 版本挑對應容器（動態 `docker ps`，不寫死）；用 `execute_sql` 前先 `get_current_db` 確認連對 DB。別賭預設值。
+
 ## 需要的資訊
 
 若使用者未提供以下資訊，請主動詢問：

@@ -82,7 +82,8 @@ MCP_NodeServer/
 │   ├── agent-coord-stale-contract.js ← PreToolUse(寫入類)：多 backend 並行時，動工前掃 transcript 找最近一次 agent_coord poll api-contract 的 after_id，若 D:\Project\_coordination\{project}\api-contract.json 有比那更新的訊息且 agent != self → 警告先 poll（防跨 backend 邏輯撞車）
 │   ├── pre-compact.js   ← PreCompact：context 壓縮前存快照 + 踩坑偵測
 │   ├── write-guard.js   ← PreToolUse(Write|Edit)：敏感檔案寫入警告 + JS/CSS 修改時提醒 bump version
-│   ├── llm-judge.js     ← PostToolUse(Write|Edit)：高/中風險檔案自我審查清單 + PHP docker lint + JS/CSS bump version 提醒
+│   ├── llm-judge.js     ← PostToolUse(Write|Edit)：高/中風險檔案自我審查清單 + PHP 版本感知 lint（漸進式回退：動態發現本機 PHP 容器由新到舊逐版 php -l，任一版過即放行並標明偵測到的舊版，全版皆 parse error 才 BLOCK；解 legacy 5.x 檔被 php84 誤判語法錯整批擋下）+ JS/CSS bump version 提醒
+│   ├── php-containers.js ← llm-judge 共用：動態發現本機在跑的 PHP 容器（docker ps + 逐一問 PHP_VERSION，不寫死容器名 → 跨環境通用），結果快取 ~/.claude/php-containers-cache.json（TTL 30 分）；可用 MCP_PHP_LINT_CONTAINERS env 覆寫
 │   ├── user-prompt-guard.js ← UserPromptSubmit：模糊指令偵測（全域強制）+ 場景缺上下文提醒（前端/後端/QC/Playwright）
 │   ├── official-docs-guard.js ← UserPromptSubmit：偵測第三方技術行為問題（瀏覽器產品名 chrome/firefox… / Web 標準 CORS/CSP/SameSite/W3C/MDN / 框架版本用法 / 規範 / 為什麼…行為），注入提醒「回答前先 WebFetch 查官方文件，禁憑訓練記憶直接答」。純瀏覽器自動化測試（截圖/導航/click 無查文件意圖）與本系統 meta 維護（hook/memory/skill）自動跳過。非阻擋，只注入提醒
 │   ├── skill-router.js  ← UserPromptSubmit：Skill 關鍵字偵測，依分數自動建議相關 Skill
@@ -156,6 +157,7 @@ MCP_NodeServer/
 | `CLAUDE_TOKEN_BUDGET_BLOCK` | `250` | token-budget-circuit-breaker：本場 tool call 數達此值硬擋一次要求收斂/分發（之後每 +150 再跳） |
 | `CLAUDE_DUAL_STATE_PATH_REGEX` | _(空)_ | refactor-advisor #14 觸發路徑限制 regex（空＝所有 .php 都檢查） |
 | `CLAUDE_DUAL_STATE_SESSION_RE` | _(預設見 hook)_ | refactor-advisor #14 偵測 session 分支的 regex |
+| `MCP_PHP_LINT_CONTAINERS` | _(空＝動態發現)_ | llm-judge PHP lint 容器組覆寫（逗號分隔，由新到舊）。預設空值時走動態發現（docker ps + 問 PHP_VERSION）；僅特殊環境（容器名特殊、不想被探測）需手動指定 |
 
 ### Git Bash PATH 補充
 
@@ -260,7 +262,11 @@ Hook 實際執行的是 `~/.claude/hooks/` 下的副本，**不是** repo 的 `h
    - **CLAUDE.md** — `tools/{category}/` 目錄結構中加入新工具
    - **README.md** — 工具總覽區段（數量、表格列、如有新區段則新增）
    - **dashboard.html** — MCP Tools 區段的 tag + `dept-count` + `section-total` + 頂部總數 + JS `SKILLS` 物件內各 Skill 的 `tools` 陣列
-4. 重啟 MCP Server
+4. **回頭看哪些 Skill 該引用此工具並更新（雙向同步，零例外）**：工具做好沒用進 Skill＝Claude 不會在該情境用它，等於白做。
+   - **新增工具** → 想「哪些既有 Skill 的情境該用它？」逐一在那些 Skill 的『可用工具』或對應步驟補上引用（情境一句話 + 工具名）。例：新增 `find_dead_symbols` → 補進 refactor/清理/`skill_audit` 類；新增前端 AST（`js_symbol_*`/`css_*`）→ 補進前端 bug/QC 類，取代「叫人 `browser_evaluate`/散搜」。
+   - **改名/淘汰工具** → 反向 Grep 所有 Skill MD 找舊工具名，一併改名或移除，避免 Skill 指到死工具。
+   - 找落點：`grep -rl "舊/相關工具名" Skills/commands/` 或語意判斷該情境的 Skill。
+5. 重啟 MCP Server
 
 **完成後自我核對（每次新增/修改 MCP 工具後必做）：**
 
@@ -273,6 +279,7 @@ Hook 實際執行的是 `~/.claude/hooks/` 下的副本，**不是** repo 的 `h
 ☐ dashboard.html dept-count 已更新？
 ☐ dashboard.html section-total 與頂部總數已更新？
 ☐ dashboard.html JS SKILLS 物件的 tools 陣列已更新？
+☐ 已掃過相關 Skill：新工具補上引用 / 淘汰工具從 Skill 移除？（雙向同步）
 ☐ MCP Server 已重啟？
 ```
 
