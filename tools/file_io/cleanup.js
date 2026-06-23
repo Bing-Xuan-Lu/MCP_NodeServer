@@ -1,5 +1,10 @@
 import fs from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
+
+// repo 根目錄（= python 容器掛載點 /develop）。動態推導以跨電腦通用，不寫死絕對路徑。
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MCP_ROOT = path.resolve(__dirname, "..", "..").replace(/\\/g, "/");
 
 // 白名單：只允許這些路徑下的遞迴刪除（避免誤刪業務資料）
 // 規則：路徑經正規化後必須以下列任一 prefix 開頭，且不可包含 `..`
@@ -7,6 +12,9 @@ const ALLOWED_PREFIXES = [
   "D:/tmp/",
   "C:/Users/tarag/AppData/Local/Temp/",
   "/tmp/",
+  // run_python_script 跑臨時腳本時，腳本輸出到容器 /develop/tmp/（= repo 根 /tmp/）的產出。
+  // 框架自家工具用 .tmp（已由 segment 覆蓋），此處補無點的 tmp。
+  `${MCP_ROOT}/tmp/`,
 ];
 
 // 額外允許：路徑中含這些 segment（更彈性，覆蓋專案內 _tmp_remote/_drift 暫存）
@@ -24,6 +32,9 @@ function normalize(p) {
 function isAllowed(absPath) {
   const norm = normalize(absPath);
   if (norm.includes("/../") || norm.includes("/..\\")) return false;
+  // repo 根 tmp 目錄本身也允許整個清除（prefix 比對要求尾斜線，裸目錄會漏判）。
+  // 僅針對此 scratch 目錄放寬，不波及系統 Temp / D:/tmp 等其他 prefix。
+  if (norm.toLowerCase() === `${MCP_ROOT}/tmp`.toLowerCase()) return true;
   if (ALLOWED_PREFIXES.some((pre) => norm.toLowerCase().startsWith(pre.toLowerCase()))) return true;
   // 補 trailing slash 後再比對 segment，避免「目錄名本身就是 segment 末端」（如
   // D:/Project/_tmp_remote）因 normalize 已剝去尾斜線而漏判 /_tmp_remote/
@@ -36,8 +47,8 @@ export const definitions = [
   {
     name: "cleanup_path",
     description:
-      "白名單 tmp 路徑安全遞迴刪除。僅允許刪除 D:/tmp/、系統 Temp、或路徑含 /_tmp_remote/ /_drift/ /_tmp/ /.tmp/ 等明確暫存 segment。需 confirm:true。\n" +
-      "用途：drift 比對 / sftp 暫存清理，避開 Bash rm -rf 與 # mcp-fallback 計數。",
+      "白名單 tmp 路徑安全遞迴刪除。僅允許刪除 D:/tmp/、系統 Temp、repo 根 /tmp/（run_python_script 產出）、或路徑含 /_tmp_remote/ /_drift/ /_tmp/ /.tmp/ 等明確暫存 segment。需 confirm:true。\n" +
+      "用途：drift 比對 / sftp 暫存清理 / python 產檔清理，避開 Bash rm -rf 與 # mcp-fallback 計數。",
     inputSchema: {
       type: "object",
       properties: {

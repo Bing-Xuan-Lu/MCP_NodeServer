@@ -8,7 +8,7 @@ import { validateArgs } from "../_shared/utils.js";
 const execPromise = util.promisify(exec);
 
 const CONTAINER = "python_runner";
-const DEVELOP_MOUNT = "/develop"; // 對應 D:\MCP_Server（python/docker-compose.yml `..:/develop`）
+const DEVELOP_MOUNT = "/develop"; // 對應專案根目錄 MCP_ROOT（python/docker-compose.yml `..:/develop`，跨機通用）
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MCP_ROOT = path.resolve(__dirname, "..", "..");
 
@@ -20,8 +20,8 @@ export const definitions = [
     name: "run_python_script",
     description:
       "在 Docker Python 容器（python_runner）中執行 Python 程式碼。" +
-      "支援兩種模式：傳入 code 執行 inline 程式碼；傳入 file_path 執行 D:\\Develop\\ 下的 .py 檔案。" +
-      "容器已掛載 D:\\Develop → /develop，可直接讀寫專案內的任何檔案。",
+      "支援兩種模式：傳入 code 執行 inline 程式碼；傳入 file_path 執行專案根目錄下的 .py 檔案。" +
+      `容器已掛載專案根目錄（${MCP_ROOT}）→ /develop，可直接讀寫專案內的任何檔案。`,
     inputSchema: {
       type: "object",
       properties: {
@@ -32,7 +32,7 @@ export const definitions = [
         file_path: {
           type: "string",
           description:
-            "相對於 D:\\Develop\\ 的 .py 檔案路徑，例如 python/scripts/fix_encoding.py（與 code 擇一）",
+            `相對於專案根目錄（${MCP_ROOT}，= 容器 /develop）的 .py 檔案路徑，例如 python/scripts/fix_encoding.py（與 code 擇一）`,
         },
         args: {
           type: "string",
@@ -71,7 +71,7 @@ async function runPython({ code, file_path, args: scriptArgs, timeout }) {
       isError: true,
       content: [{
         type: "text",
-        text: `容器 ${CONTAINER} 不存在或未啟動。\n建議動作：\n  • 執行 cd D:\\Develop\\python && docker compose up -d`,
+        text: `容器 ${CONTAINER} 不存在或未啟動。\n建議動作：\n  • 執行 cd D:\\MCP_Server\\python && docker compose up -d`,
       }],
     };
   }

@@ -1,9 +1,50 @@
+# enabled-skills.txt — 公開 Skill 部署白名單
+# 由 deploy-commands.js 讀取；不在此清單的 .md 會被當 stale 從 live 清除。
+# 規則：每新增一個公開 Skill 必須把檔名加進此清單（save_claude_skill 不會自動回寫，易漂移）。
+# 內容應涵蓋 Skills/commands/ 下所有公開 Skill（排除 _* 目錄、_internal.md、_steps.md）。
+
+axshare_diff.md
+axshare_spec_index.md
+bug_context.md
+bug_trace.md
+checkpoint.md
 claude_sync.md
+css_legacy_override.md
+db_index_analyzer.md
+db_migration.md
+db_schema_designer.md
+debug_session.md
+design_diff.md
+fetch_article.md
+form_fullfield_roundtrip_test.md
+frontend_qc.md
+full_deploy.md
 git_commit.md
+github_skill_import.md
 harness_audit.md
 hook_complaints.md
+lesson.md
+logic_trace.md
 mcp_pull_sync.md
 memory_audit.md
+php_crud_generator.md
+php_crud_test.md
+playwright_ui_test.md
+project_qc.md
+read_article.md
+remote_db_exec.md
+remote_diff.md
 retro.md
+rwd_scan.md
+sadd.md
+session_audit.md
+session_recall.md
 settings_cleanup.md
+sftp_deploy.md
+sftp_ops.md
+sftp_pull.md
 skill_audit.md
+sprint_plan.md
+tdd.md
+verify.md
+web_performance.md

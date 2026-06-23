@@ -6,7 +6,8 @@ import { CONFIG, EXTRA_ALLOWED_PATHS } from "../../config.js";
 import { validateArgs } from "../_shared/utils.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SKILLS_DIR = path.join(__dirname, "..", "Skills", "commands");
+const SKILLS_DIR = path.join(__dirname, "..", "..", "Skills", "commands");
+const WHITELIST  = path.join(__dirname, "..", "..", "Skills", "enabled-skills.txt");
 const DEPLOY_DIR = path.join(os.homedir(), ".claude", "commands");
 
 // ============================================
@@ -16,7 +17,7 @@ export const definitions = [
   {
     name: "save_claude_skill",
     description:
-      "將新技能儲存為 Claude Code 斜線指令 (.md)，並立即部署到 ~/.claude/commands/。" +
+      "將新技能儲存為 Claude Code 斜線指令 (.md)，立即部署到 ~/.claude/commands/，並自動登記到部署白名單 enabled-skills.txt（避免日後全量部署被當 stale 清除）。" +
       "Claude 可從對話中提取可重用的 Prompt 模式，呼叫此工具自動建立新技能。",
     inputSchema: {
       type: "object",
@@ -147,6 +148,14 @@ async function saveSkill({ name, content, description }) {
   await fs.copyFile(srcPath, deployPath);
   results.push(`✅ 已部署：${deployPath}`);
 
+  // 4. 登記到部署白名單（enabled-skills.txt）
+  //    deploy-commands.js 是白名單制，不在清單的 .md 會被當 stale 清除；
+  //    save 後若不回寫，日後跑一次全量部署就會誤刪此技能。
+  const wl = await ensureWhitelisted(`${name}.md`);
+  results.push(wl.added
+    ? `✅ 已登記部署白名單：Skills/enabled-skills.txt`
+    : `ℹ️  白名單已含此技能，無需重複登記`);
+
   results.push("");
   results.push(`🎉 技能 /${name} 已建立！`);
   results.push("⚠️  請重啟 Claude Code 讓新指令生效（若目前不在 MCP 對話中可能需要重載）。");
@@ -155,6 +164,18 @@ async function saveSkill({ name, content, description }) {
   return {
     content: [{ type: "text", text: results.join("\n") }],
   };
+}
+
+// ── ensure_whitelisted ────────────────────────────────────
+// 把技能檔名登記進 enabled-skills.txt（去重；保持結尾換行整潔）
+async function ensureWhitelisted(skillFile) {
+  let text = "";
+  try { text = await fs.readFile(WHITELIST, "utf-8"); } catch { /* 不存在則新建 */ }
+  const present = text.split("\n").map(l => l.trim()).includes(skillFile);
+  if (present) return { added: false };
+  const prefix = text.length > 0 && !text.endsWith("\n") ? "\n" : "";
+  await fs.appendFile(WHITELIST, prefix + skillFile + "\n", "utf-8");
+  return { added: true };
 }
 
 // ── list_skills ───────────────────────────────────────────

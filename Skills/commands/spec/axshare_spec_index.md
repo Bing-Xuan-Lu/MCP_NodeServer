@@ -52,6 +52,9 @@ $ARGUMENTS
 | `browser_navigate` | 開啟規格書頁面 |
 | `browser_snapshot` | 擷取頁面 accessibility tree |
 | `browser_evaluate` | 從 iframe 中抽取導航連結清單 |
+| `browser_resize` | 流程圖 fallback：放大 viewport 讓完整流程圖入鏡 |
+| `browser_take_screenshot` | 流程圖 fallback：截下內層 canvas iframe（存 `screenshot/`） |
+| `read_image` | 流程圖 fallback：讀截圖後把方框與箭頭流向轉寫成文字 |
 | `list_files` | 掃描本地匯出目錄找 HTML 檔案 |
 | `create_file` | 寫入索引檔 |
 
@@ -72,6 +75,25 @@ browser_navigate(url: "{使用者貼的 AxShare URL}")
 > **核心方法**：AxShare 內容在 iframe 中，用 JS 直接從 iframe DOM 抽取比 snapshot 更完整。
 >
 > 抽取腳本放在 `_axshare_spec_index/extract_iframe_script.md`，讀取後將「完整內容抽取」段落貼進 `browser_evaluate` 的 `script` 參數執行。
+
+### S2b：流程圖 / diagram 頁面截圖 fallback（重要）
+
+> **何時觸發**：S2 抽取結果 `isDiagram: true`，**或**文字內容只有左側 nav tree + 右側 comments、頁面中央的流程圖方框抓不到。
+> Axure 流程圖的方框常是點陣 / canvas / 純定位 div，單靠文字抽取會漏掉方框與箭頭流向，必須改用截圖讓 Claude 直接看圖轉寫。
+
+1. **找出內層 canvas iframe 尺寸**：`browser_evaluate` 執行 `extract_iframe_script.md` 的「流程圖 canvas 偵測」段落，取得 `{ scrollWidth, scrollHeight, label }`（可能為 null → 直接截整頁）。
+2. **放大 viewport 讓完整流程圖入鏡**：`browser_resize(width, height)`，寬高取「canvas 捲動尺寸」與目前 viewport 的較大值（上限約 2560×4000，超過則分段捲動截圖）。
+3. **截圖存到 `screenshot/` 子資料夾**（**禁止存專案根目錄**，截圖路徑必須在 `screenshot/`）：
+   - 優先對 canvas iframe 做 element 截圖（指定該 iframe 的 ref / selector）。
+   - 取不到 element 時改 `fullPage` 截整頁：`screenshot/axshare_{頁面名}.png`。
+   - 流程圖超過一螢幕高 → 捲動內層 canvas 後多次截圖 `_p1 / _p2 ...`，全部存 `screenshot/`。
+4. **讀圖轉寫**：對每張截圖呼叫 `read_image`，把流程圖轉成**結構化文字**寫進輸出（不是只貼圖）：
+   - 列出每個方框（節點）的文字標籤。
+   - 列出箭頭連線：`A → B`、判斷節點的分支（`是 → / 否 →`）。
+   - 保留流程方向（由上而下 / 由左而右）與起訖點。
+5. 輸出時在該頁內容中新增 **`**流程圖**：`** 區塊，放轉寫後的節點與流向；截圖檔路徑一併附註備查。
+
+> **驗證**：轉寫後回頭對照截圖，確認每個方框與每條箭頭都有對應到文字，沒有漏節點或漏分支。
 
 ### S3：整理並輸出
 
@@ -186,6 +208,11 @@ browser_navigate(url: "{使用者貼的 AxShare URL}")
    - 日期標記（如「20260304 新增」格式）
    - **跨頁引用**（見下方規則）
 ```
+
+> **⚠️ 流程圖頁面**：若某頁是流程圖（snapshot 只有零散方框文字、或抽取腳本回傳 `isDiagram: true`），
+> 改走單頁模式 **S2b 截圖 fallback**：放大 viewport → 截下內層 canvas iframe 存 `screenshot/` → `read_image` 看圖
+> → 把方框與箭頭流向轉寫成結構化文字（節點清單 + `A → B` 連線 + 分支），寫進該頁的 `**流程圖**：` 區塊。
+> 不可只記「此頁為流程圖」帶過。
 
 > **⚠️ 關鍵：所有註解區塊必須原文照抄，不可精簡或摘要**
 >

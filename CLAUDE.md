@@ -27,7 +27,7 @@ MCP_NodeServer/
 │   │   └── utils.js     ← 驗證函式、錯誤處理、async 工具（全工具可用）
 │   ├── file_io/         ← 檔案讀寫與文件轉換（通用 I/O）
 │   │   ├── filesystem.js ← list_files, read_file, create_file, apply_diff, apply_diff_batch, read_files_batch, list_files_batch, create_file_batch
-│   │   ├── cleanup.js   ← cleanup_path（白名單 tmp 路徑安全遞迴刪除：D:/tmp/、Temp、_tmp_remote/_drift/.tmp segment）
+│   │   ├── cleanup.js   ← cleanup_path（白名單 tmp 路徑安全遞迴刪除：D:/tmp/、Temp、repo 根 /tmp/（run_python_script 產出，跨機動態推導）、_tmp_remote/_drift/.tmp segment）
 │   │   ├── multi_inject.js ← multi_file_inject（跨檔 anchor-based 插入，CRLF/LF + indent 偵測 + idempotent skip）
 │   │   ├── excel.js     ← get_excel_values_batch, trace_excel_logic, simulate_excel_change
 │   │   ├── export_fetch.js ← fetch_export_file（帶 cookie / 先登入下載受保護的 .xlsx/.xls/.csv 匯出檔 → SheetJS 解析回傳可讀儲存格；偵測被導去登入頁、csv 走 UTF-8 解碼防亂碼；解 send_http_request 拿到 binary 亂碼的痛點）
