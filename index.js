@@ -8,7 +8,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 // ── Global Audit Log ──────────────────────────────────────
-import { appendFileSync, mkdirSync } from 'fs';
+import { appendFileSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { HOME as _HOME } from './env.js';
 
@@ -16,6 +16,30 @@ const _AUDIT_DIR  = join(_HOME, '.claude', 'logs');
 const _AUDIT_FILE = join(_AUDIT_DIR, 'mcp_audit.log');
 
 try { mkdirSync(_AUDIT_DIR, { recursive: true }); } catch (e) {}
+
+// ── Heartbeat：盡早寫 ~/.claude/.mcp-alive/<server>.json，給 session-start hook 偵測 ──
+// 關鍵：第一拍必須在下方「載入工具模組」這段慢動作之前就寫。冷啟動要載入 ~50 個模組可能 >5 秒，
+// 若拖到 server.connect 之後才寫，session-start hook 等不到新 heartbeat，會把上一個死掉實例的
+// 舊 mtime 誤報成「未運行 N 分鐘」（即使 server 其實正在開機）。started_at 只取一次代表真正啟動時間。
+const _MCP_STARTED_AT = new Date().toISOString();
+try {
+  const _ALIVE_DIR = join(_HOME, '.claude', '.mcp-alive');
+  const _ALIVE_FILE = join(_ALIVE_DIR, 'project-migration-assistant-pro.json');
+  mkdirSync(_ALIVE_DIR, { recursive: true });
+  const _writeBeat = () => {
+    try {
+      writeFileSync(_ALIVE_FILE, JSON.stringify({
+        server: 'project-migration-assistant-pro',
+        version: '5.1.0',
+        pid: process.pid,
+        started_at: _MCP_STARTED_AT,
+        last_beat: Date.now(),
+      }), 'utf-8');
+    } catch (e) {}
+  };
+  _writeBeat();                          // 第一拍：模組載入前就宣告「我在開機」
+  setInterval(_writeBeat, 10000).unref();
+} catch (e) {}
 
 const _KEY_PARAMS = ['file_path', 'path', 'remotePath', 'database', 'sql', 'command', 'url', 'query', 'name'];
 function _summarize(args) {
@@ -167,25 +191,4 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
 const transport = new StdioServerTransport();
 await server.connect(transport);
 console.error("✅ MCP Server v5.1.0 Started.");
-
-// ── Heartbeat：寫 ~/.claude/.mcp-alive/<server>.json，給 session-start hook 偵測 ──
-try {
-  const _ALIVE_DIR = join(_HOME, '.claude', '.mcp-alive');
-  mkdirSync(_ALIVE_DIR, { recursive: true });
-  const _ALIVE_FILE = join(_ALIVE_DIR, 'project-migration-assistant-pro.json');
-  const _writeBeat = () => {
-    try {
-      const payload = JSON.stringify({
-        server: 'project-migration-assistant-pro',
-        version: '5.1.0',
-        pid: process.pid,
-        started_at: new Date().toISOString(),
-        last_beat: Date.now(),
-      });
-      // writeFileSync 會更新 mtime，hook 用 mtime 判活度
-      import('fs').then(({ writeFileSync }) => writeFileSync(_ALIVE_FILE, payload, 'utf-8'));
-    } catch (e) {}
-  };
-  _writeBeat();
-  setInterval(_writeBeat, 10000).unref();
-} catch (e) {}
+// Heartbeat 已在檔案開頭（模組載入前）啟動，這裡不再重寫，避免冷啟動競態誤報。

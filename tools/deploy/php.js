@@ -121,7 +121,9 @@ export const definitions = [
       "①方法+網址 ②狀態碼+耗時(ms)+大小+content-type ③重要 Response Headers(轉址/Cookie/驗證/下載) ④Body(JSON 自動美化縮排)。" +
       "用途：測頁面正不正常(200/500)、模擬表單送出(method:POST + data)做新增/修改、帶 cookie 測登入後才看得到的頁面、" +
       "follow_redirects:false 測權限把關(被擋會 302 轉走 vs 放行 200)、files 測檔案上傳。" +
-      "做不到：驗不到 Vue/DOM/按鈕點擊等前端互動，那些要改用 browser_interact(Playwright)。",
+      "做不到：驗不到 Vue/DOM/按鈕點擊等前端互動，那些要改用 browser_interact(Playwright)。" +
+      "連線失敗時會挖出真正錯誤碼（DNS 解不到/連線被拒/TLS 憑證鏈不完整/逾時…）＋白話原因＋建議動作，不再只丟 fetch failed；" +
+      "「瀏覽器能連、工具連不上」多半是 TLS 憑證鏈問題，看代碼若是 UNABLE_TO_VERIFY_LEAF_SIGNATURE/自簽/過期，可加 insecure:true（信任的測試機）。",
     inputSchema: {
       type: "object",
       properties: {
@@ -163,6 +165,8 @@ export const definitions = [
           default: true,
         },
         return_headers: { type: "boolean", description: "選填：是否列出「全部」Response Headers（等同 Postman 的 Headers 分頁）。預設 false 時已自動顯示有意義的 location/set-cookie/www-authenticate/content-disposition；設 true 才連 content-type/server/x-* 等所有標頭一併列出", default: false },
+        timeout_ms: { type: "integer", description: "選填：連線/回應逾時毫秒數，預設 30000（30 秒）；設 0 或負數 = 不設逾時。逾時會回 ABORTED 並說明，不再無限掛著", default: 30000 },
+        insecure: { type: "boolean", description: "選填：略過 TLS 憑證驗證（預設 false）。僅在『瀏覽器能連、工具報 TLS 憑證錯誤（如 UNABLE_TO_VERIFY_LEAF_SIGNATURE / 自簽 / 過期）』且目標是信任的測試機時才開。等同 curl -k", default: false },
       },
       required: ["url"],
     },
@@ -221,7 +225,7 @@ export const definitions = [
   },
   {
     name: "send_http_requests_batch",
-    description: "批次發送多個 HTTP 請求（並行執行，減少 tool call 來回）",
+    description: "批次發送多個 HTTP 請求（並行執行，減少 tool call 來回）。連線失敗同樣回傳真正錯誤碼＋白話原因＋建議，不再只丟 fetch failed；支援 timeout_ms 逾時與 insecure 略過 TLS 驗證",
     inputSchema: {
       type: "object",
       properties: {
@@ -236,11 +240,14 @@ export const definitions = [
               headers: { type: "object", description: "自訂標頭" },
               data: { type: "string", description: "請求資料 (JSON 字串)" },
               cookie_jar: { type: "string", description: "從命名 jar 讀取 cookie 帶入請求" },
+              timeout_ms: { type: "integer", description: "選填：此筆逾時毫秒數，未填則用 batch 層 timeout_ms（預設 30000）" },
             },
             required: ["url"],
           },
           description: "HTTP 請求陣列",
         },
+        timeout_ms: { type: "integer", description: "選填：所有請求的逾時毫秒數，預設 30000（30 秒）；設 0 或負數 = 不設逾時。可被各筆 requests[].timeout_ms 覆寫", default: 30000 },
+        insecure: { type: "boolean", description: "選填：略過 TLS 憑證驗證（預設 false）。因 TLS 設定為 process 全域，整批一律一致；任一筆 requests[].insecure 或此 batch 層設 true 即整批略過。僅限信任的測試機", default: false },
         max_response_size: { type: "integer", description: "每筆回應 body 字元上限（預設 8000；設 0 或負數 = 不截斷）" },
         body_filter: {
           type: "string",
@@ -325,6 +332,84 @@ function formatHttpBody(rawText, ctype, filterOpts, maxSize) {
     ? `\n... ⚠️ 已截斷（${body.length}/${totalLen} 字元，傳 max_response_size:0 取完整內容；或加 body_filter 縮小範圍）`
     : "";
   return { body, filterNote, bodyTag, truncNote };
+}
+
+// fetch（undici）連線失敗時 error.message 永遠是泛泛的 "fetch failed"，
+// 真正原因（DNS/連線被拒/TLS 憑證/逾時）藏在 error.cause，且 cause 會多層巢狀。
+// 沿 cause 鏈挖到最底層的真正 code，對常見錯誤碼附白話原因＋建議動作。
+const FETCH_ERR_HINTS = {
+  ENOTFOUND: "DNS 解析不到此主機名（網址打錯，或這台機器的 DNS 解不到）。瀏覽器解得到，多半是用了不同 DNS / hosts 檔 / VPN。",
+  EAI_AGAIN: "DNS 暫時解析失敗（網路不通、DNS 伺服器無回應）。確認本機網路與 DNS 設定。",
+  ECONNREFUSED: "對方主機拒絕連線（port 沒開、服務沒起，或被防火牆擋）。確認網址的 port 與服務狀態。",
+  ECONNRESET: "連線被對方重置（常見於 TLS 版本/cipher 不相容，或被中間設備切斷）。",
+  ECONNABORTED: "連線中途被中斷。",
+  ETIMEDOUT: "連線逾時（對方無回應，或被防火牆靜默丟棄封包）。",
+  EHOSTUNREACH: "無法路由到對方主機（網段不通）。",
+  ENETUNREACH: "無法連到對方網路（本機網路設定/路由問題）。",
+  UND_ERR_CONNECT_TIMEOUT: "建立 TCP 連線逾時（網路不通、被防火牆擋，或對方太慢）。",
+  UND_ERR_HEADERS_TIMEOUT: "對方收了連線卻遲遲不回應標頭（伺服器處理太慢或卡死）。",
+  UND_ERR_SOCKET: "底層 socket 斷線。",
+  ABORTED: "本工具端逾時主動中止（可調大 timeout_ms，或對方真的卡住了）。",
+  UNABLE_TO_VERIFY_LEAF_SIGNATURE: "TLS 憑證鏈不完整（伺服器少給中介憑證）。瀏覽器會自動補上快取的中介憑證所以能連，Node 較嚴格會直接拒。→ 請伺服器補齊憑證鏈；或在本工具加 insecure:true 略過驗證（僅限信任的測試機）。",
+  DEPTH_ZERO_SELF_SIGNED_CERT: "伺服器用自簽憑證。瀏覽器是你按過「仍要前往」才放行的。→ 加 insecure:true 略過驗證（僅限信任的測試機）。",
+  SELF_SIGNED_CERT_IN_CHAIN: "憑證鏈中含自簽憑證。→ 加 insecure:true 略過驗證（僅限信任的測試機）。",
+  CERT_HAS_EXPIRED: "伺服器 TLS 憑證已過期。→ 更新憑證；或加 insecure:true 暫時略過（僅限信任的測試機）。",
+  ERR_TLS_CERT_ALTNAME_INVALID: "憑證上的網域名稱與你連的主機名不符（SNI/CN/SAN 對不上）。確認用的網址主機名正確。",
+  EPROTO: "TLS 交握失敗（協定/cipher 不相容，常見於只支援舊版 TLS 的老站）。",
+  ERR_INVALID_URL: "網址格式不正確（少了 http://、含非法字元、或拼錯）。",
+};
+function describeFetchError(error) {
+  // 收集所有錯誤節點：沿 .cause 鏈 + 展開 AggregateError 的 .errors[]
+  //（雙協定 IPv4/IPv6 連線失敗時，真正的 ECONNREFUSED 會被包進 AggregateError.errors）
+  const all = [];
+  (function collect(err, depth) {
+    if (!err || depth > 6 || all.includes(err)) return;
+    all.push(err);
+    if (Array.isArray(err.errors)) for (const e of err.errors) collect(e, depth + 1);
+    if (err.cause && err.cause !== err) collect(err.cause, depth + 1);
+  })(error, 0);
+
+  // 逾時中止：AbortSignal.timeout 會丟 name='TimeoutError' 的 DOMException
+  const aborted = all.some((e) => e && (e.name === "AbortError" || e.name === "TimeoutError"));
+  // 取最底層「有 code/errno 的」當真正原因
+  const root = [...all].reverse().find((e) => e && (e.code || e.errno)) || all[all.length - 1] || error;
+  // 只取字串型 code（node 系統錯誤的 code 是字串如 ECONNREFUSED；DOMException 的 code 是數字 legacy 值如 23，要略過）
+  let code = (typeof root.code === "string" ? root.code : "") || (typeof root.errno === "string" ? root.errno : "");
+  if (aborted) code = "ABORTED";
+  const detail = (root.message || String(root) || "").trim();
+  const hint = FETCH_ERR_HINTS[code] || "";
+
+  let s = code ? `❌ 請求失敗（${code}）：${detail || "fetch failed"}` : `❌ 請求失敗：${detail || error.message || "fetch failed"}`;
+  if (hint) s += `\n👉 ${hint}`;
+  // 進階排查：附整條 cause 鏈（去重）
+  const trail = all
+    .map((e) => `${e.code || e.errno || e.name || "Error"}: ${(e.message || "").split("\n")[0]}`)
+    .filter((line, idx, arr) => arr.indexOf(line) === idx);
+  if (trail.length > 1) s += `\n🔎 cause 鏈：${trail.join(" ← ")}`;
+  return s;
+}
+
+// 包一層 fetch：加逾時。預設 30s，timeoutMs<=0 表不設逾時。
+// 用 AbortSignal.timeout（逾時丟 TimeoutError，describeFetchError 可辨識為 ABORTED）。
+// TLS 驗證的略過（insecure）不在這裡做——它走 process 全域 env NODE_TLS_REJECT_UNAUTHORIZED，
+// 由呼叫端在適當範圍（單筆／整批）切換，避免並行請求互相污染。
+function fetchWithTimeout(url, options, timeoutMs = 30000) {
+  if (!(timeoutMs > 0)) return fetch(url, options);
+  return fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
+}
+
+// 在 fn 執行期間切換 TLS 驗證（insecure 時略過憑證檢查），結束後還原 env。
+// 注意：NODE_TLS_REJECT_UNAUTHORIZED 是 process 全域，故僅在單筆或整批一致時切換。
+async function withTlsMode(insecure, fn) {
+  if (!insecure) return fn();
+  const prev = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  try {
+    return await fn();
+  } finally {
+    if (prev === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    else process.env.NODE_TLS_REJECT_UNAUTHORIZED = prev;
+  }
 }
 
 // ============================================
@@ -479,7 +564,8 @@ export async function handle(name, args) {
       if (args.follow_redirects === false) options.redirect = "manual";
 
       const _t0 = Date.now();
-      const response = await fetch(args.url, options);
+      const timeoutMs = args.timeout_ms === undefined ? 30000 : args.timeout_ms;
+      const response = await withTlsMode(args.insecure === true, () => fetchWithTimeout(args.url, options, timeoutMs));
       const text = await response.text();
       const elapsedMs = Date.now() - _t0;
 
@@ -528,7 +614,7 @@ export async function handle(name, args) {
 
       return { content: [{ type: "text", text: out }] };
     } catch (error) {
-      return { isError: true, content: [{ type: "text", text: `請求失敗: ${error.message}` }] };
+      return { isError: true, content: [{ type: "text", text: `📡 ${(args.method || "GET").toUpperCase()} ${args.url}\n${describeFetchError(error)}` }] };
     }
   }
 
@@ -709,6 +795,12 @@ export async function handle(name, args) {
 
   if (name === "send_http_requests_batch") {
     const batchMaxSize = args.max_response_size === undefined ? 8000 : args.max_response_size;
+    // insecure（略過 TLS 驗證）走 process 全域 env，故整批一致；必須在發出請求前切換，連線時 undici 才讀得到
+    const anyInsecure = args.insecure === true || (Array.isArray(args.requests) && args.requests.some((r) => r.insecure === true));
+    const _prevTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    if (anyInsecure) process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    let results;
+    try {
     const tasks = args.requests.map(async (req, i) => {
       const label = req.label || `Request ${i + 1}`;
       try {
@@ -732,7 +824,8 @@ export async function handle(name, args) {
         if (req.method !== "GET" && req.method !== "HEAD" && body) options.body = body;
 
         const t0 = Date.now();
-        const response = await fetch(req.url, options);
+        const reqTimeout = req.timeout_ms !== undefined ? req.timeout_ms : (args.timeout_ms === undefined ? 30000 : args.timeout_ms);
+        const response = await fetchWithTimeout(req.url, options, reqTimeout);
         const rawText = await response.text();
         const elapsedMs = Date.now() - t0;
         const ctype = response.headers.get("content-type") || "";
@@ -758,11 +851,16 @@ export async function handle(name, args) {
         block += `\n📄 Body${bodyTag}:\n${bodyOut}${truncNote}`;
         return { ok: response.status >= 200 && response.status < 400, text: block };
       } catch (err) {
-        return { ok: false, text: `[${i + 1}] ${label}\n❌ ${(req.method || "GET").toUpperCase()} ${req.url}\n請求失敗: ${err.message}` };
+        return { ok: false, text: `[${i + 1}] ${label}\n📡 ${(req.method || "GET").toUpperCase()} ${req.url}\n${describeFetchError(err)}` };
       }
     });
-
-    const results = await Promise.all(tasks);
+    results = await Promise.all(tasks);
+    } finally {
+      if (anyInsecure) {
+        if (_prevTls === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+        else process.env.NODE_TLS_REJECT_UNAUTHORIZED = _prevTls;
+      }
+    }
     const successCount = results.filter((r) => r.ok).length;
     const failCount = results.length - successCount;
 

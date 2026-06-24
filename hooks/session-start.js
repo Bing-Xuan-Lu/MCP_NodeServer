@@ -237,7 +237,7 @@ function suggestPresets(cwd) {
 // === MCP heartbeat 偵測（已知會寫 heartbeat 的 server） ===
 const KNOWN_MCP_SERVERS = ['project-migration-assistant-pro'];
 const MCP_BEAT_FRESH_MS = 20000;   // heartbeat 視為新鮮的閾值
-const MCP_WAIT_MAX_MS = 5000;      // 最多等多久讓 MCP 寫 heartbeat
+const MCP_WAIT_MAX_MS = 10000;     // 最多等多久讓 MCP 寫 heartbeat（冷啟動載入 ~50 模組可能要數秒，給足窗口避免誤報）
 const MCP_WAIT_STEP_MS = 500;
 
 async function checkMcpAlive(cwd) {
@@ -290,13 +290,15 @@ async function main() {
       const lines = dead.map(d => {
         if (d.lastSeen) {
           const ageMin = Math.floor((Date.now() - d.lastSeen) / 60000);
-          return `  - ${d.name}（最後 heartbeat 在 ${ageMin} 分鐘前）`;
+          const ageStr = ageMin >= 60 ? `${Math.floor(ageMin / 60)} 小時${ageMin % 60} 分` : `${ageMin} 分鐘`;
+          return `  - ${d.name}（上次 heartbeat 在 ${ageStr}前）`;
         }
-        return `  - ${d.name}（從未啟動成功）`;
+        return `  - ${d.name}（尚未寫過 heartbeat）`;
       }).join('\n');
       output.push(
-        `[MCP ⚠️] 偵測到 MCP server 未運行：\n${lines}\n` +
-        `  → 對應的 MCP 工具會失敗。請檢查 Claude Code 啟動訊息或重啟。`
+        `[MCP ⏳] 此刻沒等到新鮮 heartbeat（已等 ${Math.round(MCP_WAIT_MAX_MS / 1000)} 秒）：\n${lines}\n` +
+        `  → 若你剛開啟/重啟 Claude Code，多半是 server 還在冷啟動載入工具，稍候幾秒就好（上面的「上次 heartbeat」是前一個實例的時間，不代表現在）。\n` +
+        `  → 只有實際呼叫 MCP 工具持續失敗時，才需要檢查啟動訊息或重啟。`
       );
     }
   } catch (e) {}

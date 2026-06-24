@@ -4,6 +4,7 @@
       "type": "stdio",
       "command": "node",
       "args": [
+        "--use-system-ca",
         "D:\\Develop\\MCP_NodeServer\\index.js"
       ]
     },

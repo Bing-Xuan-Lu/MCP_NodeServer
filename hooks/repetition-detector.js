@@ -2710,25 +2710,9 @@ const PATTERNS = [
     },
   },
   {
-    // Layer 4: Post-Tool-Use 提前檢測 — 在執行 Edit/Write 後累積超過 15+ 未 commit 檔案
+    // Layer 4: Post-Tool-Use 未 commit 累積提醒 — 已依使用者要求停用（不再提示 commit）
     id: 'uncommitted_accumulation',
-    detect: (entry, history) => {
-      const tool = shortName(entry.tool);
-      if (tool !== 'Edit' && tool !== 'Write') return null;
-
-      // 只在最近有 Edit/Write 且累積超過 15 個檔案時檢查
-      const recentEdits = history.slice(-20).filter(h => {
-        const t = shortName(h.tool);
-        return t === 'Edit' || t === 'Write';
-      });
-      if (recentEdits.length < 5) return null;
-
-      const uncommittedCount = checkUncommittedFiles();
-      if (uncommittedCount >= 15) {
-        return `[Post-Tool-Use] ℹ️ 已修改 ${uncommittedCount} 個檔案未 commit。若預期這次改動是原子性的，建議稍後執行 git commit。\n`;
-      }
-      return null;
-    },
+    detect: () => null,
   },
   {
     // Layer 5: 成本追蹤 — 識別低效操作並估算 token 浪費

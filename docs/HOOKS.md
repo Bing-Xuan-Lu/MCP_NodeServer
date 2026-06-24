@@ -41,7 +41,7 @@
 | L3 | same_category_repeat | 同類操作 3+ 次 | ⚠️ 警告（10+ 次 block） |
 | L3b | consecutive_batch_eligible | batch-eligible 工具（execute_sql / send_http_request / sftp_upload / run_php_script / Read images-PDF-Word-pptx 等）**連續** ≥4 次（不分子類別）→ 主動建議改用對應 batch 版。同 session 同工具僅在第 4 次提一次去重 | 📦 提示 batch（不擋） |
 | L2.84b | consecutive_same_url_navigate | `browser_navigate` 連續導航**同一 URL** 第 3 次提示（早於 L2.85 exact_same_call 的 9 次門檻）。常見因：page 沒清 stale state、selector 不存在、callback 沒跑 | ⚠️ 警告（不擋） |
-| L4 | uncommitted_accumulation | 修改 15+ 檔案未 commit | ℹ️ 提醒（大 commit 流程） |
+| L4 | uncommitted_accumulation | ~~修改 15+ 檔案未 commit~~ **已依使用者要求停用**（`detect: () => null`，不再主動提示 commit） | 🚫 停用 |
 | L5 | token_waste_detection | 8 種低效模式（重複讀檔、無過濾 Grep、頻繁截圖等） | 💰 active=逐次提醒 / passive=每 N 次摘要 |
 | L6 | auto_fix_suggestion | sed/awk 可自動化操作 | ✨ 生成修復建議 |
 | L7 | workload_reminder | 30+ tool calls + 4+ 工具種類 + 20%+ 修改比例 | 📋 提醒分發任務（僅一次） |
