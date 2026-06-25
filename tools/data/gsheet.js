@@ -3,12 +3,30 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { validateArgs } from "../_shared/utils.js";
-import { resolveSecurePath } from "../../config.js";
+import { resolveSecurePath, CONFIG } from "../../config.js";
 import { GSHEET_CREDENTIALS_PATH } from "../../env.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MCP_ROOT = path.resolve(__dirname, "..", "..");
 const CONTAINER = "python_runner";
+
+// 自動探測 gsheet service account JSON：未傳 credentials_path 且未設 env 時，
+// 依序找這些受信任的內部/專案根位置，省去每次手填路徑（使用者多次反映「每次都找不到」）。
+// 命中的是已知安全的絕對路徑，直接使用、不經 resolveSecurePath 白名單檢查。
+const CRED_CANDIDATES = [
+  path.join(MCP_ROOT, "credentials.json"),
+  path.join(MCP_ROOT, "gsheet-credentials.json"),
+  path.join(CONFIG.basePaths[0], "credentials.json"),
+];
+async function autodetectCredentials() {
+  for (const c of CRED_CANDIDATES) {
+    try {
+      await fs.access(c);
+      return c;
+    } catch {}
+  }
+  return null;
+}
 
 // ============================================
 // 工具定義
@@ -26,7 +44,7 @@ export const definitions = [
         spreadsheet_id: { type: "string", description: "Google Sheet ID（網址中的 /d/{this}/edit）" },
         credentials_path: {
           type: "string",
-          description: "Service account JSON 路徑（相對 basePath 或絕對）。預設讀 env GSHEET_CREDENTIALS_PATH（未設則必填）",
+          description: "Service account JSON 路徑（相對 basePath 或絕對）。預設讀 env GSHEET_CREDENTIALS_PATH，未設則自動探測常見位置（MCP_Server/credentials.json、專案根 credentials.json）",
         },
         write_data: {
           type: "array",
@@ -86,7 +104,7 @@ export const definitions = [
       type: "object",
       properties: {
         spreadsheet_id: { type: "string" },
-        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH（未設則必填）" },
+        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH，未設則自動探測常見位置（MCP_Server/credentials.json、專案根 credentials.json）" },
         start_cell: { type: "string", description: "起始 cell（含工作表名），例：'web!D284'" },
         default_sheet: { type: "string", description: "起始 cell 未指定工作表時用此（選填）" },
         max_depth: { type: "number", description: "遞迴展開上限（預設 4）", default: 4 },
@@ -106,7 +124,7 @@ export const definitions = [
       type: "object",
       properties: {
         spreadsheet_id: { type: "string", description: "Google Sheet ID（網址中的 /d/{this}/edit；必填）" },
-        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH（未設則必填）" },
+        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH，未設則自動探測常見位置（MCP_Server/credentials.json、專案根 credentials.json）" },
         read_range: {
           type: ["string", "array"],
           description: "要讀的 range（必填）。格式：'<worksheet>!<A1notation>'，例：'web!A1:Z200' 或 ['web!A1:Z10', 'data!B5']。**worksheet 名稱不可省略**，不知道就先用 gsheet_get_metadata 查。",
@@ -124,7 +142,7 @@ export const definitions = [
       type: "object",
       properties: {
         spreadsheet_id: { type: "string", description: "Google Sheet ID（網址中的 /d/{this}/edit）" },
-        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH（未設則必填）" },
+        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH，未設則自動探測常見位置（MCP_Server/credentials.json、專案根 credentials.json）" },
       },
       required: ["spreadsheet_id"],
     },
@@ -139,7 +157,7 @@ export const definitions = [
       type: "object",
       properties: {
         spreadsheet_id: { type: "string" },
-        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH（未設則必填）" },
+        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH，未設則自動探測常見位置（MCP_Server/credentials.json、專案根 credentials.json）" },
         start_cell: { type: "string", description: "起始 cell（含工作表名），例：'param'!D453" },
         default_sheet: { type: "string", description: "起始 cell 未指定工作表時用此（選填）" },
         max_depth: { type: "number", description: "遞迴展開上限（預設 4）", default: 4 },
@@ -163,7 +181,7 @@ export const definitions = [
       type: "object",
       properties: {
         spreadsheet_id: { type: "string", description: "Google Sheet ID（網址中的 /d/{this}/edit）" },
-        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH（未設則必填）" },
+        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH，未設則自動探測常見位置（MCP_Server/credentials.json、專案根 credentials.json）" },
         read_range: {
           type: ["string", "array"],
           description: "要讀的 range（單一字串或陣列），格式 '<worksheet>!<A1notation>'，例 'web!A1:Z200' 或 ['web!A1', 'data!B5']。worksheet 名稱不可省略，不知道先用 gsheet_get_metadata 查。",
@@ -188,7 +206,7 @@ export const definitions = [
       type: "object",
       properties: {
         spreadsheet_id: { type: "string", description: "Google Sheet ID（網址中的 /d/{this}/edit）" },
-        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH（未設則必填）" },
+        credentials_path: { type: "string", description: "預設讀 env GSHEET_CREDENTIALS_PATH，未設則自動探測常見位置（MCP_Server/credentials.json、專案根 credentials.json）" },
         write_data: {
           type: "array",
           description: "寫入清單（必填）。每項：{ range: 'web!A3', values: 'X' 或 [['X','Y'],['Z','W']] }。單值會自動包成 1x1。",
@@ -540,15 +558,49 @@ default_sheet = params.get('default_sheet') or ''
 max_depth = int(params.get('max_depth', 4))
 expand_ranges = bool(params.get('expand_ranges', False))
 
-# Range vs single cell ref：
-# 'Sheet Name'!A1   或   Sheet!A1   或   A1   或   A1:B2  或  Sheet!A1:B2
-REF_RE = re.compile(r"(?:'([^']+)'|([A-Za-z_]\\w*))?!?(\\$?[A-Z]+\\$?\\d+(?::\\$?[A-Z]+\\$?\\d+)?)")
+# Range vs single cell ref，body 三種型態：
+#   一般 cell / cell range：A1、\$A\$1、A1:B2、\$A\$1:\$B\$2
+#   整欄 range：G:G、\$G:\$G               （XLOOKUP lookup/return array 常用）
+#   整列 range：284:284、\$284:\$284
+# 整欄/整列必須帶冒號才捕捉，避免把公式裡的純數字 literal（如 *284）誤判成 row ref。
+REF_RE = re.compile(
+    r"(?:'([^']+)'|([A-Za-z_]\\w*))?!?"
+    r"(\\$?[A-Z]+\\$?\\d+(?::\\$?[A-Z]+\\$?\\d+)?"
+    r"|\\$?[A-Z]+:\\$?[A-Z]+"
+    r"|\\$?\\d+:\\$?\\d+)"
+)
+
+# 具名範圍（named range）解析：Sheets API 的 range notation 不認得名字，
+# 必須先把名字換成 A1。失敗（舊 gspread / 無權限 / 無具名範圍）就留空字典，不影響原行為。
+named_ranges = {}
+try:
+    from gspread.utils import rowcol_to_a1
+    title_by_id = {ws.id: ws.title for ws in sh.worksheets()}
+    def _grid_to_a1(gr):
+        title = title_by_id.get(gr.get('sheetId', 0))
+        sr, er = gr.get('startRowIndex'), gr.get('endRowIndex')
+        sc, ec = gr.get('startColumnIndex'), gr.get('endColumnIndex')
+        start = rowcol_to_a1((sr if sr is not None else 0) + 1, (sc if sc is not None else 0) + 1)
+        if er is not None and ec is not None:
+            a1 = f"{start}:{rowcol_to_a1(er, ec)}"  # endIndex 為 0-based exclusive，1-based inclusive 末格 == endIndex
+        else:
+            a1 = start
+        return f"'{title}'!{a1}" if title else a1
+    for nr in (sh.list_named_ranges() or []):
+        nm, gr = nr.get('name'), nr.get('range')
+        if nm and isinstance(gr, dict):
+            try:
+                named_ranges[nm] = _grid_to_a1(gr)
+            except Exception:
+                pass
+except Exception:
+    named_ranges = {}
 
 def normalize_ref(ref):
     m = REF_RE.match(ref)
     if not m: return ref
     sheet = m.group(1) or m.group(2) or default_sheet
-    body = m.group(3)
+    body = m.group(3).replace('$', '')  # Sheets API range notation 不吃 \$，去掉才抓得到（解 \$G\$284 → None）
     if sheet:
         return f"'{sheet}'!{body}"
     return body
@@ -620,6 +672,15 @@ def expand(ref, depth):
             if not r_n or r_n in seen: continue
             seen.add(r_n)
             expand(r_n, depth + 1)
+        # 具名範圍：A1 regex 抓不到名字，另外掃 token 比對具名範圍字典再展開
+        if named_ranges:
+            for token in set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", formula)):
+                if token in named_ranges:
+                    key = f"named:{token}"
+                    if key in seen: continue
+                    seen.add(key)
+                    emit(depth + 1, f"- {token} (named range → {named_ranges[token]})")
+                    expand(named_ranges[token], depth + 1)
     else:
         emit(depth, f"- {ref_n} = {value_repr} (literal)")
 
@@ -715,22 +776,32 @@ export async function handle(name, args) {
   )
     return null;
 
-  // 載入 credentials：優先用呼叫者傳入，否則讀環境變數 GSHEET_CREDENTIALS_PATH
+  // 載入 credentials：優先用呼叫者傳入 → 讀環境變數 GSHEET_CREDENTIALS_PATH → 自動探測常見位置
   const credPath = args.credentials_path || GSHEET_CREDENTIALS_PATH;
-  if (!credPath) {
-    return {
-      isError: true,
-      content: [{
-        type: "text",
-        text: "缺少 credentials_path。請傳入 service account JSON 路徑，或在 .env 設定 GSHEET_CREDENTIALS_PATH。",
-      }],
-    };
-  }
   let resolvedCred;
-  try {
-    resolvedCred = resolveSecurePath(credPath);
-  } catch (e) {
-    return { isError: true, content: [{ type: "text", text: `credentials_path 安全檢查失敗：${e.message}` }] };
+  if (credPath) {
+    try {
+      resolvedCred = resolveSecurePath(credPath);
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: `credentials_path 安全檢查失敗：${e.message}` }] };
+    }
+  } else {
+    // 未傳路徑也未設 env → 自動探測（命中即用，路徑已知安全免過 resolveSecurePath）
+    resolvedCred = await autodetectCredentials();
+    if (!resolvedCred) {
+      return {
+        isError: true,
+        content: [{
+          type: "text",
+          text:
+            "缺少 credentials_path，且自動探測不到 service account JSON。請擇一處理：\n" +
+            "  • 傳入 credentials_path 參數（相對 basePath 或絕對路徑）\n" +
+            "  • 在 .env 設定 GSHEET_CREDENTIALS_PATH\n" +
+            "  • 把 credentials.json 放到下列任一位置：\n" +
+            CRED_CANDIDATES.map((c) => `      - ${c}`).join("\n"),
+        }],
+      };
+    }
   }
   let creds;
   try {

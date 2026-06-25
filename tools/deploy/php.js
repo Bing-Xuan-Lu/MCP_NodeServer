@@ -4,6 +4,7 @@ import { exec } from "child_process";
 import util from "util";
 import { resolveSecurePath, CONFIG } from "../../config.js";
 import { validateArgs } from "../_shared/utils.js";
+import { runRemoteSSH } from "./sftp.js";
 
 const execPromise = util.promisify(exec);
 
@@ -83,32 +84,66 @@ function buildCookieHeader(jarName) {
   return Object.entries(jar).map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
+// 將 data（JSON 字串）準備成 request body，並在需要時補 Content-Type（會就地修改 headers）。
+// - 明確帶 Content-Type: x-www-form-urlencoded → 把 JSON 物件轉 query string
+// - 未帶 Content-Type 且 data 是「扁平 JSON 物件」（值皆為純量）→ 預設當表單欄位送，
+//   自動補 Content-Type: application/x-www-form-urlencoded，讓 PHP $_POST 收得到。
+//   （解：先前不補 header 時 fetch 以 text/plain 送出，PHP $_POST 全空，常被誤判成程式 bug）
+// - 其他情況（已帶 application/json、值含巢狀物件/陣列、非 JSON 字串）→ 原樣送，不動 header
+function prepareFormBody(data, headers) {
+  if (!data) return data;
+  const ctKey = Object.keys(headers).find((k) => k.toLowerCase() === "content-type");
+  const ct = ctKey ? headers[ctKey] : "";
+  if (ct && ct.includes("application/x-www-form-urlencoded")) {
+    try { return new URLSearchParams(JSON.parse(data)).toString(); } catch (e) { return data; }
+  }
+  if (!ct) {
+    try {
+      const parsed = JSON.parse(data);
+      const isFlatObject =
+        parsed && typeof parsed === "object" && !Array.isArray(parsed) &&
+        Object.values(parsed).every((v) => v === null || typeof v !== "object");
+      if (isFlatObject) {
+        headers["Content-Type"] = "application/x-www-form-urlencoded";
+        return new URLSearchParams(
+          Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k, v === null ? "" : v]))
+        ).toString();
+      }
+    } catch (e) {}
+  }
+  return data;
+}
+
 // ============================================
 // 工具定義
 // ============================================
 export const definitions = [
   {
     name: "run_php_script",
-    description: "在伺服器上執行 PHP 腳本 (CLI 模式)，並回傳輸出結果 (Stdout/Stderr)。可指定 Docker 容器執行。",
+    description:
+      "在伺服器上執行 PHP 腳本 (CLI 模式)，並回傳輸出結果 (Stdout/Stderr)。可指定 Docker 容器執行。" +
+      "remote:true 時改在『已 sftp_connect 的遠端主機』執行（走 SSH→docker exec），path 視為遠端容器/主機內的路徑，免再用 ssh_exec 手刻指令。",
     inputSchema: {
       type: "object",
       properties: {
-        path: { type: "string", description: "PHP 檔案路徑 (例如: test_case.php)" },
+        path: { type: "string", description: "PHP 檔案路徑 (例如: test_case.php)。remote:true 時視為遠端容器/主機內的絕對路徑" },
         args: { type: "string", description: "選填：傳遞給腳本的參數 (例如: id=1)" },
-        container: { type: "string", description: "選填：Docker 容器名稱（如 dev-php84），有值時在容器內執行" },
+        container: { type: "string", description: "選填：Docker 容器名稱（如 dev-php84），有值時在容器內執行。remote:true 時為遠端主機上的容器名" },
+        remote: { type: "boolean", description: "選填：在『已 sftp_connect 的遠端主機』執行（SSH→docker exec / 遠端 php）。需先 sftp_connect；path 視為遠端側路徑，不做本機路徑檢查", default: false },
       },
       required: ["path"],
     },
   },
   {
     name: "run_php_code",
-    description: "直接執行 PHP code string（免建暫存檔）。程式碼透過 stdin 傳入 PHP CLI，省掉 Write → run → rm 三步驟。自動補 <?php 標籤。lint:true 時改做語法檢查（php -l /dev/stdin）：先用 read_file 把主機檔案內容讀出再當 code 傳入，容器全程不需碰到 Windows 路徑即可 lint 主機檔。",
+    description: "直接執行 PHP code string（免建暫存檔）。程式碼透過 stdin 傳入 PHP CLI，省掉 Write → run → rm 三步驟。自動補 <?php 標籤。lint:true 時改做語法檢查（php -l /dev/stdin）：先用 read_file 把主機檔案內容讀出再當 code 傳入，容器全程不需碰到 Windows 路徑即可 lint 主機檔。remote:true 時 code 經 SSH 灌進『已 sftp_connect 的遠端主機』容器（docker exec -i），用於遠端測試機/正式機容器內的 PHP 執行（發信測試、CRUD 測試…），免再 ssh_exec 手刻或 mcp-fallback。",
     inputSchema: {
       type: "object",
       properties: {
         code: { type: "string", description: "PHP 程式碼（可含或不含 <?php 開頭，會自動補上）" },
-        container: { type: "string", description: "選填：Docker 容器名稱（如 dev-php84），有值時在容器內執行" },
+        container: { type: "string", description: "選填：Docker 容器名稱（如 dev-php84），有值時在容器內執行。remote:true 時為遠端主機上的容器名（省略則跑遠端主機的 php CLI）" },
         lint: { type: "boolean", description: "選填：只做語法檢查不執行（php -l）。程式碼經 stdin 灌進 php -l /dev/stdin，可在容器內 lint 主機讀回的檔案內容，繞過容器看不到 Windows 路徑的限制", default: false },
+        remote: { type: "boolean", description: "選填：在『已 sftp_connect 的遠端主機』執行（code 經 SSH 灌進遠端 docker exec -i 容器或遠端 php CLI 的 stdin）。需先 sftp_connect", default: false },
         timeout: { type: "number", description: "執行逾時毫秒數（預設 30000）", default: 30000 },
       },
       required: ["code"],
@@ -130,7 +165,7 @@ export const definitions = [
         url: { type: "string", description: "完整網址" },
         method: { type: "string", enum: ["GET", "POST", "PUT", "DELETE"], default: "GET" },
         headers: { type: "object", description: "自訂標頭" },
-        data: { type: "string", description: "一般欄位資料 (JSON 字串)" },
+        data: { type: "string", description: "一般欄位資料 (JSON 字串，如 {\"id\":\"1\",\"name\":\"x\"})。未帶 Content-Type 且為扁平 JSON 物件時，自動以 application/x-www-form-urlencoded 送出（PHP $_POST 收得到）；要送 JSON body 請自帶 headers Content-Type: application/json" },
         cookie_jar: { type: "string", description: "從命名 jar 讀取 cookie 帶入請求（登入後使用），例如 'frontend'" },
         save_cookies_as: { type: "string", description: "將回應的 Set-Cookie 存入命名 jar，例如 'frontend'（通常在登入請求時使用）" },
         files: {
@@ -238,7 +273,7 @@ export const definitions = [
               url: { type: "string", description: "完整網址" },
               method: { type: "string", enum: ["GET", "POST", "PUT", "DELETE"], default: "GET" },
               headers: { type: "object", description: "自訂標頭" },
-              data: { type: "string", description: "請求資料 (JSON 字串)" },
+              data: { type: "string", description: "請求資料 (JSON 字串)。未帶 Content-Type 且為扁平 JSON 物件時，自動以 application/x-www-form-urlencoded 送出（PHP $_POST 收得到）；要送 JSON body 請自帶 Content-Type: application/json" },
               cookie_jar: { type: "string", description: "從命名 jar 讀取 cookie 帶入請求" },
               timeout_ms: { type: "integer", description: "選填：此筆逾時毫秒數，未填則用 batch 層 timeout_ms（預設 30000）" },
             },
@@ -420,6 +455,25 @@ export async function handle(name, args) {
   if (def) args = validateArgs(def.inputSchema, args);
 
   if (name === "run_php_script") {
+    // 遠端模式：在已 sftp_connect 的遠端主機上跑（SSH→docker exec / 遠端 php）。
+    // path 視為遠端側路徑，不做本機 resolveSecurePath。
+    if (args.remote) {
+      if (!args.path.endsWith(".php")) throw new Error("安全限制：只能執行 .php 檔案");
+      const cmd = args.container
+        ? `docker exec ${args.container} php "${args.path}" ${args.args || ""}`.trim()
+        : `php "${args.path}" ${args.args || ""}`.trim();
+      const r = await runRemoteSSH(cmd, { timeoutMs: 30000 });
+      if (!r.ok) return { isError: true, content: [{ type: "text", text: `❌ 遠端 PHP 執行失敗：${r.error}` }] };
+      const cleanErr = cleanStderr(r.stderr);
+      const label = `[remote${args.container ? ` ${args.container}` : ""}]`;
+      return {
+        content: [{
+          type: "text",
+          text: `📝 PHP 執行結果 ${label}  ·  ${r.code === 0 ? "" : "❌ "}exit ${r.code}：\n${r.stdout}${cleanErr ? `\n⚠️ 錯誤輸出：\n${cleanErr}` : ""}`,
+        }],
+      };
+    }
+
     const isContainerAbsPath = args.container && /^\//.test(args.path);
     const fullPath = isContainerAbsPath ? args.path : resolveSecurePath(args.path);
     if (!fullPath.endsWith(".php")) throw new Error("安全限制：只能執行 .php 檔案");
@@ -457,6 +511,30 @@ export async function handle(name, args) {
     if (!/^\s*<\?php/.test(code)) code = "<?php\n" + code;
 
     const lintMode = args.lint === true;
+
+    // 遠端模式：code 經 SSH 灌進遠端容器 docker exec -i 的 php stdin（或遠端 php CLI）。
+    if (args.remote) {
+      const phpArgsR = lintMode ? " -l /dev/stdin" : "";
+      const cmd = args.container
+        ? `docker exec -i ${args.container} php${phpArgsR}`
+        : `php${phpArgsR}`;
+      const t0r = Date.now();
+      const r = await runRemoteSSH(cmd, { stdin: code, timeoutMs: timeout });
+      const elapsedR = Date.now() - t0r;
+      if (!r.ok) {
+        return { isError: true, content: [{ type: "text", text: `❌ 遠端 PHP 執行失敗  ·  ⏱ ${elapsedR}ms：${r.error}` }] };
+      }
+      const cleanErrR = cleanStderr(r.stderr);
+      const labelR = `[remote${args.container ? ` ${args.container}` : ""}]${lintMode ? " lint" : ""}`;
+      const metaR = `  ·  ⏱ ${elapsedR}ms  ·  ${r.code === 0 ? "" : "❌ "}exit ${r.code}`;
+      return {
+        content: [{
+          type: "text",
+          text: `📝 PHP 執行結果 ${labelR}${metaR}：\n${r.stdout}${cleanErrR ? `\n⚠️ 錯誤輸出：\n${cleanErrR}` : ""}`,
+        }],
+      };
+    }
+
     // lint 模式：透過 /dev/stdin 把 stdin 內容當檔案做語法檢查，
     // 容器內讀得到 /dev/stdin，因此不需把 Windows 主機路徑掛進容器即可 lint 主機讀回的檔案內容
     const phpArgs = lintMode ? " -l /dev/stdin" : "";
@@ -548,15 +626,7 @@ export async function handle(name, args) {
         body = formData;
         delete headers["Content-Type"];
       } else {
-        body = args.data;
-        if (
-          headers["Content-Type"]?.includes("application/x-www-form-urlencoded") &&
-          body
-        ) {
-          try {
-            body = new URLSearchParams(JSON.parse(body)).toString();
-          } catch (e) {}
-        }
+        body = prepareFormBody(args.data, headers);
       }
 
       const options = { method: args.method || "GET", headers };
@@ -814,10 +884,7 @@ export async function handle(name, args) {
         }
 
         if (req.data) {
-          body = req.data;
-          if (headers["Content-Type"]?.includes("application/x-www-form-urlencoded")) {
-            try { body = new URLSearchParams(JSON.parse(req.data)).toString(); } catch (e) {}
-          }
+          body = prepareFormBody(req.data, headers);
         }
 
         const options = { method: req.method || "GET", headers };

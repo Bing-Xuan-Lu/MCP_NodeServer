@@ -1112,7 +1112,7 @@ const PATTERNS = [
         hint = 'set_database({ connection_type:"docker_exec", container, ... }) + execute_sql / execute_sql_batch';
       } else if (/docker\s+exec\s+\S+\s+php\b/i.test(cmd)) {
         target = 'php';
-        hint = 'run_php_script / run_php_code / run_php_script_batch（帶 container 參數）';
+        hint = '遠端容器 → run_php_code({ remote:true, container, code }) 或 run_php_script({ remote:true, container, path })（先 sftp_connect，自動走 SSH→docker exec）；本機容器 → run_php_script / run_php_code（帶 container）';
       } else if (/docker\s+exec\s+\S+\s+python/i.test(cmd)) {
         target = 'python';
         hint = 'run_python_script（python_runner 容器）';
@@ -1212,6 +1212,13 @@ const PATTERNS = [
       const filePath = entry.args?.path || '';
       const glob = entry.args?.glob || '';
 
+      // 明確 JS scope（*.js/.ts/.vue glob、type 或 .js 路徑）→ 交給 grep_js_symbol，PHP 層讓位（避免給 PHP 建議卻是 JS）
+      if (/\.(?:js|mjs|cjs|ts|tsx|jsx|vue|svelte)\b/i.test(glob) ||
+          /\.(?:js|mjs|cjs|ts|tsx|jsx|vue|svelte)$/i.test(filePath) ||
+          ['js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'vue', 'svelte'].includes(entry.args?.type)) {
+        return null;
+      }
+
       // 偵測搜尋 PHP class/method 的 pattern
       // 放寬 PHP context：路徑含 .php、常見 PHP 目錄名、或專案目錄（project/src/app）
       const isPhpContext = /\.php/i.test(glob) || /\.php/i.test(filePath) ||
@@ -1301,6 +1308,55 @@ const PATTERNS = [
       return `[PHP Symbol] ⚠️ Grep PHP symbol「${pattern.substring(0, 50)}」→ 建議改 MCP AST 工具更省 token：\n` +
              `  → class_method_lookup / find_usages / trace_logic / find_hierarchy\n` +
              `  Grep 適合搜純文字（變數名、字串常數、SQL 欄位名）。\n`;
+    },
+  },
+  {
+    // Layer 2.4f: Grep JS Symbol — Grep 搜 JS/TS/Vue 的 function/class/method 定義時提醒改 AST 工具
+    //   JS 符號（CLAUDE.md）應走 js_symbol_lookup / js_find_usages，Grep 散搜 obj.method / function 名常跑十幾輪。
+    //   與 PHP 層互補：明確 PHP scope 交給 grep_php_symbol；這層管「明確 JS scope」與「無 scope 但 pattern 是 JS 定義風格」。
+    //   警告級（不 BLOCK），對齊「JS/CSS hook 未強制 block」的既有立場。
+    id: 'grep_js_symbol',
+    detect: (entry, _history) => {
+      const tool = shortName(entry.tool);
+      if (tool !== 'Grep') return null;
+      const pattern = entry.args?.pattern || '';
+      const filePath = entry.args?.path || '';
+      const glob = entry.args?.glob || '';
+      const type = entry.args?.type || '';
+      if (!pattern) return null;
+
+      // 純文字搜尋特徵 → 放行（alternation / 中文 / kebab / HTML 屬性 / 含檔名副檔名）
+      const isTextLike =
+        /\|/.test(pattern) || /[一-鿿]/.test(pattern) ||
+        /[a-z0-9]-[a-z0-9]/i.test(pattern) ||
+        /\b(?:class|id|data-|aria-|style|href|src|name|type|value)\s*=/i.test(pattern) ||
+        /\.(?:php|js|mjs|cjs|ts|tsx|jsx|vue|css|scss|less|html?|json|xlsx?|csv|md|py|sql|png|jpe?g|svg|txt|xml)\b/i.test(pattern);
+      if (isTextLike) return null;
+
+      // 明確 PHP scope → 交給 grep_php_symbol，這層不重複噴
+      if (/\.php\b/i.test(glob) || /\.php\b/i.test(filePath) || type === 'php') return null;
+
+      const JS_EXT = /\.(?:js|mjs|cjs|ts|tsx|jsx|vue|svelte)\b/i;
+      const JS_TYPES = new Set(['js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'vue', 'svelte']);
+      const isJsScope = JS_EXT.test(glob) || JS_EXT.test(filePath) || JS_TYPES.has(type) || /[\\/]js[\\/]/i.test(filePath);
+
+      // JS 符號「定義」pattern（function/class/賦值）— 不分 scope 都算（含 whole-repo 無 scope，如 `function showError`）
+      const DEF_PATS = [
+        { re: /\bfunction\s+\*?\s*[A-Za-z_$][\w$]*/, hint: 'function 名' },
+        { re: /\bclass\s+[A-Za-z_$][\w$]*/, hint: 'class 名' },
+        { re: /[A-Za-z_$][\w$]*\s*[:=]\s*(?:async\s+)?function\b/, hint: 'x = function' },
+        { re: /[A-Za-z_$][\w$]*\s*=\s*\([^)]*\)\s*=>/, hint: 'arrow 賦值' },
+      ];
+      let hit = DEF_PATS.find((s) => s.re.test(pattern));
+      // obj.method 點記號：較鬆，只在明確 JS scope 時才算（避免 file.php / CSS 點選擇器誤殺）
+      if (!hit && isJsScope && /^_?[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*$/.test(pattern.trim())) {
+        hit = { hint: 'obj.method 點記號' };
+      }
+      if (!hit) return null;
+
+      return `[JS Symbol] ⚠️ Grep 找 JS 符號（${hit.hint}）「${pattern.substring(0, 50)}」→ 建議改 AST 工具更省 token：\n` +
+             `  → js_symbol_lookup（定義+原始碼，支援 obj.method 點記號）/ js_find_usages（精確找呼叫點）/ js_symbol_index\n` +
+             `  Grep 適合搜純文字（變數名、字串、CSS class）。若目標其實是 PHP，改用 class_method_lookup / find_usages。\n`;
     },
   },
   {

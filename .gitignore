@@ -55,3 +55,4 @@ _gsheet_audit/
 
 # Windows reserved device names (accidentally created by > nul instead of > /dev/null)
 nul
+credentials.json

@@ -1,7 +1,7 @@
 import path from "path";
 import os from "os";
 import { createRequire } from "module";
-import { MCP_BASE_PATHS } from "./env.js";
+import { MCP_BASE_PATHS, MCP_ROOT } from "./env.js";
 
 // 優先順序：.env (MCP_BASE_PATHS) → config.local.js → 硬編碼預設
 let localConfig = {};
@@ -36,6 +36,13 @@ export function resolveSecurePath(userPath) {
 
   // 1. 預設允許：任一 basePath 以內
   if (CONFIG.basePaths.some(p => normalizedTarget.startsWith(p.toLowerCase()))) {
+    return targetPath;
+  }
+
+  // 1b. MCP Server 自身根目錄永遠放行：讓檔案/git 等 MCP 工具能操作 MCP_Server 自己的 repo
+  //     （由 env.js 的 __dirname 推導，跨機通用，免在 .env 手動把安裝路徑加進 basePaths）
+  const mcpRoot = path.resolve(MCP_ROOT).toLowerCase();
+  if (normalizedTarget === mcpRoot || normalizedTarget.startsWith(mcpRoot + path.sep)) {
     return targetPath;
   }
 

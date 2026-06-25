@@ -20,6 +20,7 @@ const REQUIRED_HOOKS = {
   ],
   PreToolUse: [
     { matcher: '.*',                                    command: `node "${hooksDir}/mcp-down-guard.js"` },
+    { matcher: 'browser_',                              command: `node "${hooksDir}/playwright-closed-guard.js"` },
     { matcher: '.*',                                    command: `node "${hooksDir}/todowrite-reminder-escalator.js"` },
     { matcher: '.*',                                    command: `node "${hooksDir}/token-budget-circuit-breaker.js"` },
     { matcher: '.*',                                    command: `node "${hooksDir}/repetition-detector.js"` },

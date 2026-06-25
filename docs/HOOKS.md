@@ -2,7 +2,7 @@
 
 > 這份是從 `CLAUDE.md` 抽出的詳細 hook 規則參考（避免大表每次都被夾帶進 context）。被 hook 擋到時，來這裡查對應 ID、行為與放行條件。CLAUDE.md 只留摘要與指標。
 
-**Hook 偵測規則**（repetition-detector 26 層 + refactor-advisor 14 項；另有獨立 `agent-coord-stale-contract`、`token-budget-circuit-breaker`（單場 tool call 達 150 警告 / 250 硬擋）兩個 PreToolUse hook）：
+**Hook 偵測規則**（repetition-detector 27 層 + refactor-advisor 14 項；另有獨立 PreToolUse hook：`agent-coord-stale-contract`、`token-budget-circuit-breaker`（單場 tool call 達 150 警告 / 250 硬擋）、`mcp-down-guard`（MCP 斷線時封鎖繞道）、`playwright-closed-guard`（matcher `browser_`：browser 結果結尾連續 ≥2 次「Target page, context or browser has been closed」即 BLOCK 下一個 browser 呼叫止住盲試，放行 browser_close 作復原重置，門檻 `CLAUDE_BROWSER_CLOSED_THRESHOLD` 可覆寫））：
 
 | 層級 | ID | 觸發條件 | 行為 |
 | --- | --- | --- | --- |
@@ -10,13 +10,14 @@
 | L1.55 | snapshot_wrong_path | Write/create_file/apply_diff 寫 `.yml`/`.yaml` 含 `[ref=eNNN]`（Playwright a11y tree）且不在 `.playwright-mcp/` / `screenshot*/` / `tmp/` / `_tmp_*/` 子目錄 | ❌ |
 | L1 | bash_wrong_tool | 用 Bash / PowerShell 做有專用工具的事（docker mysql、cat/grep/find 等）；PHP-targeted 繞道路徑（`grep .php` / `rg --type php` / `node -e fs.read .php` / `awk\|sed .php` / `Select-String .php`）強制 BLOCK | ⚠️ 警告（PHP/destructive block） |
 | L1.6 | mcp_fallback_counter | 同 session `# mcp-fallback:` 註解使用次數：第 1 次靜默 / 第 2 次警告 / 第 3 次 BLOCK，要求向使用者報告 tool gap | ⚠️→❌ |
-| L1.7 | ssh_exec_docker_exec | ssh_exec 命令含 `docker exec ... mysql/php/python` → ⚠️ 警告（不擋）。原因：ssh_exec 本質連遠端，本機 MCP（`set_database` docker_exec / `run_php_script` container）搆不到遠端容器，硬擋會跟 remote_db_exec 遠端跑 SQL 工作流衝突。提醒「容器在本機才改用 MCP」；mysql 的 `-e "SHOW/.../ALTER/DROP"` DDL 與尾端 `# mcp-fallback:` 仍放行（不出警告）。（2026-06-02 由 BLOCK 降級） | ⚠️ |
+| L1.7 | ssh_exec_docker_exec | ssh_exec 命令含 `docker exec ... mysql/php/python` → BLOCK 並導向對應 MCP 工具。**php**：導向 `run_php_code({remote:true,container,code})` / `run_php_script({remote:true,container,path})`（先 sftp_connect，自動走 SSH→docker exec，已補上遠端容器執行能力，不再有「搆不到遠端容器」缺口）。**mysql**：導向 `set_database(docker_exec)`＋`execute_sql`；DDL/meta（`-e "SHOW/EXPLAIN/.../ALTER/DROP"`）放行不擋。**python**：導向 `run_python_script`。尾端 `# mcp-fallback: <reason>` 放行並計入 L1.6 | ❌（DDL/meta 與 mcp-fallback 放行） |
 | L2 | bash_pattern_repeat | Bash 模式重複 2+ 次 | ⚠️ 警告 |
 | L2.4 | grep_php_symbol | Grep 搜 PHP class/method；明確 PHP scope (`*.php` glob / type=php / 路徑為 .php 檔) 第 1 次 BLOCK；鬆散 PHP context (路徑含 admin/model/controller 等) 需 pattern 含 PHP 結構符號 (`::` / `->` / `function` / `class` / `extends`) 才 BLOCK，避免誤殺純 JS 變數 | ❌ 建議 AST 工具 |
 | L2.4b | grep_read_same_php_file | 同一 PHP 檔 Grep+Read 拼湊 ≥ 3 次（最近 8 步） | ⚠️ 強制改用 class_method_lookup |
 | L2.4c | grep_php_structural_block | Grep PHP 結構語法（function xxx / ->method( / ::method( / class xxx / extends 等）+ PHP context | ❌ 第 1 次就 BLOCK |
 | L2.4d | php_text_search_no_scope | `php_text_search` 無 `scope` 且未 `force_full_scan: true`：首次由工具內 `FULL_SCAN_THRESHOLD=1500` 擋下、第 2 次本 hook BLOCK，避免重複全專案散搜燒 token | ❌ 第 2 次 BLOCK |
 | L2.4e | grep_find_class_refs | Grep（PHP context）找 class 引用：pattern 形如 `new X` / `X::` / `extends X` / `implements X` → 建議改 `find_usages`（精確列引用）/ `find_dead_symbols`（整包零引用死碼掃描），免被字串常數/檔尾 demo 行誤導 | ⚠️ 建議 AST 工具 |
+| L2.4f | grep_js_symbol | Grep 找 JS/TS/Vue 符號定義 → 建議改 `js_symbol_lookup` / `js_find_usages` / `js_symbol_index`。觸發：pattern 為 `function 名` / `class 名` / `x = function` / `arrow 賦值`（不分 scope，含 whole-repo 無 scope，如 `function showError`），或明確 JS scope 下的 `obj.method` 點記號（如 `_login_popup.Show`）。排除：alternation / 中文 / kebab / HTML 屬性 / 含檔名副檔名（純文字搜尋）；明確 PHP scope 讓位給 grep_php_symbol 不重複噴 | ⚠️ 建議 AST 工具 |
 | L2.5 | grep_scatter_search | Grep 散搜 3+ 不同路徑 | 🧠 強制注入記憶 |
 | L2.6 | grep_read_alternation | Grep↔Read 交替 3+ 次 | ⚠️ 提醒改用高效工具 |
 | L2.7 | edit_batch_replace | Edit 跨檔相同替換 3+ 次 | ⚠️ 警告（5+ 次 block） |

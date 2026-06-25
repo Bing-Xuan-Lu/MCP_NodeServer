@@ -466,6 +466,47 @@ function requireSftp() {
 }
 
 // ============================================
+// 共用：在「當前 sftp_connect 連線」的遠端主機執行指令（可選 stdin 灌入）
+//   給 run_php_script / run_php_code 的 remote 模式重用 ssh_exec 的 SSH 傳輸，免重造連線。
+//   回傳 { ok:true, code, stdout, stderr } 或 { ok:false, error }
+// ============================================
+export async function runRemoteSSH(command, { stdin = null, timeoutMs = 30000 } = {}) {
+  if (!currentSftp) {
+    return { ok: false, error: "尚未設定 SSH 連線。請先呼叫 sftp_connect（可帶 preset）後重試。" };
+  }
+  const config = currentSftp;
+  const tmo = Math.min(Math.max(timeoutMs || 30000, 1000), 300000);
+  return new Promise((resolve) => {
+    const conn = new SSH2Client();
+    let settled = false;
+    let timer;
+    const done = (r) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { conn.end(); } catch {}
+      resolve(r);
+    };
+    timer = setTimeout(() => done({ ok: false, error: `遠端指令逾時（${Math.round(tmo / 1000)} 秒）` }), tmo);
+    conn.on("ready", () => {
+      conn.exec(command, (err, stream) => {
+        if (err) return done({ ok: false, error: `遠端執行失敗：${err.message}` });
+        let stdout = "", stderr = "";
+        stream.on("data", (d) => { stdout += d.toString(); });
+        stream.stderr.on("data", (d) => { stderr += d.toString(); });
+        stream.on("close", (code) => done({ ok: true, code, stdout, stderr }));
+        if (stdin != null) stream.end(stdin); // 把 code 灌進 docker exec -i 容器的 php stdin
+      });
+    });
+    conn.on("error", (e) => done({ ok: false, error: `SSH 連線失敗：${e.message}（確認 sftp_connect 設定與遠端 SSH 服務）` }));
+    const connOpts = { host: config.host, port: config.port || 22, username: config.user };
+    if (config.privateKey) connOpts.privateKey = config.privateKey;
+    else connOpts.password = config.password || "";
+    conn.connect(connOpts);
+  });
+}
+
+// ============================================
 // 內部：格式化目錄列表（共用，省 token）
 // ============================================
 function formatListing(remotePath, items) {
