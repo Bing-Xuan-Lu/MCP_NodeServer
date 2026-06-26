@@ -268,7 +268,11 @@ process.stdin.on('end', () => {
       }
     }
 
-    if (state.promptGuardActive && !isSubAgent && !harnessExempt && !isMetaDev) {
+    // 例外：文件/筆記類寫入（.md/.txt 等非程式碼）不受 promptGuardActive 阻擋。
+    // promptGuard 防的是「需求不明就冷寫 code」；寫分析/說明/筆記文件是釐清需求的一部分，不該擋。
+    const isDocFile = /\.(md|markdown|mdx|txt|rst|adoc)$/i.test(filePath);
+
+    if (state.promptGuardActive && !isSubAgent && !harnessExempt && !isMetaDev && !isDocFile) {
       const reasonLine = state.promptGuardReason
         ? `  判斷依據：${state.promptGuardReason}\n`
         : '';

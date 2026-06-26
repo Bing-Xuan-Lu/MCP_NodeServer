@@ -42,8 +42,8 @@ const PASS_CLAIM_PATTERNS = [
   /(\d+)\s*\/\s*(\d+)\s*[^\n]{0,8}?(?:PASS|通過|皆通過|都通過|全過|正確|無誤)/i,
   // 全部 / 全數 / 所有 (case/測試/項目/筆/頁...) 都 PASS / 通過
   /(?:全部?|全數|所有|逐筆全|每一[筆項頁張個])\s*(?:的)?\s*(?:case|cases|測試|項目|功能|欄位|筆|頁|張|個|項)?\s*(?:都\s*|皆\s*|全\s*)?(?:PASS|通過|正確|無誤|OK)/i,
-  // 全 PASS、全綠
-  /全\s*(?:PASS|綠|數通過)/i,
+  // 全 PASS、全數通過（不含「全綠」：那是監控/CI 狀態燈用語，非資料逐筆驗證 PASS，會誤抓診斷訊息）
+  /全\s*(?:PASS|數通過)/i,
   // N 筆/頁/張 全部/都/皆 通過
   /(\d+)\s*(?:筆|頁|張|個|項|case)\s*(?:全部?|都|皆)\s*(?:通過|PASS|正確|無誤|過)/i,
 ];
@@ -58,6 +58,21 @@ function hasPassClaim(text) {
 
 function hasBreakdownEvidence(text) {
   return BREAKDOWN_EVIDENCE_RE.test(text);
+}
+
+// markdown 逐列表格 = 已攤明細：有分隔列 |---|---| 且其後至少 2 行資料列。
+// 用表格逐列列「項目 / 實際 / 預期」本來就是逐格證據，不該被當成裸 headline 而擋。
+function hasTabularBreakdown(text) {
+  const lines = text.split(/\r?\n/);
+  const sepRe = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/;
+  const rowRe = /^\s*\|.*\|.*$/;
+  let hasSep = false;
+  let dataRows = 0;
+  for (const ln of lines) {
+    if (sepRe.test(ln)) { hasSep = true; continue; }
+    if (hasSep && rowRe.test(ln)) dataRows++;
+  }
+  return hasSep && dataRows >= 2;
 }
 
 // ── 讀 transcript 最後一則 assistant 的純文字內容 ──────
@@ -143,8 +158,8 @@ process.stdin.on('end', () => {
       debug('無 PASS 宣告 → 放行');
       return allow();
     }
-    if (hasBreakdownEvidence(text)) {
-      debug('已含逐行/逐格證據 → 放行');
+    if (hasBreakdownEvidence(text) || hasTabularBreakdown(text)) {
+      debug('已含逐行/逐格證據或 markdown 逐列表格 → 放行');
       return allow();
     }
 

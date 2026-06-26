@@ -2889,6 +2889,11 @@ const PATTERNS = [
       // 例外：背景 sub-agent 寫檔不受 promptGuardActive 影響（與 write-guard.js 同步）
       if (entry.parent_tool_use_id || entry.parentToolUseId) return null;
 
+      // 例外：文件/筆記類寫入（.md/.txt 等非程式碼）不受 promptGuardActive 阻擋。
+      // promptGuard 的本意是防「需求不明就冷寫 code」；寫分析/說明/筆記文件本來就是釐清需求的一部分，不該擋。
+      const wPath = entry.args?.path || entry.args?.file_path || '';
+      if (/\.(md|markdown|mdx|txt|rst|adoc)$/i.test(String(wPath))) return null;
+
       try {
         const wgStateFile = path.join(os.tmpdir(), 'claude-write-guard', 'state.json');
         if (!fs.existsSync(wgStateFile)) return null;

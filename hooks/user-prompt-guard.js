@@ -232,6 +232,11 @@ const SCENE_SKIP_PATTERNS = [
 // 後端關鍵字：出現這些詞時，frontend 場景不適用（純後端問題誤判修正）
 const BACKEND_KEYWORDS = /列印|發票|運費|訂單金額|金額計算|計算錯|對帳|報表|匯出|匯入|寄信|寄送|發送|email|mail|寄出|簡訊|sms|通知|cron|排程|sql|資料庫|db.*?(查|寫|存|刪|更新)|後台.*?(邏輯|流程|計算|資料)|api.*?(回傳|參數|錯誤)|session|cookie|權限|登入.*?(失敗|錯誤)|缺少規格|規格.*?缺|消失|沒存到|未寫入|寫入失敗|資料.*?(不見|消失|遺失|錯)/i;
 
+// 基礎建設 / 監控 / DevOps 關鍵字：出現這些詞時 backend(PHP 後端除錯) 場景不適用。
+// Docker/Prometheus/Grafana 等維運除錯不是 PHP 應用層 bug，backend 的 needed 全是
+// PHP-specific 檢查(.php/function/controller)，會全 miss 而誤擋寫入。
+const INFRA_KEYWORDS = /docker|container|容器|compose|portainer|prometheus|grafana|cadvisor|node[-_]?exporter|traefik|kubernetes|\bk8s\b|nginx|scrape|exporter|\.ya?ml\b|systemctl|journalctl/i;
+
 const SCENARIOS = {
   frontend: {
     name: '前端樣式',
@@ -289,6 +294,9 @@ const SCENARIOS = {
 };
 
 function detectScenario(prompt) {
+  // 全域排除：Docker/Prometheus/Grafana 等維運/監控除錯不屬於前端/後端/QC/Playwright 任一場景。
+  // 否則「顯示 DOWN…問題」會被當前端、「error…為什麼失敗」會被當後端，PHP/CSS 專屬必填項全 miss 而誤擋。
+  if (INFRA_KEYWORDS.test(prompt)) return null;
   for (const [key, scenario] of Object.entries(SCENARIOS)) {
     if (!matchesAny(prompt, scenario.patterns)) continue;
     if (scenario.excludeIf && scenario.excludeIf.test(prompt)) continue;

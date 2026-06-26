@@ -24,6 +24,7 @@ const REQUIRED_HOOKS = {
     { matcher: '.*',                                    command: `node "${hooksDir}/todowrite-reminder-escalator.js"` },
     { matcher: '.*',                                    command: `node "${hooksDir}/token-budget-circuit-breaker.js"` },
     { matcher: '.*',                                    command: `node "${hooksDir}/repetition-detector.js"` },
+    { matcher: 'Grep|Glob',                             command: `node "${hooksDir}/entry-search-memory-gate.js"` },
     { matcher: 'Write|Edit|apply_diff|apply_diff_batch|create_file|create_file_batch|multi_file_inject|execute_sql|execute_sql_batch|run_php_script|run_php_code|ssh_exec',
                                                         command: `node "${hooksDir}/agent-coord-stale-contract.js"` },
     { matcher: 'Write|Edit',                            command: `node "${hooksDir}/write-guard.js"` },
@@ -40,6 +41,8 @@ const REQUIRED_HOOKS = {
   ],
   Stop: [
     { command: `node "${hooksDir}/session-stop.js"` },
+    { command: `node "${hooksDir}/verify-pass-guard.js"` },
+    { command: `node "${hooksDir}/commit-nag-guard.js"` },
   ],
 };
 
