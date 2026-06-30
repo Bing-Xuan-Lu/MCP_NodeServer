@@ -29,7 +29,10 @@ description: "將修改好的程式部署上傳到遠端測試機。當使用者
 |------|------|
 | `sftp_connect` | 建立 SFTP 連線 |
 | `sftp_list` | 列出遠端目錄，確認目前狀態 |
-| `sftp_upload` | 上傳本機檔案或目錄 |
+| `sftp_diff_hash` | **Delta 模式核心**：MD5 一次比對本機 vs 遠端整批，只回有差異的檔（不下載全文） |
+| `sftp_upload_batch` | 批次上傳差異檔（共用一條連線，支援 glob） |
+| `sftp_upload` | 上傳單檔或整個目錄（全量模式 fallback） |
+| `sftp_download_batch` | drift 處理時下載遠端版本回本機比對 |
 
 ---
 
@@ -72,7 +75,56 @@ sftp_list(remote_path)
 
 ---
 
+### 步驟 3.5：Delta 差異掃描（預設先掃再推）
+
+**這是預設行為**：部署不盲推整包，先用 `sftp_diff_hash` 找出「本機與遠端真的不一樣」的檔，只推那些，相同的自動略過。既避免無謂重推，也避免漏推「剩下還沒推的」。
+
+**Step 1 — 一次比對候選檔**
+
+候選清單來源（依情境擇一）：
+
+- 使用者指定的子目錄 / 檔案 → 直接列進 items
+- 「推剩下的 / 全部同步」→ 用 glob 涵蓋整個目標子樹（如 `module_a/**/*.php`、`*.js`）
+- 只想推這次改的 → 先 `git_status` / `git_diff` 取改動清單，再列進 items
+
+```
+sftp_diff_hash(
+  items: [{ local_path: "module_a/**/*.php" }, ...]   // 有 preset 可只給相對路徑
+)
+```
+
+回傳分類與對應動作：
+
+| 類別 | 意義 | Delta 動作 |
+|------|------|-----------|
+| `content_diff` 內容不同 | 本機與遠端內容真的不一樣 | ✅ **要推** |
+| `remote_missing` 遠端缺檔 | 新檔，遠端還沒有 | ✅ **要推** |
+| `identical` 相同 | 內容一致 | ⏭ 略過 |
+| `eol_only` 僅換行 CRLF/LF | 內容一致，只差換行 | ⏭ 略過（除非專案要求統一換行） |
+| `local_missing` 本機缺檔 | 本機沒有、遠端有 | ⚠️ 不在部署範圍，列出提醒不動 |
+
+**Step 2 — 只推差異檔（接步驟 4）**
+
+把 `content_diff` + `remote_missing` 兩類的檔列進步驟 4 的 `sftp_upload_batch`。
+
+> 若差異掃描結果「0 檔有差異」→ 直接回報「遠端已是最新，無需部署」，**不必往下**。
+
+**Step 3 — 全量模式（fallback）**
+
+僅當使用者明說「整包重推 / 不要比對直接全推」時，才略過 diff_hash，走步驟 4 的整目錄上傳。
+
+---
+
 ### 步驟 4：執行上傳
+
+**Delta 模式（預設）**：把步驟 3.5 掃出的差異檔（content_diff + remote_missing）丟給 `sftp_upload_batch` 一次推完。
+
+```
+sftp_upload_batch(items: [ {差異檔...} ])
+→ 共用一條連線，逐檔回報 ✅ 上傳 / 🔄 內容相同跳過 / ⚠️ drift 略過
+```
+
+**全量模式（fallback）**：使用者明說整包重推時，用 `sftp_upload` 推整個目錄。
 
 ```
 sftp_upload(local_path, remote_path)
@@ -145,10 +197,14 @@ sftp_list(remote_path)
 ```
 ✅ 部署完成！
 
-📊 部署結果：
+📊 部署結果（Delta 模式）：
   來源：{local_path}
   目標：{user}@{host}:{remote_path}
   時間：{datetime}
+  差異掃描：共掃 {N} 檔 → 推 {M} 檔（內容不同 {a} / 新檔 {b}）、略過 {K} 檔（相同/僅換行）
+  本次推送：
+    - {差異檔1}
+    - {差異檔2}
 
 📝 遠端目錄結構（上傳後）：
   （sftp_list 結果）

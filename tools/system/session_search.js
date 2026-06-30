@@ -200,6 +200,22 @@ function formatRecall(res) {
     L.push("");
   }
 
+  if (res.sftpUploads && res.sftpUploads.length) {
+    const totalUp = res.sftpUploads.reduce(
+      (n, e) => n + (e.uploaded && e.uploaded.length ? e.uploaded.length : e.files ? e.files.length : 0),
+      0
+    );
+    L.push(`【本場部署 / SFTP 上傳】（${res.sftpUploadCallTotal} 次呼叫，約 ${totalUp} 檔）← 查「上次推了哪些檔」看這裡`);
+    res.sftpUploads.slice(0, 8).forEach((e) => {
+      L.push(`  ▸ [${e.tool}]${e.summary ? ` ${e.summary}` : ""}`);
+      const files = e.uploaded && e.uploaded.length ? e.uploaded : e.files || [];
+      files.slice(0, 20).forEach((f) => L.push(`      • ${f}`));
+      if (files.length > 20) L.push(`      …（共 ${files.length} 檔）`);
+      if (e.skipped && e.skipped.length) L.push(`      ⏭ 另略過 ${e.skipped.length} 檔（相同/drift/排除）`);
+    });
+    L.push("");
+  }
+
   if (res.sqlPhpRun && res.sqlPhpRun.length) {
     L.push(`【關鍵 SQL / PHP】（前 ${Math.min(res.sqlPhpRun.length, 8)}）`);
     res.sqlPhpRun.slice(0, 8).forEach((q) => L.push(`  • [${q.tool}] ${q.snippet}`));

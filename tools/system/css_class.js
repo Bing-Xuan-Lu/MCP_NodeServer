@@ -62,7 +62,7 @@ export const definitions = [
 // ============================================
 const DEFAULT_CSS_EXCLUDE = [
   "**/node_modules/**", "**/vendor/**", "**/.git/**", "**/dist/**",
-  "**/build/**", "**/*.min.css", "**/screen.prefixer.css",
+  "**/build/**", "**/*.min.css",
 ];
 
 async function buildCssIndex(projectPath, scanPaths) {

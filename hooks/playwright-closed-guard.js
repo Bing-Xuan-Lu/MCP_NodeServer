@@ -70,7 +70,7 @@ function flattenContent(content) {
  * @returns {{ consecutiveClosed: number, total: number }}
  */
 function scanBrowserState(transcriptPath) {
-  const empty = { consecutiveClosed: 0, total: 0 };
+  const empty = { consecutiveClosed: 0, total: 0, lastNavUrl: '' };
   if (!transcriptPath || !fs.existsSync(transcriptPath)) return empty;
   let lines;
   try {
@@ -82,14 +82,19 @@ function scanBrowserState(transcriptPath) {
 
   const tail = lines.slice(-SCAN_DEPTH);
 
-  // tool_use_id → toolName 對照
+  // tool_use_id → toolName 對照 + 記住最近一次 browser 呼叫想去的網址（給重開引導用）
   const useIdToName = new Map();
+  let lastNavUrl = '';
   for (const line of tail) {
     try {
       const obj = JSON.parse(line);
       if (obj.type === 'assistant' && Array.isArray(obj.message?.content)) {
         for (const b of obj.message.content) {
-          if (b?.type === 'tool_use' && b.id && b.name) useIdToName.set(b.id, b.name);
+          if (b?.type === 'tool_use' && b.id && b.name) {
+            useIdToName.set(b.id, b.name);
+            const url = b.input?.url;
+            if (isBrowserTool(b.name) && typeof url === 'string' && url) lastNavUrl = url;
+          }
         }
       }
     } catch { /* skip malformed */ }
@@ -119,8 +124,8 @@ function scanBrowserState(transcriptPath) {
     if (browserResults[i]) consecutive++;
     else break;
   }
-  debug(`browserResults=${browserResults.length} consecutiveClosed=${consecutive}`);
-  return { consecutiveClosed: consecutive, total: browserResults.length };
+  debug(`browserResults=${browserResults.length} consecutiveClosed=${consecutive} lastNavUrl=${lastNavUrl || '(none)'}`);
+  return { consecutiveClosed: consecutive, total: browserResults.length, lastNavUrl };
 }
 
 let input = '';
@@ -145,20 +150,26 @@ process.stdin.on('end', () => {
     }
 
     const threshold = parseInt(process.env.CLAUDE_BROWSER_CLOSED_THRESHOLD, 10) || THRESHOLD;
-    const { consecutiveClosed } = scanBrowserState(transcriptPath);
+    const { consecutiveClosed, lastNavUrl } = scanBrowserState(transcriptPath);
     if (consecutiveClosed < threshold) {
       debug(`pass: ${toolName} (consecutiveClosed=${consecutiveClosed} < ${threshold})`);
       return allow();
     }
 
+    // 引導重開：優先用本次被擋呼叫帶的網址，其次用 transcript 最近一次 navigate 的網址
+    const curUrl = data.tool_input?.url;
+    const targetUrl = (typeof curUrl === 'string' && curUrl) ? curUrl : lastNavUrl;
+    const step2 = targetUrl ? `browser_navigate ${targetUrl}` : 'browser_navigate <回到原本那一頁的網址>';
+
     const reason =
-      `🛑 [Playwright Closed Guard] 偵測到瀏覽器已被關閉：連續 ${consecutiveClosed} 次 browser 呼叫都回「Target page, context or browser has been closed」。\n\n` +
-      `  盲目重試 browser_navigate / browser_interact 不會復原 —— 這個瀏覽器實例（被手動關掉或 crash）已經死了，再試只是原地打轉燒 token。\n\n` +
-      `  正確復原步驟：\n` +
-      `    1. 先呼叫 browser_close（重置 Playwright 的 browser 狀態，本 hook 一律放行）\n` +
-      `    2. 再呼叫 browser_navigate 重開新頁\n` +
-      `  或：停下來用純文字問使用者「瀏覽器被關了，要我重開嗎？」，不要繼續盲試。\n\n` +
-      `  解除：成功的 browser_close 之後（最近一筆 browser 結果不再是關閉錯誤）自動解除。`;
+      `🔄 [Playwright Closed Guard] 瀏覽器已被關閉（連續 ${consecutiveClosed} 次回「Target page, context or browser has been closed」）。\n` +
+      `  重發 navigate 不會重開瀏覽器 —— 請直接重開，照這兩步做：\n\n` +
+      `    1. browser_close          ← 清掉死掉的瀏覽器（本 hook 一律放行）\n` +
+      `    2. ${step2}   ← 這一步才會生出一顆全新的瀏覽器並回到原頁\n\n` +
+      `  為什麼不能只重發 navigate：navigate 是「叫現有那顆瀏覽器去網址」，現有那顆已經死了，只會一直撞同一面牆；\n` +
+      `  只有 browser_close → browser_navigate 才會真正重開一顆新的。\n\n` +
+      `  若 close→navigate 連續再失敗 2 次以上，停下用純文字回報使用者，別再盲試。\n` +
+      `  成功的 browser_close 之後本攔截自動解除。`;
 
     process.stdout.write(reason);
     debug(`BLOCK: ${toolName} (consecutiveClosed=${consecutiveClosed})`);

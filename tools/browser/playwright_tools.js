@@ -5,8 +5,29 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { validateArgs, calcSpecificity } from "../_shared/utils.js";
+import { prepareForMeasure } from "../_shared/playwright_measure_prep.js";
 
 const SESSION_DIR = path.join(os.homedir(), ".claude", "sessions");
+
+// css_inspect / element_measure 共用：量測前置（等遮罩 + trigger 展開）的 schema 片段
+const MEASURE_PREP_SCHEMA = {
+  trigger_selectors: {
+    type: "array",
+    items: { type: "string" },
+    description: "選填：量測前依序 click 這些 selector（展開 popup/modal/dropdown 才出現的元素）。每次 click 後等待 trigger_wait 毫秒。",
+  },
+  trigger_wait: { type: "number", description: "選填：每次 trigger click 後等待毫秒（預設 300）" },
+  click_timeout: { type: "number", description: "選填：trigger 一般 click 的逾時毫秒（預設 5000）。逾時自動 fallback 用 JS .click()。" },
+  force_click: { type: "boolean", description: "選填：trigger 直接用 JS .click() 繞過可點擊性檢查（預設 false）。頁面有 loading 遮罩攔截點擊時開啟。" },
+  wait_for_hidden: {
+    type: "array",
+    items: { type: "string" },
+    description: "選填：量測 / 點 trigger 前先等這些遮罩 selector 消失。不傳=自動等常見 loading 遮罩（.loader/.loading/.overlay/.spinner）；傳 [] 關閉；傳 [\".my-loader\"] 指定。解 AJAX loading 遮罩攔截 click 的痛點。",
+  },
+  wait_hidden_timeout: { type: "number", description: "選填：等遮罩消失的逾時毫秒（預設 5000）" },
+  wait_for_selector: { type: "string", description: "選填：trigger 後等此 selector 出現再量測（預設等目標 selector 本身）" },
+  wait_for_timeout: { type: "number", description: "選填：wait_for_selector 等待逾時毫秒（預設 3000）" },
+};
 
 let playwrightModule = null;
 async function getPlaywright() {
@@ -198,6 +219,7 @@ export const definitions = [
           },
           description: "選填:注入 cookies(用於需要登入的頁面)",
         },
+        ...MEASURE_PREP_SCHEMA,
       },
       required: ["url", "selector"],
     },
@@ -232,6 +254,7 @@ export const definitions = [
           },
           description: "選填:注入 cookies",
         },
+        ...MEASURE_PREP_SCHEMA,
       },
       required: ["url", "selectorA"],
     },
@@ -1173,6 +1196,14 @@ async function handleCssInspect(args) {
     viewport = { width: 1920, height: 1080 },
     timeout = 15000,
     cookies = [],
+    trigger_selectors = [],
+    trigger_wait = 300,
+    click_timeout = 5000,
+    force_click = false,
+    wait_for_hidden,
+    wait_hidden_timeout = 5000,
+    wait_for_selector,
+    wait_for_timeout = 3000,
   } = args;
 
   const browser = await acquireBrowser();
@@ -1187,6 +1218,18 @@ async function handleCssInspect(args) {
 
     const page = await context.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+
+    // 量測前置：等遮罩消失 → 依序點 trigger（含 JS-click fallback）→ 等目標出現
+    const prep = await prepareForMeasure(page, {
+      trigger_selectors, trigger_wait, click_timeout, force_click,
+      wait_for_hidden, wait_hidden_timeout,
+      wait_for_selector, wait_for_timeout, target_selector: selector,
+    });
+    if (!prep.ok) {
+      await context.close();
+      return { content: [{ type: "text", text: [prep.error, ...prep.notes].join("\n") }] };
+    }
+    const prepNotes = prep.notes;
 
     // 先確認元素存在
     const elHandle = await page.$(selector);
@@ -1375,6 +1418,7 @@ async function handleCssInspect(args) {
     await context.close();
 
     const result = {
+      ...(prepNotes.length > 0 ? { _notes: prepNotes } : {}),
       element: browserData.element,
       box: browserData.box,
       computed: browserData.computed,
@@ -1408,6 +1452,14 @@ async function handleElementMeasure(args) {
     viewport = { width: 1920, height: 1080 },
     timeout = 15000,
     cookies = [],
+    trigger_selectors = [],
+    trigger_wait = 300,
+    click_timeout = 5000,
+    force_click = false,
+    wait_for_hidden,
+    wait_hidden_timeout = 5000,
+    wait_for_selector,
+    wait_for_timeout = 3000,
   } = args;
 
   const browser = await acquireBrowser();
@@ -1422,6 +1474,18 @@ async function handleElementMeasure(args) {
 
     const page = await context.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+
+    // 量測前置：等遮罩消失 → 依序點 trigger（含 JS-click fallback）→ 等目標出現
+    const prep = await prepareForMeasure(page, {
+      trigger_selectors, trigger_wait, click_timeout, force_click,
+      wait_for_hidden, wait_hidden_timeout,
+      wait_for_selector, wait_for_timeout, target_selector: selectorA,
+    });
+    if (!prep.ok) {
+      await context.close();
+      return { content: [{ type: "text", text: [prep.error, ...prep.notes].join("\n") }] };
+    }
+    const prepNotes = prep.notes;
 
     const result = await page.evaluate(({ selA, selB }) => {
       const round = (n) => Math.round(n * 100) / 100;
@@ -1501,10 +1565,11 @@ async function handleElementMeasure(args) {
     await context.close();
 
     if (result.error) {
-      return { content: [{ type: "text", text: `❌ ${result.error}` }] };
+      return { content: [{ type: "text", text: [`❌ ${result.error}`, ...prepNotes].join("\n") }] };
     }
 
-    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    const out = prepNotes.length > 0 ? { _notes: prepNotes, ...result } : result;
+    return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
   } catch (err) {
     if (context) await context.close().catch(() => {});
     return { content: [{ type: "text", text: `❌ element_measure 執行失敗：${err.message}` }] };

@@ -23,6 +23,7 @@ MCP_NodeServer/
 ├── tools/               ← MCP 工具模組（分類分層，動態載入自 index.js glob pattern：tools/**/*.js）
 │   ├── _shared/         ← 共用模組（工具間共享的常數、函式、資源池，不對外暴露）
 │   │   ├── browser_pool.js ← Playwright browser pool factory（browser/* 共用）
+│   │   ├── playwright_measure_prep.js ← prepareForMeasure（css_inspect/element_measure/css_computed_winner 共用的量測前置：等 loading 遮罩消失 → 依序點 trigger 展開 popup/modal，一般 click 被遮罩攔截 timeout 時自動 JS .click() fallback，並回報「被 .xxx 遮罩攔截」診斷；解 AJAX loader 蓋住目標導致 click 卡 3000ms 必失敗的痛點）
 │   │   ├── php_modernizer.php ← php_modernize 的 token_get_all 詞法轉換器（tee 進容器執行，純 PHP，ASCII only）
 │   │   └── utils.js     ← 驗證函式、錯誤處理、async 工具（全工具可用）
 │   ├── file_io/         ← 檔案讀寫與文件轉換（通用 I/O）
@@ -49,8 +50,8 @@ MCP_NodeServer/
 │   │   └── flyway.js    ← flyway_info, flyway_migrate, flyway_validate, flyway_repair, flyway_baseline（需 dev-flyway Docker，選用）
 │   ├── browser/         ← 瀏覽器自動化與網頁檢查（UI testing、CSS 分析）
 │   │   ├── dom_compare.js ← dom_compare（批次比對兩個 URL 的 CSS/HTML/JS 差異；使用 browser_pool）
-│   │   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage（含 detectOverridden 死宣告偵測）, browser_save_session, browser_restore_session
-│   │   ├── css_tools.js ← css_specificity_check, css_computed_winner（使用 browser_pool）
+│   │   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure（後二者新增 trigger_selectors/wait_for_hidden/click_timeout/force_click：等 loading 遮罩消失再點展開器量測，遮罩攔截 click 自動 JS fallback，共用 _shared/playwright_measure_prep.js）, style_snapshot, css_coverage（含 detectOverridden 死宣告偵測）, browser_save_session, browser_restore_session
+│   │   ├── css_tools.js ← css_specificity_check, css_computed_winner（使用 browser_pool；trigger 點擊改用 _shared/playwright_measure_prep.js：可設 click_timeout + wait_for_hidden 等遮罩 + force_click，不再寫死 3000ms 被 loader 攔截）
 │   │   └── print_layout.js ← print_layout_test（列印版面測試：Playwright 產真實分頁 PDF → poppler render 每頁 PNG → 回傳頁圖 + 頁數 + 字體嵌入 + selector 落點；需 python_runner 容器，缺 poppler 自動補裝）
 │   ├── system/          ← 系統工具（多 Agent 協調、外部程式執行、程式碼分析）
 │   │   ├── python.js    ← run_python_script (Docker)
@@ -63,7 +64,7 @@ MCP_NodeServer/
 │   │   ├── js_symbol.js ← js_symbol_index, js_symbol_lookup, js_find_usages, js_trace_logic（JS/TS/Vue AST 符號索引：function/class/object methods + `obj.method=fn` 賦值 + `return {fn}` 工廠 pattern；亦掃 .php/.html/.htm 內嵌 `<script>` 區塊 JS，行號對應原始檔，legacy 內嵌 Vue methods 適用）
 │   │   ├── css_class.js ← css_class_lookup, css_find_usages（CSS class 定義位置 + 跨檔引用：HTML/PHP/JS/Vue 內 class attribute / addClass / classList / querySelector）
 │   │   ├── memory_triggers.js ← list_memory_triggers, memory_add_triggers, memory_remove_triggers（管理 memory frontmatter `triggers`，給 memory-auto-recall hook 用）
-│   │   └── session_search.js ← session_search（跨 session 全文搜歷史對話：檔名/錯誤/功能關鍵字，回哪場/何時/命中幾次/片段）, session_recall（回顧某一場做了什麼/卡在哪/動過哪些檔/SQL/**失敗或被擋的呼叫＋原因**）；spawn ~/.claude/hooks/session-recall-scan.js（含 index/list/recall/search 四模式，亦給 session-start 與 session-recall-on-prompt 共用）重用解析邏輯，解「換場重踩同個坑」與 token 空轉
+│   │   └── session_search.js ← session_search（跨 session 全文搜歷史對話：檔名/錯誤/功能關鍵字，回哪場/何時/命中幾次/片段）, session_recall（回顧某一場做了什麼/卡在哪/動過哪些檔/SQL/**失敗或被擋的呼叫＋原因**/**本場 SFTP 部署上傳了哪些檔（實推 / 略過 / 成功數）**）；spawn ~/.claude/hooks/session-recall-scan.js（含 index/list/recall/search 四模式，亦給 session-start 與 session-recall-on-prompt 共用）重用解析邏輯，解「換場重踩同個坑」與 token 空轉
 │   └── utils/           ← 通用工具與比對
 │       ├── image_diff.js ← image_diff（設計稿 vs 截圖像素級比對）
 │       ├── image_transform.js ← image_transform（圖片 resize / 背景色 / 圓形裁切 / 合成）
@@ -74,7 +75,7 @@ MCP_NodeServer/
 │   ├── session-start.js ← SessionStart：對話開場載入記憶 + **最近場次輕量索引**（取代倒一份過期 compact；走 session-recall-scan index 模式，列最近 6 場日期/主題/未完成/失敗數/熱檔當「地圖」）+ 浮現 hook 投訴 + 浮現 /lesson 暫存的對話品質教訓（待 /retro lesson 轉化）
 │   ├── session-recall-on-prompt.js ← UserPromptSubmit：使用者送出指令時，從 prompt 抽關鍵字（檔名含資料/文件副檔名如 .xlsx/.csv/.docx 與**中文檔名**、PascalCase 識別字、URL 段），搜「本專案」歷史找**最相關**那場（非最近那場），注入它動過的檔/失敗呼叫/未完成/片段；**另有延續詞路徑**：prompt 含「上一場/上次/繼續/還沒做完…」即使抽不到關鍵字，也按時間 recall「上一場」（已排除當前對話、防單場自我注入），逼 Claude 不裸 Glob 從零重找、不自己湊資料。抽不到關鍵字且無延續詞、或命中<2 則靜默；同場每對話只注入一次（延續詞路徑用 `__prev__` 去重）。解「session_search 要人手動喊」「開場按時間撈撈錯場」與「上一場沒寫關鍵字就被略過」
 │   ├── mcp-down-guard.js ← PreToolUse：偵測 transcript 末段 mcp__* 失敗（timeout/connection/disconnected pattern），未恢復前封鎖所有非 MCP 工具（僅 TodoWrite 放行 + mcp__* 自己放行讓它試連線），下次 mcp__* 成功呼叫自動解封
-│   ├── playwright-closed-guard.js ← PreToolUse(matcher browser_)：偵測 Playwright 瀏覽器被手動關閉/crash（transcript 末段 browser_* 結果結尾連續 ≥2 次「Target page, context or browser has been closed」），BLOCK 下一個 browser 呼叫止住盲試打轉；放行 browser_close（復原重置步驟），close 成功（最近一筆不再是關閉錯誤）即自動解除。門檻 CLAUDE_BROWSER_CLOSED_THRESHOLD 可覆寫
+│   ├── playwright-closed-guard.js ← PreToolUse(matcher browser_)：偵測 Playwright 瀏覽器被手動關閉/crash（transcript 末段 browser_* 結果結尾連續 ≥2 次「Target page, context or browser has been closed」），BLOCK 下一個盲試 navigate 並引導重開（抓出原本要去的網址，明示「browser_close → browser_navigate {原網址}」兩步，不再只擋死）；放行 browser_close（復原重置步驟），close 成功（最近一筆不再是關閉錯誤）即自動解除。門檻 CLAUDE_BROWSER_CLOSED_THRESHOLD 可覆寫。**限制：主場 hook 對 Task 子 agent 內部 tool call 不觸發（平台行為），子 agent 的瀏覽器盲試需靠 spawn 指令或子 agent frontmatter hook 引導**
 │   ├── todowrite-reminder-escalator.js ← PreToolUse：掃 transcript 數「自最後一次 TodoWrite 後」累積的 TodoWrite reminder 次數，≥10 次 BLOCK 下一個非 TodoWrite call，把軟提醒升級為硬攔截
 │   ├── token-budget-circuit-breaker.js ← PreToolUse：單場 token 預算斷路器。累加本場 tool call 次數，達 WARN（預設 150）每 50 次提醒「該收斂」；達 BLOCK（預設 250）**且近窗偵測到「打轉」**（同檔改≥5次/重複同呼叫≥4次/高量低檔案多樣性）才硬擋並點名打轉的檔；量大但在動不同檔有進展則只軟提醒不誤殺（實測 451 回合的合法大任務不被擋）。斷路器語意（跳脫一次即放行，飆到下個門檻 +150 再評估）；TodoWrite 永遠放行。門檻可由 CLAUDE_TOKEN_BUDGET_WARN/BLOCK 覆寫。補 repetition-detector 局部窗之外的「整場總量 × 打轉」視角
 │   ├── repetition-detector.js ← PreToolUse：多層偵測（錯誤工具、散搜、低效、重複、同檔連修、自動修復；**L2.90 寫 code 前本回合須先查證來源否則 BLOCK**、**L2.89 帶假設語句寫 code 直接 BLOCK**），支援成本追蹤、Slack通知、debug模式

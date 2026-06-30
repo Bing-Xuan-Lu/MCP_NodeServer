@@ -34,6 +34,7 @@ project_qc.md
 read_article.md
 remote_db_exec.md
 remote_diff.md
+remote_merge.md
 retro.md
 rwd_scan.md
 sadd.md

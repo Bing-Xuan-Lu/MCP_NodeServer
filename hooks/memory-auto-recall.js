@@ -31,7 +31,7 @@ const PROJECTS_DIR = path.join(HOME, '.claude', 'projects');
 const STATE_DIR = path.join(HOME, '.claude', 'memory-recall-state');
 const DEFAULT_REINJECT_AFTER = 30;
 const MAX_INJECT_PER_CALL = 3;        // 同次 tool call 最多注入幾條 memory，避免雜訊
-const RECENT_PROMPT_BYTES = 8192;     // 從 transcript 末端讀多少 bytes 找最近 user prompt
+const RECENT_PROMPT_BYTES = 32768;    // 從 transcript 末端讀多少 bytes 找最近 user prompt（放大避免大型 tool_result 擠掉使用者文字）
 const BODY_PREVIEW_LINES = 6;
 
 function debug(msg) {
@@ -218,7 +218,21 @@ function loadMemoriesWithTriggers(memDir) {
   return memories;
 }
 
-// ── 從 transcript 抓最近 user prompts（最後 N bytes 內）──
+// ── 從 user message content 抽出「使用者輸入的純文字」──────
+//   現行 Claude Code 的 user content 是陣列（[{type:'text'}...] 或 tool_result），
+//   舊格式才是字串。只取 type:'text' 區塊，略過 tool_result/tool_use/圖片。
+function extractUserText(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  const parts = [];
+  for (const b of content) {
+    if (typeof b === 'string') parts.push(b);
+    else if (b && b.type === 'text' && typeof b.text === 'string') parts.push(b.text);
+  }
+  return parts.join(' ').trim();
+}
+
+// ── 從 transcript 抓最近幾則 user 文字 prompt（跳過純 tool_result）──
 function getRecentPromptText(transcriptPath) {
   if (!transcriptPath || !fs.existsSync(transcriptPath)) return '';
   try {
@@ -229,18 +243,16 @@ function getRecentPromptText(transcriptPath) {
     fs.readSync(fd, buf, 0, buf.length, start);
     fs.closeSync(fd);
     const text = buf.toString('utf-8');
-    // 取最後 3 個 user message 的 content
     const lines = text.split('\n').filter(Boolean);
     const userMessages = [];
+    // 從尾端往前，蒐集最近 3 則「含使用者文字」的 user 訊息（純 tool_result 不計）
     for (let i = lines.length - 1; i >= 0 && userMessages.length < 3; i--) {
-      try {
-        const obj = JSON.parse(lines[i]);
-        if (obj.type === 'user' && obj.message && typeof obj.message.content === 'string') {
-          userMessages.unshift(obj.message.content);
-        } else if (obj.role === 'user' && typeof obj.content === 'string') {
-          userMessages.unshift(obj.content);
-        }
-      } catch {}
+      let obj;
+      try { obj = JSON.parse(lines[i]); } catch { continue; }
+      if (obj.type !== 'user' && obj.role !== 'user') continue;
+      const content = obj.message ? obj.message.content : obj.content;
+      const txt = extractUserText(content);
+      if (txt) userMessages.unshift(txt);
     }
     return userMessages.join('\n');
   } catch (err) {

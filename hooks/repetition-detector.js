@@ -124,6 +124,7 @@ function identifyTokenWaste(entry, history) {
   // ── W9: 同檔多次小 limit 分段讀（碎片化讀取） ──
   //   觸發：同 file_path 在最近 N 步內被 Read ≥4 次，且每次 limit ≤60
   //   常見壞模式：明明 Read 預設可讀 2000 行，卻刻意 limit:30~60 反覆切片讀
+  //   註：offset 多段（不限小 limit）的碎讀由獨立 Layer 5.1 read_fragment_detection 偵測（門檻 3 段/3 offset），此處不重複。
   if (tool === 'Read' || tool === 'read_file') {
     const filePath = args.file_path || args.path || '';
     if (filePath && (args.limit ?? 9999) <= 60) {
@@ -661,11 +662,17 @@ const BASH_PATTERNS = [
     block: false,
   },
   {
-    regex: /docker\s+exec\s+\S+\s+php\b/i,
+    // docker exec <容器> php → BLOCK（PHP 執行一律走 MCP 工具）。
+    //   regex 用 lazy token 吃掉中間的 docker flag（-i / -it / -u user / -w path），
+    //   並要求 php 為獨立命令 token（php(?=\s|$)）避免誤判 `cat php.ini`。
+    regex: /docker\s+exec\s+(?:\S+\s+)*?php(?=\s|$)/i,
+    // 框架 / 互動 / 探測類 CLI（MCP php 工具無法等價替代）放行：
+    //   -l(lint)/-r(inline)/腳本檔執行 → MCP 有對應，照擋；artisan/console/vendor-bin/-v/-i/-a/-m/-S → 放行
+    skipIfMatch: /\bphp\s+(?:-(?:a|v|i|m|S)\b|--(?:version|interactive|ini)\b|artisan\b|composer\b|bin\/console\b|vendor\/bin\/|\S*\.phar\b)/i,
     signature: 'bash:docker-php',
-    hint: 'run_php_script / run_php_script_batch / run_php_code（MCP 工具）',
+    hint: 'PHP 執行請用 MCP 工具：語法檢查 run_php_code({lint:true})／跑 inline run_php_code／跑腳本檔 run_php_script（遠端容器加 remote:true,container）。\n  框架/探測 CLI（artisan / bin/console / vendor/bin / -v / -i / -a / -S）已自動放行；真有 MCP 無法替代的場景，命令尾加 # mcp-fallback: <原因>。',
     warnOnFirst: true,
-    block: false,
+    block: true,
   },
   {
     regex: /docker\s+exec\s+\S+\s+python/i,

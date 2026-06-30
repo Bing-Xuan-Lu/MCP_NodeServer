@@ -41,6 +41,7 @@
 - `/sftp_ops` — SFTP 連線遠端即時除錯與環境檢查
 - `/sftp_pull` — SFTP 將遠端檔案拉取到本機
 - `/remote_diff` — 比對本機 vs 遠端 SFTP 檔案差異，找出同事改過的檔案
+- `/remote_merge` — 從測試機三方合併特定檔回本機，保留本地未提交改動（補 pull 覆蓋 / diff 唯讀之間的空缺）
 - `/remote_db_exec` — SFTP+PHP 間接執行遠端 SQL（無法直連 MySQL 時）
 - `/full_deploy` — 整合部署（diff 安全閘 + 程式碼 + DB migration + smoke test）
 

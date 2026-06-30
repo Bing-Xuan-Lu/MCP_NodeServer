@@ -27,6 +27,7 @@ const SNIPPET = 200;
 
 const FILE_TOOLS = /(?:^|__)(?:Edit|Write|create_file|create_file_batch|apply_diff|apply_diff_batch|multi_file_inject)$/;
 const SQLPHP_TOOLS = /(?:^|__)(?:execute_sql|execute_sql_batch|run_php_script|run_php_code|run_php_script_batch)$/;
+const SFTP_UPLOAD_TOOLS = /(?:^|__)(?:sftp_upload|sftp_upload_batch)$/;
 
 function clip(s, n = SNIPPET) {
   s = String(s || '').replace(/\s+/g, ' ').trim();
@@ -104,6 +105,28 @@ function resultText(c) {
   return '';
 }
 
+// 解析 sftp_upload / sftp_upload_batch 的 tool_result 文字 → { summary, uploaded[], skipped[] }
+// 用途：recall 回答「上一場部署推了哪些檔」，免再手動解 jsonl。
+function parseSftpResult(text, tool) {
+  const lines = String(text || '').split(/\r?\n/);
+  const summary = clip((lines.find((l) => l.trim()) || '').trim(), 140);
+  const uploaded = [];
+  const skipped = [];
+  for (const l of lines) {
+    const t = l.trim();
+    let m = t.match(/^✅\s+(.+?)\s+→\s+/);          // batch 實際上傳：✅ local → remote
+    if (m) { uploaded.push(m[1].trim()); continue; }
+    m = t.match(/^(?:🔄|⚠️|⛔)\s+(.+?)\s+→\s+/);     // batch 略過：內容相同 / drift / 被 excludes 排除
+    if (m) { skipped.push(m[1].trim()); continue; }
+  }
+  // 單檔 sftp_upload：result 無「local → remote」逐行格式，從「遠端:」行取目標
+  if (tool === 'sftp_upload' && uploaded.length === 0 && /✅/.test(text)) {
+    const remote = lines.find((l) => /^遠端:/.test(l.trim()));
+    if (remote) uploaded.push(remote.replace(/^遠端:\s*/, '').trim());
+  }
+  return { summary, uploaded, skipped };
+}
+
 // 解析單場 jsonl → recap 物件
 function recallSession(slug, sess) {
   const raw = fs.readFileSync(sess.file, 'utf-8');
@@ -116,6 +139,8 @@ function recallSession(slug, sess) {
   const assistantTexts = [];
   const idToTool = {};             // tool_use_id -> "tool target" 摘要，給失敗歸因用
   const failedCalls = [];          // 失敗 / 被 BLOCK 的工具呼叫
+  const sftpUploads = [];          // 本場 SFTP 部署上傳（給「上次推了哪些檔」）
+  const sftpById = {};             // tool_use_id -> sftp upload entry，給後續 tool_result 補明細
   let lastTodos = null;
   let firstTs = null;
   let lastTs = null;
@@ -162,6 +187,17 @@ function recallSession(slug, sess) {
             const q = inp.sql || inp.query || inp.code || inp.script_path || inp.file_path || '';
             if (q) sqlPhpRun.push({ tool: short, snippet: clip(q, 120) });
           }
+          if (SFTP_UPLOAD_TOOLS.test(name)) {
+            let files = [];
+            if (short === 'sftp_upload_batch' && Array.isArray(inp.items)) {
+              files = inp.items.map((it) => it && it.local_path).filter(Boolean);
+            } else if (inp.local_path) {
+              files = [inp.local_path];
+            }
+            const entry = { tool: short, files, force: !!inp.force, summary: '', uploaded: [], skipped: [] };
+            sftpUploads.push(entry);
+            if (block.id) sftpById[block.id] = entry;
+          }
           if (short === 'TodoWrite' && Array.isArray(inp.todos)) {
             lastTodos = inp.todos.map((t) => ({
               content: clip(t.content || t.activeForm || '', 100),
@@ -179,6 +215,14 @@ function recallSession(slug, sess) {
           const who = idToTool[block.tool_use_id] || '(未知工具)';
           const err = clip(resultText(block.content), 240);
           if (err) failedCalls.push({ tool: who, error: err });
+        }
+        // SFTP 上傳結果：補上「實際推了哪些 / 略過哪些 / N/M 成功」明細
+        const up = block && block.type === 'tool_result' && sftpById[block.tool_use_id];
+        if (up) {
+          const parsed = parseSftpResult(resultText(block.content), up.tool);
+          up.summary = parsed.summary;
+          up.uploaded = parsed.uploaded;
+          up.skipped = parsed.skipped;
         }
       }
     }
@@ -199,6 +243,8 @@ function recallSession(slug, sess) {
     sqlPhpRun: sqlPhpRun.slice(0, 15),
     failedCalls: failedCalls.slice(-25),   // 失敗/被擋的工具呼叫（取最後 25 筆，最近的最有用）
     failedCallTotal: failedCalls.length,
+    sftpUploads: sftpUploads.slice(0, 20),   // 本場部署上傳明細（給「上次推了哪些檔」）
+    sftpUploadCallTotal: sftpUploads.length,
     topTools: [...toolsUsed.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t, n]) => ({ tool: t, count: n })),
     lastTodos,
     // 取最後幾則 assistant 文字當「收尾結論」（最能代表這場做完什麼）

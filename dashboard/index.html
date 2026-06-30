@@ -846,6 +846,7 @@ cd MCP_NodeServer</pre>
             <b style="color:var(--green);">部署架構</b><br>
             · 部署目標是 SFTP 測試機（非 Git-based deploy），適用於傳統 PHP 主機環境<br>
             · 部署前必須跑 <code>/remote_diff</code> 安全閘 — 比對本機 vs 遠端差異，避免覆蓋同事直接在遠端修改的檔案<br>
+            · diff 發現遠端有同事改動、本機又有未提交改動時 → 用 <code>/remote_merge</code> 三方合併保留兩邊（非覆蓋），只標真衝突<br>
             · DB 遷移支援兩種模式：直連 MySQL 或 SFTP 上傳 PHP 腳本間接執行（無法直連 DB 的主機用）<br>
             · 環境設定檔（DB 連線、<code>.env</code>）會被 SFTP 部署自動跳過，不會覆蓋遠端設定
           </div>

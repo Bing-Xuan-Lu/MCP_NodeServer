@@ -6,6 +6,7 @@ import fs from "fs/promises";
 import { resolveSecurePath } from "../../config.js";
 import { validateArgs, calcSpecificity } from "../_shared/utils.js";
 import { createBrowserPool } from "../_shared/browser_pool.js";
+import { prepareForMeasure } from "../_shared/playwright_measure_prep.js";
 
 // ============================================
 // Browser Pool（跨呼叫複用 browser 進程）
@@ -85,6 +86,23 @@ export const definitions = [
         trigger_wait: {
           type: "number",
           description: "選填：每次 trigger click 後等待毫秒（預設 300）",
+        },
+        click_timeout: {
+          type: "number",
+          description: "選填：trigger 一般 click 的逾時毫秒（預設 5000）。逾時會自動 fallback 用 JS .click()。",
+        },
+        force_click: {
+          type: "boolean",
+          description: "選填：trigger 直接用 JS .click() 繞過 Playwright 可點擊性檢查（預設 false）。頁面有 loading 遮罩或浮層攔截點擊時開啟。",
+        },
+        wait_for_hidden: {
+          type: "array",
+          items: { type: "string" },
+          description: "選填：點 trigger / 量測前先等這些遮罩 selector 消失（hidden）。不傳=自動等常見 loading 遮罩（.loader/.loading/.overlay/.spinner 等）；傳 [] 關閉；傳 [\".my-loader\"] 指定。解 AJAX loading 遮罩攔截 click 的痛點。",
+        },
+        wait_hidden_timeout: {
+          type: "number",
+          description: "選填：等遮罩消失的逾時毫秒（預設 5000）",
         },
         wait_for_selector: {
           type: "string",
@@ -334,6 +352,10 @@ async function handleCssComputedWinner(args) {
     cookies = [],
     trigger_selectors = [],
     trigger_wait = 300,
+    click_timeout = 5000,
+    force_click = false,
+    wait_for_hidden,
+    wait_hidden_timeout = 5000,
     wait_for_selector,
     wait_for_timeout = 3000,
   } = args;
@@ -356,24 +378,17 @@ async function handleCssComputedWinner(args) {
     const page = await context.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout });
 
-    // 依序 click trigger selectors（展開 popup/modal/dropdown）
-    for (const trig of trigger_selectors) {
-      try {
-        await page.click(trig, { timeout: 3000 });
-        await page.waitForTimeout(trigger_wait);
-      } catch (e) {
-        await context.close();
-        return { content: [{ type: "text", text: `❌ trigger_selectors click 失敗於 "${trig}": ${e.message}` }] };
-      }
+    // 量測前置：等遮罩消失 → 依序點 trigger（含 JS-click fallback）→ 等目標出現
+    const prep = await prepareForMeasure(page, {
+      trigger_selectors, trigger_wait, click_timeout, force_click,
+      wait_for_hidden, wait_hidden_timeout,
+      wait_for_selector, wait_for_timeout, target_selector: selector,
+    });
+    if (!prep.ok) {
+      await context.close();
+      return { content: [{ type: "text", text: [prep.error, ...prep.notes].join("\n") }] };
     }
-
-    // 等待目標元素出現（給 Vue/React 條件 render 留時間）
-    const waitTarget = wait_for_selector || selector;
-    try {
-      await page.waitForSelector(waitTarget, { timeout: wait_for_timeout, state: 'attached' });
-    } catch (e) {
-      // 不立刻失敗，往下一步給更詳細的診斷
-    }
+    const prepNotes = prep.notes;
 
     // 確認元素存在
     const elHandle = await page.$(selector);
@@ -522,6 +537,7 @@ async function handleCssComputedWinner(args) {
 
     // 格式化輸出
     const lines = [`元素: ${selector}\nURL: ${url}\n`];
+    if (prepNotes.length > 0) lines.push(prepNotes.join("\n"), "");
 
     for (const [prop, data] of Object.entries(results)) {
       lines.push(`=== ${prop} ===`);
