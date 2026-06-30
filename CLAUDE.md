@@ -91,7 +91,7 @@ MCP_NodeServer/
 │   ├── official-docs-guard.js ← UserPromptSubmit：偵測第三方技術行為問題（瀏覽器產品名 chrome/firefox… / Web 標準 CORS/CSP/SameSite/W3C/MDN / 框架版本用法 / 規範 / 為什麼…行為），注入提醒「回答前先 WebFetch 查官方文件，禁憑訓練記憶直接答」。純瀏覽器自動化測試（截圖/導航/click 無查文件意圖）與本系統 meta 維護（hook/memory/skill）自動跳過。非阻擋，只注入提醒
 │   ├── skill-router.js  ← UserPromptSubmit：Skill 關鍵字偵測，依分數自動建議相關 Skill
 │   ├── verify-pass-guard.js ← Stop：回合結束掃 assistant 最後訊息，攔「N/N PASS / 全部通過」但無逐行/逐格明細證據的驗證偷懶（合計對 ≠ 明細對；不抓「全綠」等監控/CI 狀態燈用語避免誤擋診斷訊息、markdown 逐列表格視為已附明細放行；防迴圈：stop_hook_active 放行 + 同宣告 hash 集合去重；無次數上限，每個新的未附明細 PASS 宣告都擋）
-│   ├── commit-nag-guard.js ← Stop：回合結束掃 assistant 最後訊息，攔「主動提 commit/push/git add 當收尾」（CLAUDE.md 明令禁止做完就提 commit；放行：使用者本回合自己提過 commit/git/推版、或唯讀 git status/diff/log；防迴圈 stop_hook_active + 同訊息 hash 去重）
+│   ├── commit-nag-guard.js ← Stop：回合結束掃 assistant 最後訊息，攔「主動提 commit/push/git add 當收尾」（CLAUDE.md 明令禁止做完就提 commit；放行：使用者本回合自己提過 commit/git/推版（含 `/git_commit` slash 指令，掃最近 6 則 user 訊息窗口而非只看最後一則，避免被「選項回覆」這種末則訊息漏判）、或唯讀 git status/diff/log；防迴圈 stop_hook_active + 同訊息 hash 去重）
 │   ├── task-stop-docker-warn.js ← PostToolUse(Bash run_in_background + TaskStop)：背景任務若以 `docker exec` 啟動，TaskStop 只 kill 外層 pipe、container 內 child 仍在跑（曾踩坑：以為 kill 了實際還在燒 Sheet API）。Bash 階段把 docker child 命令寫進 %TEMP% cache，TaskStop 時比對 task_id → 提醒 + 給 ps/kill 驗證指令（非阻擋，exit 0；6 小時自動清 cache）
 │   └── record-lesson.cjs ← 非 hook 輔助腳本：由 /lesson skill 呼叫，append 對話品質教訓到 ~/.claude/quality-lessons.jsonl（跨專案 sink）；支援 --list / --done <ts>，給 /retro lesson 消化用
 ├── skills/index.js      ← MCP Prompts 路由（注意：小寫 skills，不是 Skills）

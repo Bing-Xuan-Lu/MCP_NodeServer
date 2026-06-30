@@ -50,23 +50,30 @@ function extractText(c) {
   return '';
 }
 
-// 回傳 { assistant, user } 各自的最後一則純文字
+// 回傳最後一則 assistant 純文字，與最近數則 user 純文字（窗口）。
+//   user 用窗口而非單則：slash 指令流程（如 /git_commit）中，觸發指令的 user 訊息
+//   常在「選項回覆」之前 1~2 則，只看最後一則會漏判使用者其實本回合已起 commit 話題。
+const USER_WINDOW = 6;
 function readTranscriptTail(transcriptPath) {
-  const result = { assistant: '', user: '' };
+  const result = { assistant: '', user: '', userWindow: '' };
   if (!transcriptPath || !fs.existsSync(transcriptPath)) return result;
   try {
     const lines = fs.readFileSync(transcriptPath, 'utf-8').trim().split(/\r?\n/);
+    const userTexts = [];
     for (let i = lines.length - 1; i >= 0; i--) {
-      if (result.assistant && result.user) break;
+      if (result.assistant && userTexts.length >= USER_WINDOW) break;
       let obj;
       try { obj = JSON.parse(lines[i]); } catch { continue; }
       const role = obj.message?.role;
       if (obj.type === 'assistant' && role === 'assistant' && !result.assistant) {
         result.assistant = extractText(obj.message.content);
-      } else if (obj.type === 'user' && role === 'user' && !result.user) {
-        result.user = extractText(obj.message.content);
+      } else if (obj.type === 'user' && role === 'user' && userTexts.length < USER_WINDOW) {
+        const t = extractText(obj.message.content);
+        if (t) userTexts.push(t);
       }
     }
+    result.user = userTexts[0] || '';
+    result.userWindow = userTexts.join('\n');
   } catch { /* unreadable → 放行 */ }
   return result;
 }
@@ -100,11 +107,11 @@ process.stdin.on('end', () => {
 
     if (data.stop_hook_active) { debug('stop_hook_active → 放行'); return allow(); }
 
-    const { assistant, user } = readTranscriptTail(data.transcript_path || '');
+    const { assistant, userWindow } = readTranscriptTail(data.transcript_path || '');
     if (!assistant.trim()) return allow();
 
-    // 使用者本回合自己提到 commit/git → 我回應這話題不算主動 nag
-    if (USER_COMMIT_TOPIC.test(user)) { debug('user 起的 commit 話題 → 放行'); return allow(); }
+    // 使用者本回合自己提到 commit/git（含 /git_commit 等 slash 指令）→ 我回應這話題不算主動 nag
+    if (USER_COMMIT_TOPIC.test(userWindow)) { debug('user 起的 commit 話題（窗口）→ 放行'); return allow(); }
 
     if (!COMMIT_NAG_PATTERNS.some((re) => re.test(assistant))) {
       debug('無主動 commit/push 提示 → 放行');

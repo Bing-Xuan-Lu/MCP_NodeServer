@@ -834,11 +834,33 @@ function shortName(toolName) {
   return match ? match[1] : toolName;
 }
 
+// 剝除「字串承載」命令的 payload，避免把訊息內容裡的關鍵字當成實際執行命令。
+//   只處理 git commit 訊息（-m / --message / heredoc）與 echo/printf 的引號字串——
+//   這些情境裡的 `docker exec php` 等字樣是「文字資料」而非執行意圖（曾踩坑：commit
+//   訊息描述提到 docker exec php 被 L1 docker-php 規則誤擋）。
+//   不碰 docker/grep 等真正執行類命令的引號（那是執行意圖，需保留偵測）；
+//   鏈接如 `git commit -m "x" && docker exec php y` 仍保留後段供偵測。
+function stripMessagePayloads(command) {
+  let s = command;
+  // heredoc 主體：<<'EOF' ... \nEOF （含 git commit -m "$(cat <<'EOF' ... EOF )"）
+  s = s.replace(/<<-?\s*(['"]?)(\w+)\1[\s\S]*?^\s*\2\b/gm, ' HEREDOC ');
+  if (/\bgit\s+commit\b/i.test(command)) {
+    s = s.replace(/-m\s+(["'])[\s\S]*?\1/gi, ' -m MSG ');              // -m "訊息"
+    s = s.replace(/--message(?:=|\s+)(["'])[\s\S]*?\1/gi, ' --message MSG ');
+    s = s.replace(/\$\(cat[\s\S]*?\)/gi, ' MSG ');                      // 殘留的 $(cat ...)
+  }
+  if (/^\s*(?:echo|printf)\b/i.test(command)) {
+    s = s.replace(/(["'])[\s\S]*?\1/g, ' STR ');                        // echo/printf 的引號字串
+  }
+  return s;
+}
+
 /** 從 Bash 命令提取簽名（核心動作） */
 function extractBashSignature(command) {
   if (!command) return null;
+  const probe = stripMessagePayloads(command);
   for (const { regex, signature } of BASH_PATTERNS) {
-    if (regex.test(command)) return signature;
+    if (regex.test(probe)) return signature;
   }
   return null;
 }
@@ -846,10 +868,11 @@ function extractBashSignature(command) {
 /** 從 Bash 命令取得完整匹配結果 { signature, hint, warnOnFirst } */
 function matchBashPattern(command) {
   if (!command) return null;
+  const probe = stripMessagePayloads(command);
   for (const pat of BASH_PATTERNS) {
-    if (pat.regex.test(command)) {
+    if (pat.regex.test(probe)) {
       // 若 pattern 帶 skipIfMatch：命令符合時視為合法用途，放行（用於 mysql DDL/SHOW/EXPLAIN 等 meta query）
-      if (pat.skipIfMatch && pat.skipIfMatch.test(command)) return null;
+      if (pat.skipIfMatch && pat.skipIfMatch.test(probe)) return null;
       return pat;
     }
   }
