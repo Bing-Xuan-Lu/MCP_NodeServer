@@ -105,6 +105,35 @@ function resultText(c) {
   return '';
 }
 
+// 從 user 訊息 / attachment 裡挖出「使用者貼上的內嵌截圖」(base64 圖片 block)。
+// 只掃 user 來源(貼圖 / queued_command),不掃 assistant 與 tool_result——
+// 那些通常是 Playwright 等工具產生、已另存 screenshot/ 的截圖,不是交接要看的使用者證據。
+// 之所以要撈:textOf 只留 type==='text',截圖 block 會被靜默丟掉,交接時等於憑空消失。
+function collectPastedImages(obj, out) {
+  const pushImg = (n) => {
+    if (n && n.type === 'image' && n.source && n.source.type === 'base64' && n.source.data) {
+      out.push({ mediaType: n.source.media_type || 'image/png', data: n.source.data });
+    }
+  };
+  // 1) user message content 直接帶的圖片 block
+  if (obj.type === 'user' && obj.message && Array.isArray(obj.message.content)) {
+    for (const blk of obj.message.content) pushImg(blk);
+  }
+  // 2) attachment(queued_command 等)結構不固定,遞迴找 image block;
+  //    遇到 key 'data' 不往下走,避免踏進 base64 巨串。
+  if (obj.attachment) {
+    const walk = (n, depth) => {
+      if (!n || depth > 5) return;
+      if (Array.isArray(n)) { for (const x of n) walk(x, depth + 1); return; }
+      if (typeof n === 'object') {
+        pushImg(n);
+        for (const k of Object.keys(n)) { if (k !== 'data') walk(n[k], depth + 1); }
+      }
+    };
+    walk(obj.attachment, 0);
+  }
+}
+
 // 解析 sftp_upload / sftp_upload_batch 的 tool_result 文字 → { summary, uploaded[], skipped[] }
 // 用途：recall 回答「上一場部署推了哪些檔」，免再手動解 jsonl。
 function parseSftpResult(text, tool) {
@@ -127,6 +156,21 @@ function parseSftpResult(text, tool) {
   return { summary, uploaded, skipped };
 }
 
+// 偵測「這場結束在一個等使用者回答的抉擇」——交接的關鍵訊號。
+// 若成立，lastTodos 很可能已被這則收尾訊息推翻（中途計畫 vs 最終決定），
+// 接手前必須以完整最後訊息為準，不能照 TODO 直接動手。
+function detectPendingDecision(text) {
+  if (!text) return null;
+  const t = String(text).trim();
+  const tail = t.slice(-80);
+  // 結尾是問句，或明確要使用者選擇
+  const endsWithQuestion = /[?？]\s*$/.test(tail) || /你要哪|要哪個|你決定|請選|選哪|哪一個|你要選|你選|怎麼做\??$/.test(tail);
+  // 內文列了選項：(A)/(B)、方案 A/B、「兩條路 / 兩個做法」
+  const hasOptions = /[（(]\s*[ABＡＢabＡ]\s*[）)]/.test(t) || /(?:方案|選項|路線|做法|方向)\s*[ABＡＢ]/.test(t) || /兩條路|兩個(?:選項|方向|做法|選擇)/.test(t);
+  if (!endsWithQuestion && !hasOptions) return null;
+  return { endsWithQuestion, hasOptions };
+}
+
 // 解析單場 jsonl → recap 物件
 function recallSession(slug, sess) {
   const raw = fs.readFileSync(sess.file, 'utf-8');
@@ -142,6 +186,9 @@ function recallSession(slug, sess) {
   const sftpUploads = [];          // 本場 SFTP 部署上傳（給「上次推了哪些檔」）
   const sftpById = {};             // tool_use_id -> sftp upload entry，給後續 tool_result 補明細
   let lastTodos = null;
+  const pastedImagesRaw = [];      // 使用者貼上的內嵌截圖（原始 base64），迴圈後再 dump 成暫存檔
+  let lastUserSnippet = '';        // 最近一則使用者文字，給截圖標「出現在哪句話附近」
+  let finalMessageFull = '';       // 最後一則 assistant 文字「完整」保留（不砍 260），交接靠這則
   let firstTs = null;
   let lastTs = null;
 
@@ -160,13 +207,28 @@ function recallSession(slug, sess) {
 
     if (isRealUserText(obj)) {
       const cleaned = cleanUserText(textOf(obj.message));
-      if (cleaned) userRequests.push(clip(cleaned, 220));
+      if (cleaned) { userRequests.push(clip(cleaned, 220)); lastUserSnippet = cleaned; }
+    }
+
+    // 使用者貼上的內嵌截圖：撈出來並標上時間與鄰近文字，交接時才不會漏掉圖
+    {
+      const before = pastedImagesRaw.length;
+      collectPastedImages(obj, pastedImagesRaw);
+      if (pastedImagesRaw.length > before) {
+        const near = (obj.type === 'user' && obj.message)
+          ? (cleanUserText(textOf(obj.message)) || lastUserSnippet) : lastUserSnippet;
+        for (let i = before; i < pastedImagesRaw.length; i++) {
+          pastedImagesRaw[i].ts = ts;
+          pastedImagesRaw[i].near = near;
+        }
+      }
     }
 
     if (obj.type === 'assistant' && obj.message && Array.isArray(obj.message.content)) {
       for (const block of obj.message.content) {
         if (block.type === 'text' && block.text && block.text.trim()) {
           assistantTexts.push(clip(block.text, 260));
+          finalMessageFull = block.text.trim();   // 持續覆寫，迴圈結束時即最後一則
         }
         if (block.type === 'tool_use') {
           const name = block.name || '';
@@ -228,9 +290,46 @@ function recallSession(slug, sess) {
     }
   }
 
+  // 把使用者貼的截圖 dump 成暫存 PNG，讓 recall 能給出路徑供 read_image 真正看圖。
+  // 只在 recall 模式會走到這裡（buildIndex/search 不呼叫 recallSession），不拖慢開場。
+  const MAX_DUMP = 12;             // 最多 dump 幾張，避免大量截圖爆磁碟/時間
+  const pastedImages = [];
+  let dumpDir = null;
+  for (let i = 0; i < pastedImagesRaw.length; i++) {
+    const img = pastedImagesRaw[i];
+    const sizeKB = Math.round((img.data.length * 3 / 4) / 1024); // base64 → 原始位元組估算
+    let file = null;
+    if (i < MAX_DUMP) {
+      try {
+        if (!dumpDir) {
+          // dump 進 MCP 允許的暫存路徑，read_image 才開得了(os.tmpdir 不在 basePath 白名單會被擋)。
+          // 依序:env 覆寫 → D:\tmp(本環境免授權暫存) → 退回 os.tmpdir(至少能 dump,跨機不壞)。
+          const base = process.env.CLAUDE_RECALL_IMG_DIR
+            || (fs.existsSync('D:\\tmp') ? path.join('D:\\tmp', 'claude-recall-img') : path.join(os.tmpdir(), 'claude-recall-img'));
+          dumpDir = path.join(base, sess.id);
+          fs.mkdirSync(dumpDir, { recursive: true });
+        }
+        const ext = ((img.mediaType.split('/')[1] || 'png').replace(/[^a-z0-9]/gi, '')) || 'png';
+        const fp = path.join(dumpDir, `img${String(i + 1).padStart(2, '0')}.${ext}`);
+        fs.writeFileSync(fp, Buffer.from(img.data, 'base64'));
+        file = fp;
+      } catch { file = null; }
+    }
+    pastedImages.push({
+      seq: i + 1,
+      mediaType: img.mediaType,
+      sizeKB,
+      ts: img.ts ? new Date(img.ts).toISOString() : null,
+      near: clip(img.near || '', 80),
+      file,
+    });
+  }
+
   return {
     slug,
     sessionId: sess.id,
+    pastedImages,                  // 使用者貼上的截圖（已 dump，file 給 read_image 用）
+    pastedImageTotal: pastedImagesRaw.length,
     date: firstTs ? new Date(firstTs).toISOString() : null,
     lastActivity: lastTs ? new Date(lastTs).toISOString() : null,
     snapshot: findSnapshot(sess.id),
@@ -249,6 +348,11 @@ function recallSession(slug, sess) {
     lastTodos,
     // 取最後幾則 assistant 文字當「收尾結論」（最能代表這場做完什麼）
     closingNotes: assistantTexts.slice(-MAX_DECISIONS),
+    // 最後一則 assistant 訊息「完整」保留（上限 4000 字防爆）——交接以這則為準，不再被 260 字截斷坑
+    finalMessage: finalMessageFull ? finalMessageFull.slice(0, 4000) : '',
+    finalMessageTruncated: finalMessageFull.length > 4000,
+    // 這場是否結束在一個等使用者回答的抉擇（成立時 lastTodos 可能已被推翻）
+    pendingDecision: detectPendingDecision(finalMessageFull),
   };
 }
 
@@ -393,6 +497,55 @@ function buildIndex(slug, n, excludeId) {
   return { slug, count: sessions.length, sessions: sessions.map((s) => quickDigest(slug, s)).filter(Boolean) };
 }
 
+// 跨場「變更檔案」反查索引：時間窗內每場動過哪些檔 union 起來，回 file -> 哪幾場改的。
+// 給 /session_deploy 用：git working tree 才是「要推什麼」的真相，這裡只補「每個檔是哪幾場 session 改的」摘要。
+// source-verified: 欄位名經實測真實 JSONL 確認——
+//   單檔 Edit/Write=file_path、apply_diff/create_file=path；
+//   batch：apply_diff_batch=diffs[].path、create_file_batch=files[].path（不是 items！）。
+function changedFilesIndex(slug, days, excludeId) {
+  let sessions = listSessions(slug);
+  const cutoff = days ? Date.now() - days * 86400000 : 0;
+  if (cutoff) sessions = sessions.filter((s) => s.mtime >= cutoff);
+  if (excludeId) sessions = sessions.filter((s) => !(s.id === excludeId || s.id.startsWith(excludeId)));
+  const fileMap = new Map(); // path -> { total, sessions:[{session,date,edits}] }
+  for (const sess of sessions) {
+    let raw;
+    try { raw = fs.readFileSync(sess.file, 'utf-8'); } catch { continue; }
+    const perFile = new Map();
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line) continue;
+      let o; try { o = JSON.parse(line); } catch { continue; }
+      if (!(o.type === 'assistant' && o.message && Array.isArray(o.message.content))) continue;
+      for (const b of o.message.content) {
+        if (b.type !== 'tool_use' || !FILE_TOOLS.test(b.name || '')) continue;
+        const inp = b.input || {};
+        const paths = [];
+        const one = inp.file_path || inp.path || (inp.target && inp.target.path);
+        if (one) paths.push(one);
+        // batch / 多檔工具的陣列：apply_diff_batch=diffs、create_file_batch=files、其餘防禦性 items/injections
+        for (const arr of [inp.diffs, inp.files, inp.items, inp.injections]) {
+          if (Array.isArray(arr)) for (const it of arr) { const p = it && (it.path || it.file_path); if (p) paths.push(p); }
+        }
+        for (const p of paths) perFile.set(p, (perFile.get(p) || 0) + 1);
+      }
+    }
+    for (const [p, n] of perFile) {
+      if (!fileMap.has(p)) fileMap.set(p, { total: 0, sessions: [] });
+      const rec = fileMap.get(p);
+      rec.total += n;
+      rec.sessions.push({
+        session: sess.id.slice(0, 8),
+        date: new Date(sess.mtime).toISOString().slice(0, 16).replace('T', ' '),
+        edits: n,
+      });
+    }
+  }
+  const files = [...fileMap.entries()]
+    .map(([file, r]) => ({ file, total: r.total, sessions: r.sessions }))
+    .sort((a, b) => b.total - a.total);
+  return { slug, days: days || null, sessionCount: sessions.length, fileCount: files.length, files };
+}
+
 // ── main ───────────────────────────────────────────
 function main() {
   const [, , mode, a, b, c] = process.argv;
@@ -400,6 +553,10 @@ function main() {
   try {
     if (mode === 'index') {
       process.stdout.write(JSON.stringify(buildIndex(a, parseInt(b, 10) || 8, curId), null, 2));
+    } else if (mode === 'changed') {
+      // source-verified: 只是把上面剛實測建好的 changedFilesIndex 接上 CLI 分派，無新真相源
+      // changed <slug> [days]：跨場變更檔案反查（days 預設 14，含當前對話一起算）
+      process.stdout.write(JSON.stringify(changedFilesIndex(a, parseInt(b, 10) || 14, null), null, 2));
     } else if (mode === 'list') {
       const sessions = listSessions(a);
       const out = sessions.map((s) => ({

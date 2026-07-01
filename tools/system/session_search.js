@@ -68,6 +68,27 @@ export const definitions = [
       },
     },
   },
+  {
+    name: "session_changed_files",
+    description:
+      "跨 session 反查：某專案近 N 天內，哪些程式檔被動過、各自來自哪幾場 session。" +
+      "用途：多場對話四散改了很多檔，要一次盤點「這些變更分別是哪場做的」，或搭配 git_status 一口氣部署。" +
+      "只統計 Edit/Write/apply_diff/create_file 等檔案寫入工具，唯讀不改任何檔。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: {
+          type: "string",
+          description: "專案 slug 模糊關鍵字（如 myproject）；省略＝依當前 cwd 反推",
+        },
+        days: {
+          type: "integer",
+          description: "往回盤點幾天（預設 14，上限 90）",
+          default: 14,
+        },
+      },
+    },
+  },
 ];
 
 // ============================================
@@ -173,6 +194,15 @@ function formatRecall(res) {
   L.push(`📖 回顧：[${shortSlug(res.slug)}] ${res.sessionId.slice(0, 8)} · ${(res.date || "").slice(0, 16).replace("T", " ")}`);
   L.push("");
 
+  // 最重要的交接訊號：這場結束在一個等使用者回答的抉擇。
+  // 放最前面，逼接手者先讀完整最後訊息，別照可能已作廢的 TODO 直接動手。
+  if (res.pendingDecision) {
+    L.push(`⚠️ 這場結束在一個【等你回答的抉擇】，並未做完就停。`);
+    L.push(`   → 下面「未完成 TODO」很可能是中途計畫、已被最後訊息推翻。`);
+    L.push(`   → 接手前務必先讀本頁最底的【上一場最後訊息（完整）】，以那則為準。`);
+    L.push("");
+  }
+
   if (res.userRequests && res.userRequests.length) {
     L.push(`【使用者要求】（共 ${res.userRequestTotal} 則，列前 ${Math.min(res.userRequests.length, 8)}）`);
     res.userRequests.slice(0, 8).forEach((r) => L.push(`  • ${r}`));
@@ -183,7 +213,9 @@ function formatRecall(res) {
     const pending = res.lastTodos.filter((t) => t.status !== "completed");
     const done = res.lastTodos.filter((t) => t.status === "completed");
     if (pending.length) {
-      L.push(`【未完成 / 卡住】← 下一場接手點`);
+      L.push(res.pendingDecision
+        ? `【未完成 / 卡住】⚠️ 這批可能是中途計畫、已被最後訊息推翻，僅供參考（以文末完整最後訊息為準）`
+        : `【未完成 / 卡住】← 下一場接手點`);
       pending.forEach((t) => L.push(`  ☐ ${t.content}${t.status ? ` (${t.status})` : ""}`));
       L.push("");
     }
@@ -197,6 +229,23 @@ function formatRecall(res) {
   if (res.filesModified && res.filesModified.length) {
     L.push(`【動過的檔】Top ${Math.min(res.filesModified.length, 12)}`);
     res.filesModified.slice(0, 12).forEach((f) => L.push(`  • ${f.file} ×${f.edits}`));
+    L.push("");
+  }
+
+  // 使用者貼上的截圖：過去 recall 完全看不到圖（scan 只留 text block），交接時整張圖憑空消失。
+  // 現在 dump 成暫存 PNG 並在此列出路徑，接手時用 read_image 就能真的看到那張圖。
+  if (res.pastedImages && res.pastedImages.length) {
+    L.push(`【使用者貼上的截圖】共 ${res.pastedImageTotal} 張 ← 這是文字看不到的證據，需要時用 read_image 開下面路徑`);
+    res.pastedImages.forEach((im) => {
+      const when = im.ts ? im.ts.slice(0, 16).replace("T", " ") : "";
+      L.push(`  🖼 #${im.seq} ${im.mediaType} ~${im.sizeKB}KB ${when}`);
+      if (im.near) L.push(`      出現在：「${im.near}」附近`);
+      if (im.file) L.push(`      read_image → ${im.file}`);
+      else L.push(`      （未 dump：超過上限或解碼失敗，需開原始 jsonl）`);
+    });
+    if (res.pastedImageTotal > res.pastedImages.length) {
+      L.push(`  …（另有 ${res.pastedImageTotal - res.pastedImages.length} 張未 dump，超過張數上限）`);
+    }
     L.push("");
   }
 
@@ -228,9 +277,18 @@ function formatRecall(res) {
     L.push("");
   }
 
-  if (res.closingNotes && res.closingNotes.length) {
-    L.push(`【收尾結論】（最後幾則 assistant 訊息）`);
-    res.closingNotes.slice(-4).forEach((n) => L.push(`  ▸ ${n}`));
+  // 倒數第 2~4 則當「收尾脈絡」（摘要即可）；最後一則不放這，改用下面完整版
+  if (res.closingNotes && res.closingNotes.length > 1) {
+    L.push(`【收尾脈絡】（倒數第 2~4 則 assistant 訊息摘要）`);
+    res.closingNotes.slice(-4, -1).forEach((n) => L.push(`  ▸ ${n}`));
+    L.push("");
+  }
+
+  // 最後一則「完整」呈現——這是交接的真正依據（過去被砍到 260 字，害接手者看不到最終決定/抉擇）
+  if (res.finalMessage) {
+    L.push(`【上一場最後訊息（完整）】← 交接以這則為準，不是上面的 TODO`);
+    res.finalMessage.split("\n").forEach((ln) => L.push(`  ${ln}`));
+    if (res.finalMessageTruncated) L.push(`  …（超過 4000 字已截斷，需全文用 read_file 讀該場 jsonl）`);
     L.push("");
   }
 
@@ -254,9 +312,37 @@ function formatCandidates(reso, what) {
 // ============================================
 // 工具邏輯
 // ============================================
+function formatChanged(res, projectLabel) {
+  if (res.error) return `❌ 盤點失敗：${res.error}`;
+  if (!res.files || res.files.length === 0) {
+    return `📂 [${projectLabel}] 近 ${res.days || "?"} 天沒有 session 動過任何檔（掃 ${res.sessionCount} 場）。`;
+  }
+  const L = [];
+  L.push(`📂 [${projectLabel}] 近 ${res.days} 天跨 session 變更盤點：${res.sessionCount} 場動過 ${res.fileCount} 個檔`);
+  L.push(`（要「一口氣推」：先 git_status 取實際 M/A 檔，再與下表交集後餵給 sftp_upload_batch；本表是「誰改的」摘要）`);
+  L.push("");
+  res.files.forEach((f) => {
+    const short = f.file.split(/[\\/]/).slice(-2).join("/");
+    const sess = f.sessions.map((s) => `${s.session}(×${s.edits})`).join(" ");
+    L.push(`  • ${short}  共×${f.total}  ← ${sess}`);
+  });
+  if (res.fileCount > res.files.length) L.push(`  …（另有 ${res.fileCount - res.files.length} 檔）`);
+  return L.join("\n");
+}
+
 export async function handle(name, args) {
   const def = definitions.find((d) => d.name === name);
   if (def) args = validateArgs(def.inputSchema, args);
+
+  if (name === "session_changed_files") {
+    const reso = resolveSlug(args.project);
+    if (!reso.slug) {
+      return { content: [{ type: "text", text: formatCandidates(reso, "盤點變更") }] };
+    }
+    const days = Math.min(args.days || 14, 90);
+    const res = await runScan(["changed", reso.slug, String(days)]);
+    return { content: [{ type: "text", text: formatChanged(res, shortSlug(reso.slug)) }] };
+  }
 
   if (name === "session_search") {
     const days = Math.min(args.days || 30, 180);
