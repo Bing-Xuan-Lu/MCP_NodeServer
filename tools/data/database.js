@@ -231,6 +231,7 @@ try {
 export const definitions = [
   {
     name: "set_database",
+    _meta: { "anthropic/alwaysLoad": true },
     description: "設定資料庫連線。支援多連線：不同 database 各自儲存，最後設定的為預設連線。\n" +
       "database 與 preset 擇一必填（preset 用於載入先前已 remember 的連線）。\n" +
       "兩種模式：\n" +
@@ -287,6 +288,7 @@ export const definitions = [
   },
   {
     name: "execute_sql",
+    _meta: { "anthropic/alwaysLoad": true },
     description: "執行 SQL 指令 (DDL/DML)，支援多條語句以分號分隔、逐條執行。可用 sql（字串）或 file（讀取本機 SQL 檔）擇一傳入。DELETE/UPDATE/DROP/TRUNCATE 需加 confirm: true。可指定 database 切換連線。",
     inputSchema: {
       type: "object",

@@ -130,6 +130,7 @@ export const definitions = [
   },
   {
     name: "read_file",
+    _meta: { "anthropic/alwaysLoad": true },
     description:
       "讀取檔案內容（支援分段）。大檔案會自動截斷並提示用 offset/limit 分段讀取。",
     inputSchema: {
@@ -150,6 +151,7 @@ export const definitions = [
   },
   {
     name: "create_file",
+    _meta: { "anthropic/alwaysLoad": true },
     description: "建立或覆寫檔案",
     inputSchema: {
       type: "object",
@@ -237,6 +239,7 @@ export const definitions = [
   },
   {
     name: "apply_diff",
+    _meta: { "anthropic/alwaysLoad": true },
     description: "修改檔案 (Search & Replace 模式)",
     inputSchema: {
       type: "object",

@@ -2,7 +2,7 @@
 
 > 這份是從 `CLAUDE.md` 抽出的詳細 hook 規則參考（避免大表每次都被夾帶進 context）。被 hook 擋到時，來這裡查對應 ID、行為與放行條件。CLAUDE.md 只留摘要與指標。
 
-**Hook 偵測規則**（repetition-detector 27 層 + refactor-advisor 14 項；另有獨立 PreToolUse hook：`agent-coord-stale-contract`、`token-budget-circuit-breaker`（單場 tool call 達 150 警告 / 250 硬擋）、`mcp-down-guard`（MCP 斷線時封鎖繞道）、`playwright-closed-guard`（matcher `browser_`：browser 結果結尾連續 ≥2 次「Target page, context or browser has been closed」即 BLOCK 下一個盲試 navigate，並引導重開——抓出原網址明示「browser_close → browser_navigate {原網址}」兩步；放行 browser_close 作復原重置，門檻 `CLAUDE_BROWSER_CLOSED_THRESHOLD` 可覆寫。限制：主場 hook 不觸發於 Task 子 agent 內部 tool call）、`entry-search-memory-gate`（matcher `Grep|Glob`：**開場找入口前先翻記憶硬 gate**；見下方獨立規則表））：
+**Hook 偵測規則**（repetition-detector 27 層 + refactor-advisor 14 項；另有獨立 PreToolUse hook：`agent-coord-stale-contract`、`token-budget-circuit-breaker`（單場 tool call 達 150 警告 / 250 硬擋）、`mcp-down-guard`（三態：mcp__* 呼叫失敗=強封鎖；最近有 mcp__* 成功=放行；末段無 mcp__* 結果＝工具從清單消失時，僅「Claude 剛宣稱斷線＋當前跑 DB/PHP/HTTP 繞道指令」才擋，補原本「工具消失沒失敗結果」的盲點）、`playwright-closed-guard`（matcher `browser_`：browser 結果結尾連續 ≥2 次「Target page, context or browser has been closed」即 BLOCK 下一個盲試 navigate，並引導重開——抓出原網址明示「browser_close → browser_navigate {原網址}」兩步；放行 browser_close 作復原重置，門檻 `CLAUDE_BROWSER_CLOSED_THRESHOLD` 可覆寫。限制：主場 hook 不觸發於 Task 子 agent 內部 tool call）、`entry-search-memory-gate`（matcher `Grep|Glob`：**開場找入口前先翻記憶硬 gate**；見下方獨立規則表））：
 
 | 層級 | ID | 觸發條件 | 行為 |
 | --- | --- | --- | --- |

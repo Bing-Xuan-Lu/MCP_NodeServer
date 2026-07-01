@@ -136,6 +136,7 @@ export const definitions = [
   },
   {
     name: "run_php_code",
+    _meta: { "anthropic/alwaysLoad": true },
     description: "直接執行 PHP code string（免建暫存檔）。程式碼透過 stdin 傳入 PHP CLI，省掉 Write → run → rm 三步驟。自動補 <?php 標籤。lint:true 時改做語法檢查（php -l /dev/stdin）：先用 read_file 把主機檔案內容讀出再當 code 傳入，容器全程不需碰到 Windows 路徑即可 lint 主機檔。remote:true 時 code 經 SSH 灌進『已 sftp_connect 的遠端主機』容器（docker exec -i），用於遠端測試機/正式機容器內的 PHP 執行（發信測試、CRUD 測試…），免再 ssh_exec 手刻或 mcp-fallback。",
     inputSchema: {
       type: "object",
@@ -151,6 +152,7 @@ export const definitions = [
   },
   {
     name: "send_http_request",
+    _meta: { "anthropic/alwaysLoad": true },
     description:
       "對一個網址發出 HTTP 請求（不開瀏覽器、不跑 JavaScript，純打網址取回應），結果以 Postman 風格呈現：" +
       "①方法+網址 ②狀態碼+耗時(ms)+大小+content-type ③重要 Response Headers(轉址/Cookie/驗證/下載) ④Body(JSON 自動美化縮排)。" +

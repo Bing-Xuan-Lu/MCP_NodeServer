@@ -38,6 +38,7 @@
 ## 部署維運部
 
 - `/sftp_deploy` — SFTP 將本機 PHP 專案部署到遠端測試機
+- `/session_deploy` — 把四散多場 session 改過、未 commit 的程式一次全推上測試機，附「每支檔是哪幾場 session 改的」摘要
 - `/sftp_ops` — SFTP 連線遠端即時除錯與環境檢查
 - `/sftp_pull` — SFTP 將遠端檔案拉取到本機
 - `/remote_diff` — 比對本機 vs 遠端 SFTP 檔案差異，找出同事改過的檔案

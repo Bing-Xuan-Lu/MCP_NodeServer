@@ -13,6 +13,7 @@ import { resolveSecurePath, CONFIG } from "../../config.js";
 export const definitions = [
   {
     name: "class_method_lookup",
+    _meta: { "anthropic/alwaysLoad": true },
     description:
       "給定 PHP class 名稱 + method 名稱（可選），直接回傳完整函式原始碼（含行號）。省去 Grep → Read 兩步，一次到位。若省略 method_name 則回傳 class 概覽（所有方法簽名+行號）。",
     inputSchema: {

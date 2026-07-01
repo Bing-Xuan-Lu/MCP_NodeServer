@@ -1,6 +1,6 @@
 ---
 name: sftp_deploy
-description: "將修改好的程式部署上傳到遠端測試機。當使用者說「部署」「推上去」「上傳」「deploy」時使用，僅推程式不含 DB。"
+description: "將程式部署上傳到遠端測試機。當使用者說「部署」「推上去」「上傳」「deploy」時使用。預設僅推程式；說「全部推」「完整部署」「程式加 DB 一起」時走 +DB 完整模式（程式 + DB migration + smoke test）。"
 ---
 
 # /sftp_deploy — 將本機 PHP 專案部署到遠端測試機
@@ -220,6 +220,27 @@ sftp_list(remote_path)
 
 - 遠端伺服器收到最新的 PHP 程式碼
 - 部署前後的遠端目錄對比
+
+---
+
+## +DB 完整部署模式（程式 + 資料庫 + 驗證）
+
+當使用者說「全部推」「完整部署」「程式加 DB 一起」時，在上方程式碼部署之外，再串接 DB migration 與 smoke test，形成完整流水線（原 `/full_deploy`）。
+
+**額外需要的資訊**：DB 存取方式（直連 / 間接 SFTP+PHP）、DB 連線、migration SQL 檔（無則跳過 DB 階段）。
+
+**流程（前後串接）：**
+
+1. **Phase A — Remote Diff 安全閘**（除非 `--skip-diff`）：`sftp_download` 遠端檔到 `D:\tmp\` → `git diff --no-index` 列出遠端被改的檔；有差異先問「以本機覆蓋 / merge 回本機（`/remote_merge`）/ 中止」。
+2. **Phase B — 程式碼部署**：走上方 sftp_deploy 主流程（delta / 全量）。
+3. **Phase C — DB Migration**（有 migration SQL 才做）：
+   - 直連（內部測試機）：`execute_sql` 依序 `SET FOREIGN_KEY_CHECKS=0` → migration → `=1`
+   - 間接（準測試機）：產帶 token 的 PHP 腳本 → `sftp_upload` → `send_http_request` 執行 → `sftp_delete` 立刻刪
+4. **Phase D — Smoke Test**：`send_http_request` 打首頁（期望 200）與後台（200/302），非預期即警告查 error log。
+
+**額外可用工具**：`sftp_download`、`execute_sql` / `execute_sql_batch`、`create_file`、`read_file`、`send_http_request`。
+
+**模式注意**：本機為主、遠端被覆蓋；設定檔（config/.env/database）永不上傳；間接模式 PHP 腳本用完立刻刪；不做 rollback（回滾用 `/db_migration run rollback` + `/sftp_pull`）。
 
 ---
 
