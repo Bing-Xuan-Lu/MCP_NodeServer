@@ -2,7 +2,7 @@
 
 > 這份是從 `CLAUDE.md` 抽出的詳細 hook 規則參考（避免大表每次都被夾帶進 context）。被 hook 擋到時，來這裡查對應 ID、行為與放行條件。CLAUDE.md 只留摘要與指標。
 
-**Hook 偵測規則**（repetition-detector 27 層 + refactor-advisor 14 項；另有獨立 PreToolUse hook：`agent-coord-stale-contract`、`token-budget-circuit-breaker`（單場 tool call 達 150 警告 / 250 硬擋）、`mcp-down-guard`（三態：mcp__* 呼叫失敗=強封鎖；最近有 mcp__* 成功=放行；末段無 mcp__* 結果＝工具從清單消失時，僅「Claude 剛宣稱斷線＋當前跑 DB/PHP/HTTP 繞道指令」才擋，補原本「工具消失沒失敗結果」的盲點）、`playwright-closed-guard`（matcher `browser_`：browser 結果結尾連續 ≥2 次「Target page, context or browser has been closed」即 BLOCK 下一個盲試 navigate，並引導重開——抓出原網址明示「browser_close → browser_navigate {原網址}」兩步；放行 browser_close 作復原重置，門檻 `CLAUDE_BROWSER_CLOSED_THRESHOLD` 可覆寫。限制：主場 hook 不觸發於 Task 子 agent 內部 tool call）、`entry-search-memory-gate`（matcher `Grep|Glob`：**開場找入口前先翻記憶硬 gate**；見下方獨立規則表））：
+**Hook 偵測規則**（repetition-detector 28 層 + refactor-advisor 14 項；另有獨立 PreToolUse hook：`agent-coord-stale-contract`、`token-budget-circuit-breaker`（單場 tool call 達 150 警告 / 250 硬擋）、`mcp-down-guard`（三態：mcp__* 呼叫失敗=強封鎖；最近有 mcp__* 成功=放行；末段無 mcp__* 結果＝工具從清單消失時，僅「Claude 剛宣稱斷線＋當前跑 DB/PHP/HTTP 繞道指令」才擋，補原本「工具消失沒失敗結果」的盲點）、`playwright-closed-guard`（matcher `browser_`：browser 結果結尾連續 ≥2 次「Target page, context or browser has been closed」即 BLOCK 下一個盲試 navigate，並引導重開——抓出原網址明示「browser_close → browser_navigate {原網址}」兩步；放行 browser_close 作復原重置，門檻 `CLAUDE_BROWSER_CLOSED_THRESHOLD` 可覆寫。限制：主場 hook 不觸發於 Task 子 agent 內部 tool call）、`entry-search-memory-gate`（matcher `Grep|Glob`：**開場找入口前先翻記憶硬 gate**；見下方獨立規則表））：
 
 | 層級 | ID | 觸發條件 | 行為 |
 | --- | --- | --- | --- |
@@ -41,6 +41,7 @@
 | L2.90 | write_needs_investigation | 寫 code 檔（.php/.js/.css/.py/.sql/.vue/.html 等）前，自使用者上一則訊息後完全沒做過任何查證/調查動作（讀檔 / Grep / 查 DB / 查符號·依賴 / trace Sheet·Excel / 打 API 等）。原因：憑記憶冷寫＝用猜的，是 bug 清不完的根源。放行：做過任一查證、目標為文件/設定/memory、或內容註明「source-verified」 | ❌ BLOCK |
 | L3 | same_category_repeat | 同類操作 3+ 次 | ⚠️ 警告（10+ 次 block） |
 | L3b | consecutive_batch_eligible | batch-eligible 工具（execute_sql / send_http_request / sftp_upload / run_php_script / Read images-PDF-Word-pptx 等）**連續** ≥4 次（不分子類別）→ 主動建議改用對應 batch 版。同 session 同工具僅在第 4 次提一次去重 | 📦 提示 batch（不擋） |
+| L3c | gsheet_per_cell_pull | GSheet 讀取家族（`gsheet_fetch_with_state` / `gsheet_get_values` / `gsheet_fetch_formatted`）最近 12 步內累計 ≥5 次（**不需連續**，交替也算）→ 提示改批次：一次多 range / PHP 端批次比對出 PASS-FAIL 表；偵測到「fetch_with_state 回空→補 get_values」雙叫節奏會額外點名。補「token 斷路器數呼叫次數不數 token、L3b 要連續」對「逐組灌 GSheet 高 token/次」的盲點。第 5 次提一次去重 | 💸 提示 batch（不擋） |
 | L2.84b | consecutive_same_url_navigate | `browser_navigate` 連續導航**同一 URL** 第 3 次提示（早於 L2.85 exact_same_call 的 9 次門檻）。常見因：page 沒清 stale state、selector 不存在、callback 沒跑 | ⚠️ 警告（不擋） |
 | L4 | uncommitted_accumulation | ~~修改 15+ 檔案未 commit~~ **已依使用者要求停用**（`detect: () => null`，不再主動提示 commit） | 🚫 停用 |
 | L5 | token_waste_detection | 8 種低效模式（重複讀檔、無過濾 Grep、頻繁截圖等） | 💰 active=逐次提醒 / passive=每 N 次摘要 |
@@ -79,3 +80,19 @@
 - **解除**：read_file/Read 任一 memory 檔（含 `ops_index.md`）或 `session_recall`，本場即永久解除。
 - **ENV**：`CLAUDE_ENTRY_GATE_DISABLE=1` 全域停用；`CLAUDE_ENTRY_GATE_EARLY_LIMIT`（預設 12）；`CLAUDE_ENTRY_GATE_MIN_FILES`（預設 8）。
 - **適用範圍**：所有「cwd 對應到 `~/.claude/projects/<slug>/memory/` 且記憶檔 ≥8」的專案，非僅單一專案。
+
+---
+
+## Stop Hooks（回合結束掃 assistant 最後訊息）
+
+這組在每個 turn 結束時觸發，掃 assistant 最後一則訊息 + 該回合的 tool_use，攔驗證/收尾類壞習慣。共通防迴圈機制：`stop_hook_active=true` 一律放行；同一宣告以 hash 去重，同 session 不重複擋同一段文字。任何解析錯誤一律靜默放行（exit 0）。
+
+| Hook | 攔什麼 | 放行條件 |
+| --- | --- | --- |
+| verify-pass-guard.js | 宣告「N/N PASS / 全部通過 / X 筆全過」等**多筆驗證結論**但無逐行/逐格明細證據（合計對 ≠ 明細對） | markdown 逐列表格（視為已附明細）；「全綠」等監控/CI 狀態燈用語（避免誤擋診斷訊息）；同宣告 hash 已擋過 |
+| commit-nag-guard.js | AI「主動提 commit/push/git add 當收尾」（含祈使句「要不要我 commit」與狀態標籤式被動提法「未 commit / 還沒 commit / 也還沒部署」） | 使用者本回合自己提過 commit/git/推版（含 `/git_commit`，掃最近 6 則 user 訊息窗口）；唯讀 git status/diff/log |
+| self-admission-recorder.js | **非阻擋純捕捉**：偵測 AI 第一人稱自認犯錯（我搞錯/改錯/漏了/言過其實/是我的疏失…，嚴格錨定「我」排除「你錯了/假設語氣」）→ append 一筆到 `~/.claude/quality-lessons.jsonl`（category=self-error, auto:true），下次 session-start 浮現、`/retro lesson` 消化 | 同 session 同段承認 hash 去重（不擋回合） |
+| test-claim-verify-nudge.js | 宣稱「測完 / 可以用了 / 功能正常 / 沒問題」但這回合**完全沒跑任何實際驗證工具**（讀 code、`php -l` lint、看 diff 都不算） | ① 本回合有跑實際驗證工具（browser_interact / browser_* 互動 / send_http_request(_batch) / execute_sql(_batch) / run_php_test / page_audit / css_inspect / css_computed_winner / element_measure / 非 lint 的 run_php_code·run_php_script）；② 誠實說「還沒測 / 建議你實測 / 未驗證」；③ 同宣稱 hash 已擋過 |
+
+- **verify-pass-guard vs test-claim-verify-nudge 分工**：前者抓「**有**驗但粒度/範圍不夠（缺逐格明細）」；後者抓「**根本沒**驗就宣稱測完」。兩者互補、可同回合各自觸發。
+- **self-admission-recorder vs test-claim-verify-nudge**：前者被動記錄 AI 認錯供事後消化（不擋）；後者主動在「說測完卻沒測」當下就擋回合。二者都鼓勵誠實——誠實承認未測/未驗即放行。

@@ -2694,6 +2694,42 @@ const PATTERNS = [
     },
   },
   {
+    // L3c: GSheet Per-Cell Pull — 逐組/逐格拉 GSheet 而非批次對帳（token 燒點）
+    //   背景：逐項對帳（PHP vs GSheet baseline）時，容易一組一組 fetch_with_state / get_values，
+    //         甚至 fetch_with_state 回空又補一次 get_values（雙叫）。14 組 ×2 = 28 次、每次回傳整片，
+    //         輕鬆堆到 40K+。token 斷路器數「呼叫次數」不數 token，這種高 token/次的燒法會滑過去；
+    //         L3b 要求「連續同一支工具」，交替叫也不觸發。故補這個「GSheet 讀取家族」窗口偵測。
+    //   觸發：最近 12 步內 GSheet 讀取家族累計 ≥5 次 → 提示改批次（一次多 range / PHP 端批次比對出表）。
+    //   單次警告（== 5 時提一次）。
+    id: 'gsheet_per_cell_pull',
+    detect: (entry, history) => {
+      const GS_READ = new Set(['gsheet_fetch_with_state', 'gsheet_get_values', 'gsheet_fetch_formatted']);
+      const tool = shortName(entry.tool);
+      if (!GS_READ.has(tool)) return null;
+
+      const recent = history.slice(-12).map((h) => shortName(h.tool));
+      const count = recent.filter((t) => GS_READ.has(t)).length + 1; // 含本次
+      if (count < 5) return null;
+      if (count !== 5) return null; // 只在剛達 5 次時提一次，去重
+
+      // 偵測「fetch_with_state 回空又補 get_values」的雙叫節奏（相鄰兩步一支 fetch 一支 get）
+      const last2 = recent.slice(-2);
+      const doubleCall =
+        (last2.includes('gsheet_fetch_with_state') && last2.includes('gsheet_get_values'));
+
+      return (
+        `[Repetition Detector] 💸 BATCH 提示：你已逐組拉 GSheet ${count} 次（token 燒點）。\n` +
+        (doubleCall
+          ? `  → 偵測到「fetch_with_state 回空 → 補 get_values」雙叫節奏；這台不穩就直接用 gsheet_get_values / gsheet_set_values 一套到底，別再雙叫。\n`
+          : '') +
+        `  → gsheet_get_values 一次可帶「多個 range」，把整批格併成一次呼叫，別一組一組拉。\n` +
+        `  → 逐項對帳的正解：測試機 PHP 算好 N 項 → 一支腳本批次比對 → 出一張 PASS/FAIL 表（全程 3~4 次呼叫），不要一格一格灌 GSheet 還自己心算。\n` +
+        `  → 無印刷的組別，印刷版三格必然全不適用，抽樣「有印刷 + 無法承製」各 2 組即可驗證邏輯，不必 14 組全灌。\n` +
+        `  （同 session 僅提一次；繼續逐組拉不再警告，但 token 會持續累積。）\n`
+      );
+    },
+  },
+  {
     // L2.84b: Consecutive Same-URL Navigate — 連續導航同一 URL ≥3 次即警告（早於 exact_same_call 9 次門檻）
     //   背景：page audit / wait_for 後常會反射性重 navigate 同一頁，但頁面狀態沒清掉重來等於白燒。
     //   觸發：最近 N 次 tool call 連續都是同一 URL 的 browser_navigate（不分哪個 playwright instance）。

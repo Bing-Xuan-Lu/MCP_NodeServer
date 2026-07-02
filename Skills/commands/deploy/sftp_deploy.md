@@ -85,7 +85,14 @@ sftp_list(remote_path)
 
 - 使用者指定的子目錄 / 檔案 → 直接列進 items
 - 「推剩下的 / 全部同步」→ 用 glob 涵蓋整個目標子樹（如 `module_a/**/*.php`、`*.js`）
-- 只想推這次改的 → 先 `git_status` / `git_diff` 取改動清單，再列進 items
+- 「部署工作區變更 / 未 commit 的變更 / 這次改的」→ **預設只用 unstaged（`git_status` 的「Unstaged 工作區變更」分組，等同 `git diff --name-status`）**，不含 staged。原因：staged 常是多場 session 累積、還沒 commit 的舊改動，跟「這次真正改的」是兩組不同東西，混推會把舊半成品一起送上測試機。
+  在部署計畫訊息裡明講範圍，讓使用者能一眼確認：
+
+  ```text
+  git_status 掃描結果：{S} 個 staged（略過，非本次範圍）/ {U} 個 unstaged（本次推送）
+  ```
+
+  使用者若明確要求「連 staged 也推」才把 staged 併入範圍。
 
 ```
 sftp_diff_hash(

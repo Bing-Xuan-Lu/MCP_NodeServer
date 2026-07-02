@@ -129,7 +129,7 @@ MCP_NodeServer/
 │   ├── pdf.js           ← read_pdf_file, read_pdf_files_batch (.pdf → Markdown/Text)
 │   ├── images.js        ← read_image, read_images_batch（圖片讀取 + 縮放，支援 PNG/JPG/WebP/GIF/SVG）
 │   ├── video.js         ← read_video（影片 → faster-whisper 字幕 + ffmpeg 關鍵幀，支援 MP4/MOV/MKV/WebM/AVI/M4V，python_runner 容器）
-│   ├── git.js           ← git_status, git_diff, git_log, git_stash_ops（container 模式以 -w workdir 指定容器內 repo 路徑，預設 /var/www/html；本機模式可加 cwd 指定專案目錄）
+│   ├── git.js           ← git_status（預設 --porcelain 分流 staged/unstaged/untracked 精簡輸出，省 token；porcelain:false 走完整原始輸出）, git_diff, git_log, git_stash_ops（container 模式以 -w workdir 指定容器內 repo 路徑，預設 /var/www/html；本機模式可加 cwd 指定專案目錄）
 │   ├── dom_compare.js   ← dom_compare（批次比對兩個 URL 的 CSS/HTML/JS 差異，需 Playwright）
 │   ├── playwright_tools.js ← browser_interact, page_audit, css_inspect, element_measure, style_snapshot, css_coverage（含 detectOverridden 死宣告偵測）, browser_save_session, browser_restore_session（自帶 headless 瀏覽器，需 Playwright）
 │   ├── print_layout.js  ← print_layout_test（列印版面測試：產真實分頁 PDF → poppler render 每頁 PNG → 頁圖 + 頁數 + 字體嵌入 + selector 落點，需 Playwright + python_runner）

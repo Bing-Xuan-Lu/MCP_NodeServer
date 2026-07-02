@@ -52,6 +52,36 @@ const PASS_CLAIM_PATTERNS = [
 const BREAKDOWN_EVIDENCE_RE =
   /(逐行|逐格|逐欄位|逐項|逐筆列|每一行|每一格|每個欄位|每筆明細|明細.{0,4}(?:逐|每|對照)|breakdown|per[-\s]?(?:row|line|field|item))/i;
 
+// ── 範圍縮水假通過 guard（PASS=61 案）──────────────────────────
+// 病根：跑自建比對腳本得出「PASS=61 / 全數逐格對齊」，但腳本比對清單寫死只涵蓋部分格，
+//       正在爭議的格根本沒被放進比對 → 沒比的格永遠不會 FAIL →「全數對齊」是結構性假象。
+//       這種訊息通常「有」寫「逐格」字樣，會騙過 BREAKDOWN_EVIDENCE_RE，故需獨立 gate。
+
+// 引用了「自動化比對機制 / PASS 計數」（代表結論來自腳本，而非人工逐格核對）
+const HARNESS_CLAIM_RE =
+  /(harness|比對腳本|比對程式|自動(?:化)?比對|對比腳本|compare\.php|_compare\b|est_compare|PASS\s*[=:]\s*\d+|FAIL\s*[=:]\s*0|跑(?:了)?\s*(?:一支|這支|那支)?\s*(?:腳本|harness|比對))/i;
+
+// 宣稱「全數 / 全部 / N 格 逐格對齊 / 全通過」這類「全涵蓋」結論
+const TOTALITY_CLAIM_RE =
+  /(全數|全部|所有|\d{2,5}\s*格|每一格|逐格全)\s*[^\n]{0,12}?(?:對齊|對上|一致|吻合|通過|PASS|正確|無誤|FAIL\s*[=:]\s*0)/i;
+
+// 有「明說比對範圍涵蓋 / 排除了哪些」= 已誠實揭露 scope，放行
+const SCOPE_DISCLOSURE_RE =
+  /(比對清單|比對範圍|涵蓋(?:的)?(?:欄位|格|範圍|哪些|項目)|共\s*比對(?:了)?\s*\d+\s*(?:格|欄|項|筆|個)|欄位清單|範圍(?:為|是|涵蓋|包含)|僅比對|只比(?:對)?|未(?:比對|涵蓋)|不含|排除(?:了)?\s*(?:哪些|印刷|特別色|該|那)|沒(?:比對?|涵蓋)|比對(?:了)?以下(?:欄位|格|項))/i;
+
+// 範圍縮水假通過：自動化比對 + 全涵蓋宣稱，但沒揭露比對清單涵蓋哪些格 → 擋
+function isScopeNarrowedPassClaim(text) {
+  return HARNESS_CLAIM_RE.test(text) && TOTALITY_CLAIM_RE.test(text) && !SCOPE_DISCLOSURE_RE.test(text);
+}
+
+// 誠實承認「驗證範圍受限 / 沒比對某些格」= 我們要鼓勵的行為，任一 guard 都放行。
+// （承認 X 沒驗 ≠ 宣告全過；擋這種等於懲罰誠實，會逼 Claude 回去講漂亮話）
+const HONEST_LIMITATION_RE =
+  /(未涵蓋|未比對|沒比對?|沒(?:涵蓋|驗證?)|不含|排除了|僅比對|只比對?|不能宣稱|言過其實|有盲區|範圍(?:受限|不足)|尚未驗證)/i;
+function isHonestLimitationAdmission(text) {
+  return HONEST_LIMITATION_RE.test(text);
+}
+
 function hasPassClaim(text) {
   return PASS_CLAIM_PATTERNS.some((re) => re.test(text));
 }
@@ -154,11 +184,23 @@ process.stdin.on('end', () => {
     const text = readLastAssistantText(transcriptPath);
     if (!text.trim()) return allow();
 
-    if (!hasPassClaim(text)) {
-      debug('無 PASS 宣告 → 放行');
+    // 誠實承認驗證範圍受限（沒比對某些格）→ 鼓勵的行為，任一 guard 都放行
+    if (isHonestLimitationAdmission(text)) {
+      debug('誠實承認範圍受限 → 放行');
       return allow();
     }
-    if (hasBreakdownEvidence(text) || hasTabularBreakdown(text)) {
+
+    // 範圍縮水假通過 gate：自動化比對腳本跑出「全數逐格對齊」但沒揭露比對清單涵蓋哪些格。
+    // 獨立於 hasPassClaim 判斷 —— 這種宣稱常用「對齊/一致」而非「PASS/通過」字樣，
+    // plain PASS pattern 抓不到；且即使寫了「逐格」也要擋（PASS=61 案就是有「逐格」騙過 breakdown 檢查）。
+    const scopeNarrowed = isScopeNarrowedPassClaim(text);
+
+    if (!hasPassClaim(text) && !scopeNarrowed) {
+      debug('無 PASS 宣告且非範圍縮水 → 放行');
+      return allow();
+    }
+
+    if (!scopeNarrowed && (hasBreakdownEvidence(text) || hasTabularBreakdown(text))) {
       debug('已含逐行/逐格證據或 markdown 逐列表格 → 放行');
       return allow();
     }
@@ -177,7 +219,7 @@ process.stdin.on('end', () => {
     state.hashes = seen.slice(-100);
     saveState(sessionId, state);
 
-    const reason =
+    const reasonPlain =
       '🛑 [Verify Pass Guard] 你宣告了多筆/多項「PASS / 全部通過」，但這則訊息看不到逐行/逐欄位的實際值對照。\n\n' +
       '  合計（aggregate / headline 單一數字）對 ≠ 明細（breakdown 每一行/每一格）對。\n' +
       '  前車之鑑：某專案 部分退貨單只驗 refund_amount=245 合計就宣告 7/7 PASS，漏掉「運費」那行顯示 $0 的破綻。\n\n' +
@@ -186,6 +228,18 @@ process.stdin.on('end', () => {
       '    2. N 筆 case 各自的明細，不能抽驗一筆就推論全過\n' +
       '  若該畫面確實沒有明細層、只有單一數字，請明確說明「此 case 無明細需驗，僅 headline」即可結束。\n' +
       `  （本 session 第 ${state.blocks} 次；每個未附明細的 PASS 宣告都會擋，直到逐格列證據或明確說明此 case 無明細可驗）`;
+
+    const reasonNarrowed =
+      '🛑 [Verify Pass Guard｜範圍縮水] 你用自動化比對腳本宣告了「全數 / N 格 逐格對齊 / 全通過」，但沒說清楚那支腳本的「比對清單實際涵蓋哪些格 / 欄位」。\n\n' +
+      '  沒被列入比對的格永遠不會 FAIL —— 所以「全數對齊」等於把驗證範圍縮成「保證會過的子集」造出的假象，這不是通過。\n' +
+      '  前車之鑑：PASS=61 案，harness 寫死只比 23 格，正在爭議的「印刷版 3 格」從沒放進比對清單，卻宣告「1403 格全數逐格對齊」。\n\n' +
+      '  請在結束前補上：\n' +
+      '    1. 明列這支比對腳本的「比對清單」——到底涵蓋哪些欄位 / 格，逐一列出\n' +
+      '    2. 特別確認：使用者正在質疑 / 修正的那一格，有沒有在比對清單內？沒有的話「全數通過」不成立\n' +
+      '    3. 若確實有格沒比對，誠實說明「僅比對 X 格，未涵蓋 Y」，不要用「全數」字樣包裝\n' +
+      `  （本 session 第 ${state.blocks} 次）`;
+
+    const reason = scopeNarrowed ? reasonNarrowed : reasonPlain;
 
     // Stop hook：以 JSON decision=block 餵回 reason，要求 Claude 繼續處理
     writeStdoutUtf8(JSON.stringify({ decision: 'block', reason }));

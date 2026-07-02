@@ -649,8 +649,17 @@ export async function handle(name, args) {
       await conn.ping();
     } catch (err) {
       const isAuth = /Access denied|ER_ACCESS_DENIED/i.test(err.message);
+      // SSH 層認證失敗（非 MySQL）：docker_exec 走 SSH 中繼時，未帶 ssh_password 會退回金鑰認證，
+      // 若目標主機不吃該金鑰便回 Permission denied (publickey,password)。此時要指引補 ssh_password。
+      const isSshAuth = /Permission denied|publickey|password\)/i.test(err.message);
       const hints = isAuth
         ? ["確認使用者名稱與密碼是否正確"]
+        : isDockerExec && dbConfig.ssh_host && !dbConfig.ssh_password && isSshAuth
+        ? [
+            "SSH 認證失敗：docker_exec 走 SSH 中繼時，未帶 ssh_password 會退回金鑰（BatchMode）認證",
+            "若目標主機需密碼登入，請在 set_database 明確帶 ssh_password 參數後重試",
+            "若確定走金鑰登入，確認本機 ~/.ssh 私鑰已加入該主機 authorized_keys",
+          ]
         : isDockerExec
         ? ["確認 container 名稱、SSH 連線、容器內 mysql CLI 可用"]
         : ["確認 host、port、database 是否正確"];

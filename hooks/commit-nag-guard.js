@@ -39,6 +39,11 @@ const COMMIT_NAG_PATTERNS = [
   /(可以|現在|接著|然後|要不要先|記得|別忘了|建議).{0,8}(commit|push)\s*(?:了|起來|上去|嗎|吧|喔)?/i,
   /commit\s*(?:起來|上去|一下|嗎|吧|了嗎)/i,
   /\bgit\s+(?:add|commit|push)\b/i,
+  // 狀態標籤式主動提 commit：AI 收尾自己秀出「未 commit / 還沒 commit / 尚未 commit」
+  // （使用者把「AI 主動秀 commit 狀態」也視為「問 commit」，即使不是祈使句）
+  /(?:未|尚未|還沒|都還沒|沒有?)\s*commit/i,
+  // 「(還沒 commit，也還沒部署)」這類附帶提交/部署狀態的括號收尾
+  /也\s*(?:還沒|尚未|未)\s*(?:commit|部署|推(?:上|一)?版?|deploy)/i,
 ];
 
 // ── 使用者本回合自己起的 commit 話題 → 放行 ──────
